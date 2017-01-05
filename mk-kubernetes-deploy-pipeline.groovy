@@ -61,15 +61,20 @@ node {
     }
 
     stage("Install core infra") {
-        salt.runSaltProcess(saltMaster, 'install_foundation_infra')
+        installFoundationInfra(saltMaster)
+        validateFoundationInfra(saltMaster)
     }
 
-    stage("Install Kubernetes cluster") {
-        salt.runSaltProcess(saltMaster, 'install_kubernetes_infra')
+    stage("Install Kubernetes infra") {
+        installOpenstackMcpInfra(saltMaster)
     }
 
-    stage("Run tests on Kubernetes cluster") {
-    //    salt.runSaltProcess(saltMaster, 'install_mk_compute')
+    stage("Install Kubernetes control") {
+        installOpenstackMcpControl(saltMaster)
+    }
+
+    stage("Install Kubernetes compute") {
+        installOpenstackMcpCompute(saltMaster)
     }
 
     //stage('Delete Heat stack') {
