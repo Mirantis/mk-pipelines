@@ -34,7 +34,7 @@ node {
     def openstackEnv = "${env.WORKSPACE}/venv"
 
     if (HEAT_STACK_NAME == "") {
-	HEAT_STACK_NAME = "mk-k8s-simple-b" + BUILD_NUMBER
+	HEAT_STACK_NAME = JOB_NAME + "-b" + BUILD_NUMBER
     }
 
     stage ('Download Heat templates') {

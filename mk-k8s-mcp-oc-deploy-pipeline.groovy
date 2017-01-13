@@ -33,6 +33,10 @@ node {
     def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : "liberty"
     def openstackEnv = "${env.WORKSPACE}/venv"
 
+    if (HEAT_STACK_NAME == "") {
+	HEAT_STACK_NAME = JOB_NAME + "-b" + BUILD_NUMBER
+    }
+
     stage ('Download Heat templates') {
         git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
     }
