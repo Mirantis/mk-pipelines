@@ -81,8 +81,9 @@ node {
     //    salt.installOpenstackMcpCompute(saltMaster)
     //}
 
-    //stage('Delete Heat stack') {
+    stage('Trigger cleanup job') {
     //    openstack.deleteHeatStack(openstackCloud, HEAT_STACK_NAME, openstackEnv)
-    //}
+        build job: 'mk-k8s-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+    }
 
 }
