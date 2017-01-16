@@ -34,7 +34,7 @@ node {
     def openstackEnv = "${env.WORKSPACE}/venv"
 
     if (HEAT_STACK_NAME == "") {
-	HEAT_STACK_NAME = JOB_NAME + "-b" + BUILD_NUMBER
+        HEAT_STACK_NAME = JOB_NAME + "-b" + BUILD_NUMBER
     }
 
     stage ('Download Heat templates') {
@@ -81,8 +81,10 @@ node {
     //    salt.installOpenstackMcpCompute(saltMaster)
     //}
 
-    stage('Trigger cleanup job') {
-        build job: 'mk-k8s-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+    if (HEAT_STACK_DELETE == "1") {
+        stage('Trigger cleanup job') {
+            build job: 'mk-k8s-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+        }
     }
 
 }
