@@ -40,7 +40,9 @@ node {
 
     stage ('Download Heat templates') {
         git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
-        println(common.getPasswordCredentials(SALT_MASTER_CREDENTIALS))
+        creds = common.getPasswordCredentials(SALT_MASTER_CREDENTIALS)
+        println(creds.username)
+        println(creds.password.toString())
     }
 
     stage('Install OpenStack env') {
