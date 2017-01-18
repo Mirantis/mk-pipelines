@@ -22,7 +22,6 @@
 git = new com.mirantis.mk.git()
 openstack = new com.mirantis.mk.openstack()
 salt = new com.mirantis.mk.salt()
-common = new com.mirantis.mk.common()
 
 node {
 
@@ -40,9 +39,6 @@ node {
 
     stage ('Download Heat templates') {
         git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
-        creds = common.getPasswordCredentials(SALT_MASTER_CREDENTIALS)
-        println(creds.username)
-        println(creds.password.toString())
     }
 
     stage('Install OpenStack env') {
