@@ -17,6 +17,8 @@
  *   HEAT_STACK_ENVIRONMENT     Heat stack environmental parameters
  *   HEAT_STACK_ZONE            Heat stack availability zone
  *   HEAT_STACK_PUBLIC_NET      Heat stack floating IP pool
+ *   CONFORMANCE_IMAGE          Path to docker image with conformance e2e tests
+ *   K8S_API_SERVER             Kubernetes API address
  */
 
 git = new com.mirantis.mk.git()
@@ -75,6 +77,10 @@ node {
 
     stage("Install Kubernetes compute") {
         salt.installOpenstackMcpCompute(saltMaster)
+    }
+
+    stage("Run k8s conformance e2e tests") {
+        salt.runConformanceTest(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
     }
 
     //stage('Delete Heat stack') {
