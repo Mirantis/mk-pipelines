@@ -84,7 +84,7 @@ node {
     //}
 
     stage("Run k8s conformance e2e tests") {
-        salt.runConformanceTest(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
+        salt.runConformanceTests(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
     }
 
     if (HEAT_STACK_DELETE == "1") {
