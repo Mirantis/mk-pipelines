@@ -19,6 +19,8 @@
  *   HEAT_STACK_PUBLIC_NET      Heat stack floating IP pool
  *   CONFORMANCE_IMAGE          Path to docker image with conformance e2e tests
  *   K8S_API_SERVER             Kubernetes API address
+ *   RUN_TESTS                  Run test (0/1)
+ *   HEAT_STACK_DELETE          Delete Heat stack when finished (0/1)
  */
 
 git = new com.mirantis.mk.git()
@@ -79,12 +81,10 @@ node {
         salt.installOpenstackMcpControl(saltMaster)
     }
 
-    //stage("Install Kubernetes compute") {
-    //    salt.installOpenstackMcpCompute(saltMaster)
-    //}
-
-    stage("Run k8s conformance e2e tests") {
-        salt.runConformanceTests(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
+    if (RUN_TESTS == "1")
+        stage("Run k8s conformance e2e tests") {
+            salt.runConformanceTests(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
+        }
     }
 
     if (HEAT_STACK_DELETE == "1") {
