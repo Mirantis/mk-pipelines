@@ -94,7 +94,7 @@ node {
             salt.installOpenstackMcpControl(saltMaster)
         }
 
-        if (K8S_RUN_CONFORMANCE_TESTS == true) {
+        if (K8S_RUN_CONFORMANCE_TEST == true) {
             stage("Run k8s conformance e2e tests") {
                 salt.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
             }
