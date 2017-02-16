@@ -101,13 +101,29 @@ node {
         }
     }
 
-    //if (INSTALL_OPENSTACK) {
-    // install Infra and control, tests, ...
-    //}
+    if (INSTALL_OPENSTACK) {
+        // install Infra and control, tests, ...
+
+        stage("Install OpenStack infra") {
+            salt.installOpenstackMkInfra(saltMaster)
+        }
+
+        stage("Install OpenStack control") {
+            salt.installOpenstackMkControl(saltMaster)
+        }
+
+        stage("Install OpenStack network") {
+            salt.installOpenstackMkNetwork(saltMaster)
+        }
+
+        stage("Install OpenStack compute") {
+            salt.installOpenstackMkCompute(saltMaster)
+        }
+    }
 
     if (HEAT_STACK_DELETE) {
         stage('Trigger cleanup job') {
-            build job: HEAT_STACK_CLEANUP_JOB, parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+            build job: 'deploy_heat_cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
         }
     }
 
