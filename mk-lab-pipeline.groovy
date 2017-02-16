@@ -85,7 +85,7 @@ node {
         salt.validateFoundationInfra(saltMaster)
     }
 
-    if (INSTALL_K8S == true) {
+    if (INSTALL_K8S == 'true') {
         stage("Install Kubernetes infra") {
             salt.installOpenstackMcpInfra(saltMaster)
         }
@@ -94,14 +94,14 @@ node {
             salt.installOpenstackMcpControl(saltMaster)
         }
 
-        if (K8S_RUN_CONFORMANCE_TEST == true) {
+        if (K8S_RUN_CONFORMANCE_TEST == 'true') {
             stage("Run k8s conformance e2e tests") {
                 salt.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
             }
         }
     }
 
-    if (INSTALL_OPENSTACK == true) {
+    if (INSTALL_OPENSTACK == 'true') {
         // install Infra and control, tests, ...
 
         stage("Install OpenStack infra") {
@@ -121,10 +121,9 @@ node {
         }
     }
 
-    if (HEAT_STACK_DELETE == true) {
+    if (HEAT_STACK_DELETE == 'true') {
         stage('Trigger cleanup job') {
             build job: 'deploy_heat_cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
         }
     }
-
 }
