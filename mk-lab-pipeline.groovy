@@ -24,10 +24,9 @@
  *
  *   K8S_API_SERVER             Kubernetes API address
  *   K8S_CONFORMANCE_IMAGE      Path to docker image with conformance e2e tests
- *   K8S_RUN_CONFORMANCE_TEST   Run test (bool)
  *
- *   INSTALL_K8S                Install K8S (bool)
- *   INSTALL_OPENSTACK          Install OpenStack (bool)
+ *   INSTALL                    What should be installed (k8s, openstack, ...)
+ *   TESTS                      Run tests (bool)
  */
 
 git = new com.mirantis.mk.git()
@@ -41,12 +40,16 @@ node {
     def saltMaster
 
     // value defaults
-    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : "liberty"
+    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
     def openstackEnv = "${env.WORKSPACE}/venv"
 
-    if (HEAT_STACK_NAME == "") {
+    if (HEAT_STACK_NAME == '') {
         HEAT_STACK_NAME = BUILD_TAG
     }
+
+    //
+    // Bootstrap
+    //
 
     stage ('Download Heat templates') {
         git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
@@ -69,13 +72,17 @@ node {
         openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
     }
 
-    stage("Connect to Salt master") {
+    stage('Connect to Salt master') {
         saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
         saltMasterUrl = "http://${saltMasterHost}:8088"
         saltMaster = salt.createSaltConnection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
     }
 
-    stage("Install core infra") {
+    //
+    // Install
+    //
+
+    stage('Install core infra') {
         // salt.master, reclass
         // refresh_pillar
         // sync_all
@@ -85,41 +92,52 @@ node {
         salt.validateFoundationInfra(saltMaster)
     }
 
-    if (INSTALL_K8S == 'true') {
-        stage("Install Kubernetes infra") {
+
+    if (INSTALL.toLowerCase().contains('k8s')) {
+        stage('Install Kubernetes infra') {
             salt.installOpenstackMcpInfra(saltMaster)
         }
 
-        stage("Install Kubernetes control") {
+        stage('Install Kubernetes control') {
             salt.installOpenstackMcpControl(saltMaster)
         }
 
-        if (K8S_RUN_CONFORMANCE_TEST == 'true') {
-            stage("Run k8s conformance e2e tests") {
+        if (TESTS.toLowerCase().contains('k8s')) {
+            stage('Run k8s conformance e2e tests') {
                 salt.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
             }
         }
     }
 
-    if (INSTALL_OPENSTACK == 'true') {
+    if (INSTALL.toLowerCase().contains('openstack')) {
         // install Infra and control, tests, ...
 
-        stage("Install OpenStack infra") {
+        stage('Install OpenStack infra') {
             salt.installOpenstackMkInfra(saltMaster)
         }
 
-        stage("Install OpenStack control") {
+        stage('Install OpenStack control') {
             salt.installOpenstackMkControl(saltMaster)
         }
 
-        stage("Install OpenStack network") {
+        stage('Install OpenStack network') {
             salt.installOpenstackMkNetwork(saltMaster)
         }
 
-        stage("Install OpenStack compute") {
+        stage('Install OpenStack compute') {
             salt.installOpenstackMkCompute(saltMaster)
         }
+
+        //if (TESTS.toLowerCase().contains('openstack')) {
+        //    stage('Run OpenStack tests') {
+        //        salt...
+        //    }
+        //}
     }
+
+    //
+    // Cleanup
+    //
 
     if (HEAT_STACK_DELETE == 'true') {
         stage('Trigger cleanup job') {
