@@ -82,6 +82,7 @@ node {
     }
 
     if (RUN_TESTS == "1") {
+        sleep(30000)
         stage('Run k8s bootstrap tests') {
             salt.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
         }
