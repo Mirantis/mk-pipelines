@@ -82,6 +82,10 @@ node {
     }
 
     if (RUN_TESTS == "1") {
+        stage('Run k8s bootstrap tests') {
+            salt.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+        }
+
         stage("Run k8s conformance e2e tests") {
             salt.runConformanceTests(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
         }
