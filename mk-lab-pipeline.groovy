@@ -103,6 +103,10 @@ node {
         }
 
         if (TESTS.toLowerCase().contains('k8s')) {
+            stage('Run k8s bootstrap tests') {
+                salt.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+            }
+
             stage('Run k8s conformance e2e tests') {
                 salt.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
             }
