@@ -1,4 +1,5 @@
 /**
+ * DO NOT USE THIS OUTDATED PIPELINE - add your steps to mk-lab-pipeline
  *
  * Launch heat stack with basic k8s
  *
