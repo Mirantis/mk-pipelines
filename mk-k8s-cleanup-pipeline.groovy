@@ -12,9 +12,9 @@
  *
  */
 
-git = new com.mirantis.mk.git()
-openstack = new com.mirantis.mk.openstack()
-salt = new com.mirantis.mk.salt()
+git = new com.mirantis.mk.Git()
+openstack = new com.mirantis.mk.Openstack()
+salt = new com.mirantis.mk.Salt()
 
 node {
 
@@ -23,8 +23,8 @@ node {
     def saltMaster
 
     // value defaults
-    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : "liberty"
-    def openstackEnv = "${env.WORKSPACE}/venv"
+    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
+    def openstackEnv = '${env.WORKSPACE}/venv'
 
     stage('Install OpenStack env') {
         openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
