@@ -24,7 +24,7 @@ node {
 
     // value defaults
     def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
-    def openstackEnv = '${env.WORKSPACE}/venv'
+    def openstackEnv = "${env.WORKSPACE}/venv"
 
     stage('Install OpenStack env') {
         openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
