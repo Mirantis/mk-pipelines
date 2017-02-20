@@ -29,9 +29,10 @@
  *   TESTS                      Run tests (bool)
  */
 
-git = new com.mirantis.mk.git()
-openstack = new com.mirantis.mk.openstack()
-salt = new com.mirantis.mk.salt()
+git = new com.mirantis.mk.Git()
+openstack = new com.mirantis.mk.Openstack()
+salt = new com.mirantis.mk.Salt()
+orchestrate = new com.mirantis.mk.Orchestrate()
 
 node {
 
@@ -75,7 +76,7 @@ node {
     stage('Connect to Salt master') {
         saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
         saltMasterUrl = "http://${saltMasterHost}:8088"
-        saltMaster = salt.createSaltConnection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
+        saltMaster = salt.connection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
     }
 
     //
@@ -88,27 +89,27 @@ node {
         // sync_all
         // linux,openssh,salt.minion.ntp
 
-        salt.installFoundationInfra(saltMaster)
-        salt.validateFoundationInfra(saltMaster)
+        orchestrate.installFoundationInfra(saltMaster)
+        orchestrate.validateFoundationInfra(saltMaster)
     }
 
 
     if (INSTALL.toLowerCase().contains('k8s')) {
         stage('Install Kubernetes infra') {
-            salt.installOpenstackMcpInfra(saltMaster)
+            orchestrate.installOpenstackMcpInfra(saltMaster)
         }
 
         stage('Install Kubernetes control') {
-            salt.installOpenstackMcpControl(saltMaster)
+            orchestrate.installOpenstackMcpControl(saltMaster)
         }
 
         if (TESTS.toLowerCase().contains('k8s')) {
             stage('Run k8s bootstrap tests') {
-                salt.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+                orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
             }
 
             stage('Run k8s conformance e2e tests') {
-                salt.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
+                orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
             }
         }
     }
@@ -117,24 +118,24 @@ node {
         // install Infra and control, tests, ...
 
         stage('Install OpenStack infra') {
-            salt.installOpenstackMkInfra(saltMaster)
+            orchestrate.installOpenstackMkInfra(saltMaster)
         }
 
         stage('Install OpenStack control') {
-            salt.installOpenstackMkControl(saltMaster)
+            orchestrate.installOpenstackMkControl(saltMaster)
         }
 
         stage('Install OpenStack network') {
-            salt.installOpenstackMkNetwork(saltMaster)
+            orchestrate.installOpenstackMkNetwork(saltMaster)
         }
 
         stage('Install OpenStack compute') {
-            salt.installOpenstackMkCompute(saltMaster)
+            orchestrate.installOpenstackMkCompute(saltMaster)
         }
 
         //if (TESTS.toLowerCase().contains('openstack')) {
         //    stage('Run OpenStack tests') {
-        //        salt...
+        //        orchestrate...
         //    }
         //}
     }
