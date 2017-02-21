@@ -13,6 +13,7 @@
  *   HEAT_STACK_PUBLIC_NET      Heat stack floating IP pool
  *   HEAT_STACK_DELETE          Delete Heat stack when finished (bool)
  *   HEAT_STACK_CLEANUP_JOB     Name of job for deleting Heat stack
+ *   HEAT_STACK_REUSE           Reuse Heat stack (don't create one)
  *
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
  *
@@ -65,12 +66,14 @@ node {
         openstack.getKeystoneToken(openstackCloud, openstackEnv)
     }
 
-    stage('Launch new Heat stack') {
-        envParams = [
-            'availability_zone': HEAT_STACK_ZONE,
-            'public_net': HEAT_STACK_PUBLIC_NET
-        ]
-        openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+    if (HEAT_STACK_REUSE == 'false') {
+        stage('Launch new Heat stack') {
+            envParams = [
+                'availability_zone': HEAT_STACK_ZONE,
+                'public_net': HEAT_STACK_PUBLIC_NET
+            ]
+            openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+        }
     }
 
     stage('Connect to Salt master') {
