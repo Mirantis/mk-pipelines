@@ -24,9 +24,10 @@
  *   HEAT_STACK_DELETE          Delete Heat stack when finished (0/1)
  */
 
-git = new com.mirantis.mk.git()
-openstack = new com.mirantis.mk.openstack()
-salt = new com.mirantis.mk.salt()
+git = new com.mirantis.mk.Git()
+openstack = new com.mirantis.mk.Openstack()
+salt = new com.mirantis.mk.Salt()
+orchestrate = new com.mirantis.mk.Orchestrate()
 
 node {
 
@@ -35,11 +36,11 @@ node {
     def saltMaster
 
     // value defaults
-    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : "liberty"
+    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
     def openstackEnv = "${env.WORKSPACE}/venv"
 
     if (HEAT_STACK_NAME == "") {
-        HEAT_STACK_NAME = JOB_NAME + "-b" + BUILD_NUMBER
+        HEAT_STACK_NAME = BUILD_TAG
     }
 
     stage ('Download Heat templates') {
@@ -66,30 +67,30 @@ node {
     stage("Connect to Salt master") {
         saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
         saltMasterUrl = "http://${saltMasterHost}:8000"
-        saltMaster = salt.createSaltConnection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
+        saltMaster = salt.connection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
     }
 
     stage("Install core infra") {
-        salt.installFoundationInfra(saltMaster)
-        salt.validateFoundationInfra(saltMaster)
+        orchestrate.installFoundationInfra(saltMaster)
+        orchestrate.validateFoundationInfra(saltMaster)
     }
 
     stage("Install Kubernetes infra") {
-        salt.installOpenstackMcpInfra(saltMaster)
+        orchestrate.installOpenstackMcpInfra(saltMaster)
     }
 
     stage("Install Kubernetes control") {
-        salt.installOpenstackMcpControl(saltMaster)
+        orchestrate.installOpenstackMcpControl(saltMaster)
     }
 
     if (RUN_TESTS == "1") {
         sleep(30000)
         stage('Run k8s bootstrap tests') {
-            salt.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+            orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
         }
 
         stage("Run k8s conformance e2e tests") {
-            salt.runConformanceTests(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
+            orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
         }
     }
 
