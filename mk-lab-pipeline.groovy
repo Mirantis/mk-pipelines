@@ -68,10 +68,10 @@ node {
 
     if (HEAT_STACK_REUSE == 'false') {
         stage('Launch new Heat stack') {
-            envParams = [
-                'availability_zone': HEAT_STACK_ZONE,
-                'public_net': HEAT_STACK_PUBLIC_NET
-            ]
+            envParams = []
+            //    'availability_zone': HEAT_STACK_ZONE,
+            //    'public_net': HEAT_STACK_PUBLIC_NET
+            //]
             openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
         }
     }
