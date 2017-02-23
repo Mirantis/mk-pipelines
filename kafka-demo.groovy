@@ -39,7 +39,7 @@ node {
             master,
             'I@kubernetes:master',
             'cmd.run',
-            ['/bin/bash -c \'find /srv/kubernetes/ -type d | grep -v jobs | while read i; do ls $i/*.yml &>/dev/null && (set -x; hyperkube kubectl apply -f $i || echo Command failed; set +x); done; jobs=$(hyperkube kubectl get jobs -o name); find /srv/kubernetes/jobs -type f -name "*.yml" | while read i; do name=$(grep "name:" $i | head -1 | awk "{print $NF}"); echo $jobs|grep $name >/dev/null || (set -x; hyperkube kubectl apply -f $i || echo Command failed; set +x);done\'']
+            ['/bin/bash -c \'find /srv/kubernetes/ -type d | grep -v jobs | while read i; do ls $i/*.yml &>/dev/null && (set -x; hyperkube kubectl apply -f $i || echo Command failed; set +x); done;\'']
         )
 
     }
