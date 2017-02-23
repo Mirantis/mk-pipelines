@@ -24,11 +24,11 @@ node {
     stage("Enforce kubernetes.control") {
         common.infoMsg('Enforcing kubernetes.control on I@kubernetes:master')
 
-        salt.enforceState(
+        salt.runSaltProcessStep(
             master,
-            ['expression': 'I@kubernetes:master', 'type': 'compound'],
+            'I@kubernetes:master',
+            'state.sls',
             ['kubernetes.control'],
-            true
         )
     }
 
