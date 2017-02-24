@@ -16,6 +16,7 @@
  *   HEAT_STACK_REUSE           Reuse Heat stack (don't create one)
  *
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
+ *   SALT_MASTER_PORT           Port of salt-api, defaults to 8000
  *
  *   OPENSTACK_API_URL          OpenStack API address
  *   OPENSTACK_API_CREDENTIALS  Credentials to the OpenStack API
@@ -72,8 +73,14 @@ node {
     }
 
     stage('Connect to Salt master') {
+        def saltMasterPort
+        try {
+            saltMasterPort = SALT_MASTER_PORT
+        } catch (MissingPropertyException e) {
+            saltMasterPort = 8000
+        }
         saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
-        saltMasterUrl = "http://${saltMasterHost}:8088"
+        saltMasterUrl = "http://${saltMasterHost}:${saltMasterPort}"
         saltMaster = salt.connection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
     }
 
