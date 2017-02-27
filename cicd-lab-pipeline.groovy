@@ -123,8 +123,8 @@ node {
         salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
 
         // XXX: Hack to fix dependency of gerrit on mysql
-        print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "docker service rm gerrit; rm -rf /srv/volumes/gerrit/*")
-        sleep(10)
+        print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "docker service rm gerrit; sleep 5; rm -rf /srv/volumes/gerrit/*")
+        sleep(30)
         print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "apt-get install -y mysql-client; mysql -ppassword -h172.16.10.254 -e'drop database gerrit;create database gerrit;'")
         salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
         // ---- cut here (end of hack) ----
@@ -141,7 +141,7 @@ node {
                     }
                 }
             }
-            sleep(10)
+            sleep(30)
         }
     }
 
