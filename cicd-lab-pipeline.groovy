@@ -116,7 +116,7 @@ node {
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.flush')
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.update')
         salt.enforceState(saltMaster, 'I@docker:swarm', 'docker.swarm', true)
-        print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ['docker node ls'])
+        print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'docker node ls')
     }
 
     stage("Deploy Docker services") {
