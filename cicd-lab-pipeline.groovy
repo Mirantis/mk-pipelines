@@ -99,42 +99,42 @@ node {
     }
 
     stage("Deploy GlusterFS") {
-        salt.runSaltProcessStep(master, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.service'])
-        salt.runSaltProcessStep(master, 'ci01*', 'state.sls', ['glusterfs.server.setup'])
-        salt.runSaltProcessStep(master, 'I@glusterfs:client', 'state.sls', ['glusterfs.client'])
+        salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.service'])
+        salt.runSaltProcessStep(saltMaster, 'ci01*', 'state.sls', ['glusterfs.server.setup'])
+        salt.runSaltProcessStep(saltMaster, 'I@glusterfs:client', 'state.sls', ['glusterfs.client'])
     }
 
     stage("Deploy GlusterFS") {
-        salt.runSaltProcessStep(master, 'I@haproxy:proxy', 'state.sls', ['haproxy,keepalived'])
+        salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'state.sls', ['haproxy,keepalived'])
     }
 
     stage("Setup Docker Swarm") {
-        salt.runSaltProcessStep(master, 'I@docker:host', 'state.sls', ['docker.host'])
-        salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'state.sls', ['docker.swarm'])
-        salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'mine.flush')
-        salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'mine.update')
-        salt.runSaltProcessStep(master, 'I@docker:swarm', 'state.sls', ['docker.swarm'])
-        salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'cmd.run', ['docker node ls'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'state.sls', ['docker.host'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['docker.swarm'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.flush')
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.update')
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm', 'state.sls', ['docker.swarm'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ['docker node ls'])
     }
 
     stage("Deploy Docker services") {
-        salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'state.sls', ['docker.client'])
-        salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'cmd.run', ['docker service ls'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['docker.client'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ['docker service ls'])
 
         retry(30) {
-            salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'cmd.run', ["""/bin/bash -c '! docker service ls | grep -E "0/[0-9]+"'"""])
+            salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ["""/bin/bash -c '! docker service ls | grep -E "0/[0-9]+"'"""])
             sleep(10)
         }
     }
 
     stage("Configure CI/CD services") {
-        salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'state.sls', ['aptly'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['aptly'])
         retry(2) {
             // Needs to run twice to pass __virtual__ method of gerrit module
             // after installation of dependencies
-            salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'state.sls', ['gerrit'])
+            salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['gerrit'])
         }
-        salt.runSaltProcessStep(master, 'I@docker:swarm:role:master', 'state.sls', ['jenkins'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['jenkins'])
     }
 
     //
