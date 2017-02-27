@@ -100,7 +100,7 @@ node {
     stage("Deploy GlusterFS") {
         salt.enforceState(saltMaster, 'I@glusterfs:server', 'glusterfs.server.service', true)
         salt.enforceState(saltMaster, 'ci01*', 'glusterfs.server.setup', true)
-        sleep(5)
+        sleep(5000)
         salt.enforceState(saltMaster, 'I@glusterfs:client', 'glusterfs.client', true)
         print salt.cmdRun(saltMaster, 'I@glusterfs:client', 'mount|grep fuse.glusterfs || echo "Command failed"')
     }
@@ -124,7 +124,7 @@ node {
 
         // XXX: Hack to fix dependency of gerrit on mysql
         print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "docker service rm gerrit; sleep 5; rm -rf /srv/volumes/gerrit/*")
-        sleep(30)
+        sleep(10000)
         print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "apt-get install -y mysql-client; mysql -ppassword -h172.16.10.254 -e'drop database gerrit;create database gerrit;'")
         salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
         // ---- cut here (end of hack) ----
@@ -141,7 +141,7 @@ node {
                     }
                 }
             }
-            sleep(30)
+            sleep(10000)
         }
     }
 
