@@ -32,7 +32,6 @@ salt = new com.mirantis.mk.Salt()
 orchestrate = new com.mirantis.mk.Orchestrate()
 
 node {
-
     // connection objects
     def openstackCloud
     def saltMaster
@@ -99,49 +98,53 @@ node {
     }
 
     stage("Deploy GlusterFS") {
-        salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.service'])
-        salt.runSaltProcessStep(saltMaster, 'ci01*', 'state.sls', ['glusterfs.server.setup'])
-        salt.runSaltProcessStep(saltMaster, 'I@glusterfs:client', 'state.sls', ['glusterfs.client'])
+        salt.enforceState(saltMaster, 'I@glusterfs:server', 'glusterfs.server.service', true)
+        salt.enforceState(saltMaster, 'ci01*', 'glusterfs.server.setup', true)
+        sleep(5)
+        salt.enforceState(saltMaster, 'I@glusterfs:client', 'glusterfs.client', true)
+        print salt.cmdRun(saltMaster, 'I@glusterfs:client', 'mount|grep fuse.glusterfs')
     }
 
     stage("Deploy GlusterFS") {
-        salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'state.sls', ['haproxy,keepalived'])
+        salt.enforceState(saltMaster, 'I@haproxy:proxy', 'haproxy,keepalived')
     }
 
     stage("Setup Docker Swarm") {
-        salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'state.sls', ['docker.host'])
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['docker.swarm'])
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['salt'])
+        salt.enforceState(saltMaster, 'I@docker:host', 'docker.host', true)
+        salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.swarm', true)
+        salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'salt', true)
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.flush')
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.update')
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm', 'state.sls', ['docker.swarm'])
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ['docker node ls'])
+        salt.enforceState(saltMaster, 'I@docker:swarm', 'docker.swarm', true)
+        print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ['docker node ls'])
     }
 
     stage("Deploy Docker services") {
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['docker.client'])
+        salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
 
         // XXX: Hack to fix dependency of gerrit on mysql
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ["docker service rm gerrit; rm -rf /srv/volumes/gerrit/*"])
+        print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "docker service rm gerrit; rm -rf /srv/volumes/gerrit/*")
         sleep(5)
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['docker.client'])
+        print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', """apt-get install -y mysql-client; mysql -ppassword -h172.16.10.254 -e"drop database gerrit;create database gerrit;"""")
+        salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
+        // ---- cut here (end of hack) ----
 
         retry(30) {
-            salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ["""/bin/bash -c '! docker service ls | grep -E "0/[0-9]+"'"""])
+            print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', """/bin/bash -c '! docker service ls | grep -E "0/[0-9]+"'""")
             sleep(10)
         }
     }
 
     stage("Configure CI/CD services") {
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['aptly'])
+        salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'aptly', true)
         retry(2) {
             // Needs to run twice to pass __virtual__ method of gerrit module
             // after installation of dependencies
-            salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['gerrit'])
+            salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'gerrit', true)
         }
         retry(2) {
             // Same for jenkins
-            salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['jenkins'])
+            salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'jenkins', true)
         }
     }
 
