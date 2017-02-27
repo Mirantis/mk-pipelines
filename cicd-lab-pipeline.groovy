@@ -134,7 +134,8 @@ node {
             for (entry in out['return']) {
                 for (node in entry) {
                     if (node.value =~ /Some services are not running/) {
-                        throw new Exception("$node.key: $node.value)
+                        throw new Exception("$node.key: $node.value")
+
                     } else {
                         print out
                     }
