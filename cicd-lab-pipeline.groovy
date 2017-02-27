@@ -111,6 +111,7 @@ node {
     stage("Setup Docker Swarm") {
         salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'state.sls', ['docker.host'])
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['docker.swarm'])
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['salt'])
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.flush')
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.update')
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm', 'state.sls', ['docker.swarm'])
@@ -119,7 +120,11 @@ node {
 
     stage("Deploy Docker services") {
         salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['docker.client'])
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ['docker service ls'])
+
+        // XXX: Hack to fix dependency of gerrit on mysql
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ["docker service rm gerrit; rm -rf /srv/volumes/gerrit/*"])
+        sleep(5)
+        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['docker.client'])
 
         retry(30) {
             salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'cmd.run', ["""/bin/bash -c '! docker service ls | grep -E "0/[0-9]+"'"""])
@@ -134,7 +139,10 @@ node {
             // after installation of dependencies
             salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['gerrit'])
         }
-        salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['jenkins'])
+        retry(2) {
+            // Same for jenkins
+            salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'state.sls', ['jenkins'])
+        }
     }
 
     //
