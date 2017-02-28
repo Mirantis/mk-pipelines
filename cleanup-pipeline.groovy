@@ -1,5 +1,4 @@
 /**
- *  DO NOT USE THIS PIPELINE, USE cleanup-pipeline.groovy
  *
  * Launch heat stack with basic k8s
  *
