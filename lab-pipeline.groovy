@@ -105,6 +105,11 @@ node {
         // linux,openssh,salt.minion.ntp
 
         orchestrate.installFoundationInfra(saltMaster)
+
+        if (INSTALL.toLowerCase().contains('kvm')) {
+            orchestrate.installFoundationKvm(saltMaster)
+        }
+
         orchestrate.validateFoundationInfra(saltMaster)
     }
 
