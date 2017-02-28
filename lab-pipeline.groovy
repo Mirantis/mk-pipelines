@@ -4,7 +4,7 @@
  * Flow parameters:
  *   STACK_TYPE                 Orchestration engine: heat, ''
  *   INSTALL                    What should be installed (k8s, openstack, ...)
- *   TESTS                      What should be tested (k8s, openstack, ...)
+ *   TEST                       What should be tested (k8s, openstack, ...)
  *
  * Expected parameters:
  *
@@ -147,7 +147,7 @@ node {
     // Test
     //
 
-    if (TESTS.toLowerCase().contains('k8s')) {
+    if (TEST.toLowerCase().contains('k8s')) {
         stage('Run k8s bootstrap tests') {
             orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
         }
