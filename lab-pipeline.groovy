@@ -107,7 +107,7 @@ node {
         orchestrate.installFoundationInfra(saltMaster)
 
         if (INSTALL.toLowerCase().contains('kvm')) {
-            orchestrate.installFoundationKvm(saltMaster)
+            orchestrate.installInfraKvm(saltMaster)
         }
 
         orchestrate.validateFoundationInfra(saltMaster)
