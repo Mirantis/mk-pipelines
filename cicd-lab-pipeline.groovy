@@ -135,11 +135,13 @@ node {
                 def entry = out['return'].get(a)
                 for (int i = 0; i < entry.size(); i++) {
                     def node = entry.get(i)
-                    if (node.value =~ /Some services are not running/) {
-                        sleep(10)
-                        throw new Exception("$node.key: $node.value")
-                    } else {
-                        print out
+                    if (node) {
+                        if (node.value =~ /Some services are not running/) {
+                            sleep(10)
+                            throw new Exception("$node.key: $node.value")
+                        } else {
+                            print out
+                        }
                     }
                 }
             }
