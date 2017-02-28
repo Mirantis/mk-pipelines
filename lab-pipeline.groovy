@@ -47,7 +47,7 @@ node {
     //
 
     stage ('Create infrastructure') {
-        IF (STACK_TYPE == 'heat') {
+        if (STACK_TYPE == 'heat') {
             // value defaults
             def openstackCloud
             def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
