@@ -147,6 +147,8 @@ node {
                     }
                 }
             }
+            // Give services some time to settle
+            sleep(60)
         }
 
         stage("Configure CI/CD services") {
