@@ -132,7 +132,7 @@ node {
         retry(30) {
             out = salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', """/bin/bash -c 'docker service ls | grep -E "0/[0-9]+"' && echo 'Some services are not running'""")
             for (int a = 0; a < out['return'].size(); a++) {
-                def entry = a
+                def entry = out['return'][a]
                 for (int i = 0; i < entry.size(); i++) {
                     def node = entry[i]
                     if (node.value =~ /Some services are not running/) {
