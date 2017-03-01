@@ -31,6 +31,26 @@ openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 orchestrate = new com.mirantis.mk.Orchestrate()
 
+def waitForServices(saltMaster) {
+    retry(30) {
+        out = salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', """/bin/bash -c 'docker service ls | grep -E "0/[0-9]+"' && echo 'Some services are not running'""")
+        for (int a = 0; a < out['return'].size(); a++) {
+            def entry = out['return'].get(a)
+            for (int i = 0; i < entry.size(); i++) {
+                def node = entry.get(i)
+                if (node) {
+                    if (node.value =~ /Some services are not running/) {
+                        sleep(10)
+                        throw new Exception("$node.key: $node.value")
+                    } else {
+                        print out
+                    }
+                }
+            }
+        }
+    }
+}
+
 node {
     try {
         // connection objects
@@ -125,30 +145,11 @@ node {
 
             // XXX: Hack to fix dependency of gerrit on mysql
             print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "docker service rm gerrit; sleep 5; rm -rf /srv/volumes/gerrit/*")
-            sleep(10)
-            print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "apt-get install -y mysql-client; mysql -ppassword -h172.16.10.11 -P13306 -e'drop database gerrit;create database gerrit;'")
+            waitForServices(saltMaster)
             salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
             // ---- cut here (end of hack) ----
 
-            retry(30) {
-                out = salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', """/bin/bash -c 'docker service ls | grep -E "0/[0-9]+"' && echo 'Some services are not running'""")
-                for (int a = 0; a < out['return'].size(); a++) {
-                    def entry = out['return'].get(a)
-                    for (int i = 0; i < entry.size(); i++) {
-                        def node = entry.get(i)
-                        if (node) {
-                            if (node.value =~ /Some services are not running/) {
-                                sleep(10)
-                                throw new Exception("$node.key: $node.value")
-                            } else {
-                                print out
-                            }
-                        }
-                    }
-                }
-            }
-            // Give services some time to settle
-            sleep(30)
+            waitForServices(saltMaster)
         }
 
         stage("Configure CI/CD services") {
