@@ -169,10 +169,6 @@ node {
                     print "Restarting Salt minion"
                     salt.cmdRun(saltMaster, 'I@gerrit:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
                     sleep(5)
-                    // XXX: Restart of salt-minion will cause glusterfs to
-                    // receive SIGTERM and got unmounted which will break
-                    // everything
-                    salt.enforceState(saltMaster, 'I@glusterfs:client', 'glusterfs.client', true)
                     throw e
                 }
             }
@@ -190,10 +186,6 @@ node {
                     print "Restarting Salt minion"
                     salt.cmdRun(saltMaster, 'I@jenkins:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
                     sleep(5)
-                    // XXX: Restart of salt-minion will cause glusterfs to
-                    // receive SIGTERM and got unmounted which will break
-                    // everything
-                    salt.enforceState(saltMaster, 'I@glusterfs:client', 'glusterfs.client', true)
                     throw e
                 }
             }
