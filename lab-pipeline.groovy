@@ -130,8 +130,15 @@ node {
     if (INSTALL.toLowerCase().contains('openstack')) {
         // install Infra and control, tests, ...
 
+        if (INSTALL.toLowerCase().contains('kvm')) {
+            physical = "true"
+        } else {
+            physical = "false"
+        }
+
+
         stage('Install OpenStack infra') {
-            orchestrate.installOpenstackMkInfra(saltMaster)
+            orchestrate.installOpenstackMkInfra(saltMaster, physical)
         }
 
         stage('Install OpenStack control') {
@@ -139,11 +146,11 @@ node {
         }
 
         stage('Install OpenStack network') {
-            orchestrate.installOpenstackMkNetwork(saltMaster)
+            orchestrate.installOpenstackMkNetwork(saltMaster, physical)
         }
 
         stage('Install OpenStack compute') {
-            orchestrate.installOpenstackMkCompute(saltMaster)
+            orchestrate.installOpenstackMkCompute(saltMaster, physical)
         }
 
     }
