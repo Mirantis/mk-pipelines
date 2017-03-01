@@ -166,9 +166,9 @@ node {
                 try {
                     salt.enforceState(saltMaster, 'I@gerrit:client', 'gerrit', true)
                 } catch (Exception e) {
-                    timeout(1) {
-                        salt.cmdRun(saltMaster, 'I@gerrit:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
-                    }
+                    print "Restarting Salt minion"
+                    salt.cmdRun(saltMaster, 'I@gerrit:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
+                    sleep(30)
                     throw e
                 }
             }
@@ -183,9 +183,9 @@ node {
                 try {
                     salt.enforceState(saltMaster, 'I@jenkins:client', 'jenkins', true)
                 } catch (Exception e) {
-                    timeout(1) {
-                        salt.cmdRun(saltMaster, 'I@jenkins:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
-                    }
+                    print "Restarting Salt minion"
+                    salt.cmdRun(saltMaster, 'I@jenkins:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
+                    sleep(30)
                     throw e
                 }
             }
