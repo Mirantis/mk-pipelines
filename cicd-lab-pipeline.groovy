@@ -148,32 +148,46 @@ node {
                 }
             }
             // Give services some time to settle
-            sleep(60)
+            sleep(30)
         }
 
         stage("Configure CI/CD services") {
             // Aptly
-            salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'aptly', true)
+            salt.enforceState(saltMaster, 'I@aptly:server', 'aptly', true)
 
             // Gerrit
-            timeout(600) {
+            timeout(10) {
                 println "Waiting for Gerrit to come up.."
-                salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'while true; do curl -svf 172.16.10.254:8080 >/dev/null && break; done')
+                salt.cmdRun(saltMaster, 'I@gerrit:client', 'while true; do curl -svf 172.16.10.254:8080 >/dev/null && break; done')
             }
             retry(2) {
                 // Needs to run twice to pass __virtual__ method of gerrit module
                 // after installation of dependencies
-                salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'gerrit', true)
+                try {
+                    salt.enforceState(saltMaster, 'I@gerrit:client', 'gerrit', true)
+                } catch (Exception e) {
+                    timeout(1) {
+                        salt.cmdRun(saltMaster, 'I@gerrit:client', 'service salt-minion restart')
+                    }
+                    throw e
+                }
             }
 
             // Jenkins
-            timeout(600) {
+            timeout(10) {
                 println "Waiting for Jenkins to come up.."
-                salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'while true; do curl -svf 172.16.10.254:8081 >/dev/null && break; done')
+                salt.cmdRun(saltMaster, 'I@jenkins:client', 'while true; do curl -svf 172.16.10.254:8081 >/dev/null && break; done')
             }
             retry(2) {
                 // Same for jenkins
-                salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'jenkins', true)
+                try {
+                    salt.enforceState(saltMaster, 'I@jenkins:client', 'jenkins', true)
+                } catch (Exception e) {
+                    timeout(1) {
+                        salt.cmdRun(saltMaster, 'I@jenkins:client', 'service salt-minion restart')
+                    }
+                    throw e
+                }
             }
         }
 
