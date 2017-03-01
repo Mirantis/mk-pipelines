@@ -183,8 +183,8 @@ node {
                 println "============================================================"
                 println "Your CI/CD lab has been deployed and you can enjoy it:"
                 println "   Use sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24"
-                println "   to connect to your private subnet and visit services
-                println "   running at 172.16.10.254 (vip address):
+                println "   to connect to your private subnet and visit services"
+                println "   running at 172.16.10.254 (vip address):"
                 println "       9600    haproxy stats"
                 println "       8080    gerrit"
                 println "       8081    jenkins"
