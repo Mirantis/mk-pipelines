@@ -207,19 +207,19 @@ node {
             salt.enforceState(saltMaster, 'I@nginx:server', 'nginx')
 
             if (HEAT_STACK_DELETE != 'true') {
-                println "============================================================"
-                println "Your CI/CD lab has been deployed and you can enjoy it:"
-                println "   Use sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24"
-                println "   to connect to your private subnet and visit services"
-                println "   running at 172.16.10.254 (vip address):"
-                println "       9600    haproxy stats"
-                println "       8080    gerrit"
-                println "       8081    jenkins"
-                println "       8091    Docker swarm visualizer"
-                println "       8090    Reclass-generated documentation"
-                println ""
-                println "Don't forget to terminate your stack when you don't needed!"
-                println "============================================================"
+                print """============================================================
+Your CI/CD lab has been deployed and you can enjoy it:
+   Use sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24
+   to connect to your private subnet and visit services
+   running at 172.16.10.254 (vip address):
+       9600    haproxy stats
+       8080    gerrit
+       8081    jenkins
+       8091    Docker swarm visualizer
+       8090    Reclass-generated documentation
+
+Don't forget to terminate your stack when you don't needed!
+============================================================"""
             }
         }
     } catch (Throwable e) {
