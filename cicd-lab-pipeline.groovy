@@ -205,7 +205,9 @@ timestamps {
                 //
                 try {
                     retry(3) {
-                        print salt.orchestrateSystem(saltMaster, ['expression': '*', 'type': 'compound'], 'sphinx.orch.generate_doc')
+                        // TODO: fix salt.orchestrateSystem
+                        // print salt.orchestrateSystem(saltMaster, ['expression': '*', 'type': 'compound'], 'sphinx.orch.generate_doc')
+                        print salt.cmdRun(saltMaster, 'I@salt:master', 'salt-run state.orchestrate sphinx.orch.generate_doc')
                     }
                 } catch (Throwable e) {
                     // We don't want sphinx docs to ruin whole build, so possible
@@ -225,7 +227,7 @@ timestamps {
         8091    Docker swarm visualizer
         8090    Reclass-generated documentation
 
-    Don't forget to terminate your stack when you don't needed!
+    Don't forget to terminate your stack when you don't need it!
     ============================================================"""
             }
         } catch (Throwable e) {
