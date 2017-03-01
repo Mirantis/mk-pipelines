@@ -197,7 +197,7 @@ node {
             //
             try {
                 retry(3) {
-                    salt.runSaltProcessStep(saltMaster, '*', 'state.orchestrate', ['sphinx.orch.generate_doc'])
+                    print salt.orchestrateSystem(saltMaster, ['expression': '*', 'type': 'compound'], 'sphinx.orch.generate_doc')
                 }
             } catch (Throwable e) {
                 // We don't want sphinx docs to ruin whole build, so possible
@@ -206,21 +206,19 @@ node {
             }
             salt.enforceState(saltMaster, 'I@nginx:server', 'nginx')
 
-            if (HEAT_STACK_DELETE != 'true') {
-                print """============================================================
+            print """============================================================
 Your CI/CD lab has been deployed and you can enjoy it:
-   Use sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24
-   to connect to your private subnet and visit services
-   running at 172.16.10.254 (vip address):
-       9600    haproxy stats
-       8080    gerrit
-       8081    jenkins
-       8091    Docker swarm visualizer
-       8090    Reclass-generated documentation
+Use sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24
+to connect to your private subnet and visit services
+running at 172.16.10.254 (vip address):
+    9600    haproxy stats
+    8080    gerrit
+    8081    jenkins
+    8091    Docker swarm visualizer
+    8090    Reclass-generated documentation
 
 Don't forget to terminate your stack when you don't needed!
 ============================================================"""
-            }
         }
     } catch (Throwable e) {
         // If there was an error or exception thrown, the build failed
