@@ -152,11 +152,24 @@ node {
         }
 
         stage("Configure CI/CD services") {
+            // Aptly
             salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'aptly', true)
+
+            // Gerrit
+            timeout(600) {
+                println "Waiting for Gerrit to come up.."
+                salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'while true; do curl -svf 172.16.10.254:8080 >/dev/null && break; done')
+            }
             retry(2) {
                 // Needs to run twice to pass __virtual__ method of gerrit module
                 // after installation of dependencies
                 salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'gerrit', true)
+            }
+
+            // Jenkins
+            timeout(600) {
+                println "Waiting for Jenkins to come up.."
+                salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'while true; do curl -svf 172.16.10.254:8081 >/dev/null && break; done')
             }
             retry(2) {
                 // Same for jenkins
