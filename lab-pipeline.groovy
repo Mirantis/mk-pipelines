@@ -364,8 +364,9 @@ timestamps {
                 stage('Install OpenStack compute') {
                     //orchestrate.installOpenstackMkCompute(saltMaster, physical)
                     // Configure compute nodes
-                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply', null, true)
-                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply', null, true)
+                    retry(2) {
+                        salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply', null, true)
+                    }
 
                     // Provision opencontrail virtual routers
                     if (INSTALL.toLowerCase().contains('kvm')) {
