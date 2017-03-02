@@ -112,15 +112,15 @@ timestamps {
 
                     //orchestrate.installFoundationInfra(saltMaster)
                     salt.enforceState(saltMaster, 'I@salt:master', ['salt.master', 'reclass'], true)
-                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', null, true)
-                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', [], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', [], null, true)
                     salt.enforceState(saltMaster, 'I@linux:system', ['linux', 'openssh', 'salt.minion', 'ntp'], true)
 
 
                     if (INSTALL.toLowerCase().contains('kvm')) {
                         //orchestrate.installInfraKvm(saltMaster)
-                        salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar')
-                        salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all')
+                        salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', [], null, true)
+                        salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', [], null, true)
 
                         salt.enforceState(saltMaster, 'I@salt:control', ['salt.minion', 'linux.system', 'linux.network', 'ntp'], true)
                         salt.enforceState(saltMaster, 'I@salt:control', 'libvirt', true)
@@ -128,20 +128,20 @@ timestamps {
 
                         sleep(300)
 
-                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.refresh_pillar', null, true)
-                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all', null, true)
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.refresh_pillar', [], null, true)
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all', [], null, true)
 
                         // workaround - install apt-transport-https
-                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https refresh=True'])
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https refresh=True'], null, true)
                         salt.enforceState(saltMaster, 'I@linux:system', ['linux', 'openssh', 'salt.minion', 'ntp'], true)
                     }
 
                     //orchestrate.validateFoundationInfra(saltMaster)
                     salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['salt-key'], null, true)
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'test.version', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'test.version', [], null, true)
                     salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['reclass-salt --top'], null, true)
-                    salt.runSaltProcessStep(saltMaster, 'I@reclass:storage', 'reclass.inventory', null, true)
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'state.show_top', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@reclass:storage', 'reclass.inventory', [], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'state.show_top', [], null, true)
                 }
             }
 
