@@ -40,143 +40,145 @@ openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 orchestrate = new com.mirantis.mk.Orchestrate()
 
-node {
+timestamps {
+    node {
 
-    //
-    // Prepare machines
-    //
+        //
+        // Prepare machines
+        //
 
-    stage ('Create infrastructure') {
-        if (STACK_TYPE == 'heat') {
-            // value defaults
-            def openstackCloud
-            def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
-            def openstackEnv = "${env.WORKSPACE}/venv"
-
-
-            if (HEAT_STACK_NAME == '') {
-                HEAT_STACK_NAME = BUILD_TAG
-            }
-
-            // get templates
-            git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
-
-            // create openstack env
-            openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
-            openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
-            openstack.getKeystoneToken(openstackCloud, openstackEnv)
+        stage ('Create infrastructure') {
+            if (STACK_TYPE == 'heat') {
+                // value defaults
+                def openstackCloud
+                def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
+                def openstackEnv = "${env.WORKSPACE}/venv"
 
 
-            // launch stack
-            if (HEAT_STACK_REUSE == 'false') {
-                stage('Launch new Heat stack') {
-                    // create stack
-                    envParams = [
-                        'instance_zone': HEAT_STACK_ZONE,
-                        'public_net': HEAT_STACK_PUBLIC_NET
-                    ]
-                    openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+                if (HEAT_STACK_NAME == '') {
+                    HEAT_STACK_NAME = BUILD_TAG
                 }
+
+                // get templates
+                git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
+
+                // create openstack env
+                openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
+                openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+                openstack.getKeystoneToken(openstackCloud, openstackEnv)
+
+
+                // launch stack
+                if (HEAT_STACK_REUSE == 'false') {
+                    stage('Launch new Heat stack') {
+                        // create stack
+                        envParams = [
+                            'instance_zone': HEAT_STACK_ZONE,
+                            'public_net': HEAT_STACK_PUBLIC_NET
+                        ]
+                        openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+                    }
+                }
+
+                // get SALT_MASTER_URL
+                saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
+                SALT_MASTER_URL = "http://${saltMasterHost}:8088"
+            }
+        }
+
+        //
+        // Connect to Salt master
+        //
+
+        def saltMaster
+        stage('Connect to Salt API') {
+            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        }
+
+        //
+        // Install
+        //
+
+        stage('Install core infrastructure') {
+            // salt.master, reclass
+            // refresh_pillar
+            // sync_all
+            // linux,openssh,salt.minion.ntp
+
+            orchestrate.installFoundationInfra(saltMaster)
+
+            if (INSTALL.toLowerCase().contains('kvm')) {
+                orchestrate.installInfraKvm(saltMaster)
             }
 
-            // get SALT_MASTER_URL
-            saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
-            SALT_MASTER_URL = "http://${saltMasterHost}:8088"
-        }
-    }
-
-    //
-    // Connect to Salt master
-    //
-
-    def saltMaster
-    stage('Connect to Salt API') {
-        saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-    }
-
-    //
-    // Install
-    //
-
-    stage('Install core infrastructure') {
-        // salt.master, reclass
-        // refresh_pillar
-        // sync_all
-        // linux,openssh,salt.minion.ntp
-
-        orchestrate.installFoundationInfra(saltMaster)
-
-        if (INSTALL.toLowerCase().contains('kvm')) {
-            orchestrate.installInfraKvm(saltMaster)
-        }
-
-        orchestrate.validateFoundationInfra(saltMaster)
-    }
-
-
-    // install k8s
-    if (INSTALL.toLowerCase().contains('k8s')) {
-        stage('Install Kubernetes infra') {
-            orchestrate.installOpenstackMcpInfra(saltMaster)
-        }
-
-        stage('Install Kubernetes control') {
-            orchestrate.installOpenstackMcpControl(saltMaster)
-        }
-
-    }
-
-    // install openstack
-    if (INSTALL.toLowerCase().contains('openstack')) {
-        // install Infra and control, tests, ...
-
-        if (INSTALL.toLowerCase().contains('kvm')) {
-            physical = "true"
-        } else {
-            physical = "false"
+            orchestrate.validateFoundationInfra(saltMaster)
         }
 
 
-        stage('Install OpenStack infra') {
-            orchestrate.installOpenstackMkInfra(saltMaster, physical)
+        // install k8s
+        if (INSTALL.toLowerCase().contains('k8s')) {
+            stage('Install Kubernetes infra') {
+                orchestrate.installOpenstackMcpInfra(saltMaster)
+            }
+
+            stage('Install Kubernetes control') {
+                orchestrate.installOpenstackMcpControl(saltMaster)
+            }
+
         }
 
-        stage('Install OpenStack control') {
-            orchestrate.installOpenstackMkControl(saltMaster)
+        // install openstack
+        if (INSTALL.toLowerCase().contains('openstack')) {
+            // install Infra and control, tests, ...
+
+            if (INSTALL.toLowerCase().contains('kvm')) {
+                physical = "true"
+            } else {
+                physical = "false"
+            }
+
+
+            stage('Install OpenStack infra') {
+                orchestrate.installOpenstackMkInfra(saltMaster, physical)
+            }
+
+            stage('Install OpenStack control') {
+                orchestrate.installOpenstackMkControl(saltMaster)
+            }
+
+            stage('Install OpenStack network') {
+                orchestrate.installOpenstackMkNetwork(saltMaster, physical)
+            }
+
+            stage('Install OpenStack compute') {
+                orchestrate.installOpenstackMkCompute(saltMaster, physical)
+            }
+
         }
 
-        stage('Install OpenStack network') {
-            orchestrate.installOpenstackMkNetwork(saltMaster, physical)
+        //
+        // Test
+        //
+
+        if (TEST.toLowerCase().contains('k8s')) {
+            stage('Run k8s bootstrap tests') {
+                orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+            }
+
+            stage('Run k8s conformance e2e tests') {
+                orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
+            }
         }
 
-        stage('Install OpenStack compute') {
-            orchestrate.installOpenstackMkCompute(saltMaster, physical)
-        }
 
-    }
+        //
+        // Clean
+        //
 
-    //
-    // Test
-    //
-
-    if (TEST.toLowerCase().contains('k8s')) {
-        stage('Run k8s bootstrap tests') {
-            orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
-        }
-
-        stage('Run k8s conformance e2e tests') {
-            orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
-        }
-    }
-
-
-    //
-    // Clean
-    //
-
-    if (HEAT_STACK_DELETE == 'true' && STACK_TYPE == 'heat') {
-        stage('Trigger cleanup job') {
-            build job: 'deploy_heat_cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+        if (HEAT_STACK_DELETE == 'true' && STACK_TYPE == 'heat') {
+            stage('Trigger cleanup job') {
+                build job: 'deploy_heat_cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+            }
         }
     }
 }
