@@ -378,7 +378,7 @@ timestamps {
         } catch (Throwable e) {
             currentBuild.result = 'FAILURE'
             throw e
-        } finaly {
+        } finally {
 
             //
             // Clean
