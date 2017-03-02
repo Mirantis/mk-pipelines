@@ -343,6 +343,7 @@ timestamps {
                     //runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail'], 1)
                     salt.enforceState(saltMaster, 'ntw01*', 'opencontrail', true)
                     salt.enforceState(saltMaster, 'I@opencontrail:control', 'opencontrail', true)
+                    salt.enforceState(saltMaster, 'I@opencontrail:collector', 'opencontrail', true)
 
                     // Provision opencontrail control services
                     if (INSTALL.toLowerCase().contains('kvm')) {
@@ -376,7 +377,7 @@ timestamps {
                     }
 
                     salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'system.reboot', [], null, true)
-                    sleep(30)
+                    sleep(10)
                 }
             }
 
