@@ -228,13 +228,13 @@ timestamps {
 
                     //runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.setup'], 1)
                     if (INSTALL.toLowerCase().contains('kvm')) {
-                        salt.enforceState(saltMaster, 'ctl01*', 'glusterfs.server.setup', true)
-                        salt.enforceState(saltMaster, 'ctl02*', 'glusterfs.server.setup', true)
-                        salt.enforceState(saltMaster, 'ctl03*', 'glusterfs.server.setup', true)
-                    } else {
                         salt.enforceState(saltMaster, 'kvm01*', 'glusterfs.server.setup', true)
                         salt.enforceState(saltMaster, 'kvm02*', 'glusterfs.server.setup', true)
                         salt.enforceState(saltMaster, 'kvm03*', 'glusterfs.server.setup', true)
+                    } else {
+                        salt.enforceState(saltMaster, 'ctl01*', 'glusterfs.server.setup', true)
+                        salt.enforceState(saltMaster, 'ctl02*', 'glusterfs.server.setup', true)
+                        salt.enforceState(saltMaster, 'ctl03*', 'glusterfs.server.setup', true)
                     }
 
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'])
