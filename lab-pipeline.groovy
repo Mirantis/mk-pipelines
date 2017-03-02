@@ -40,9 +40,6 @@ openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 
 
-// Set decription and information
-currentBuild.description = "Install: ${INSTALL}<br>Test: ${TEST}"
-
 timestamps {
     node {
         try {
@@ -64,7 +61,7 @@ timestamps {
                     }
 
                     // set description
-                    currentBuild.description = "${currentBuild.description}<br>Stack: ${HEAT_STACK_NAME}"
+                    currentBuild.description = "${HEAT_STACK_NAME}"
 
                     // get templates
                     git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
@@ -88,6 +85,7 @@ timestamps {
 
                     // get SALT_MASTER_URL
                     saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
+                    currentBuild.description = "${HEAT_STACK_NAME}: ${saltMasterHost}"
                     SALT_MASTER_URL = "http://${saltMasterHost}:8088"
                 }
             }
