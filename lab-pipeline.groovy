@@ -375,7 +375,8 @@ timestamps {
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp01 --host_ip 172.16.10.105 --api_server_ip 172.16.10.254 --oper add --admin_user admin --admin_password workshop --admin_tenant_name admin'], null, true)
                     }
 
-                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'system.reboot', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'system.reboot', [], null, true)
+                    sleep(30)
                 }
             }
 
