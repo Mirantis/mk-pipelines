@@ -310,7 +310,12 @@ timestamps {
 
                     // Install neutron service
                     //runSaltProcessStep(saltMaster, 'I@neutron:server', 'state.sls', ['neutron'], 1)
-                    salt.enforceState(saltMaster, 'ctl01*', 'neutron', true)
+                    if (INSTALL.toLowerCase().contains('kvm')) {
+                        salt.enforceState(saltMaster, 'ntw01*', 'neutron', true)
+                    } else {
+                        salt.enforceState(saltMaster, 'ctl01*', 'neutron', true)
+                    }
+
                     salt.enforceState(saltMaster, 'I@neutron:server', 'neutron', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron agent-list'], null, true)
 
@@ -341,6 +346,10 @@ timestamps {
 
                     // Provision opencontrail control services
                     if (INSTALL.toLowerCase().contains('kvm')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 10.167.4.20 --api_server_port 8082 --host_name ntw01 --host_ip 10.167.4.21 --router_asn 64512 --admin_password password --admin_user admin --admin_tenant_name admin --oper add'], null, true)
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 10.167.4.20 --api_server_port 8082 --host_name ntw02 --host_ip 10.167.4.22 --router_asn 64512 --admin_password password --admin_user admin --admin_tenant_name admin --oper add'], null, true)
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 10.167.4.20 --api_server_port 8082 --host_name ntw03 --host_ip 10.167.4.23 --router_asn 64512 --admin_password password --admin_user admin --admin_tenant_name admin --oper add'], null, true)
+                    } else {
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl01 --host_ip 172.16.10.101 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl02 --host_ip 172.16.10.102 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl03 --host_ip 172.16.10.103 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
@@ -360,6 +369,8 @@ timestamps {
 
                     // Provision opencontrail virtual routers
                     if (INSTALL.toLowerCase().contains('kvm')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp001 --host_ip 10.167.4.101 --api_server_ip 10.167.4.21 --oper add --admin_user admin --admin_password password --admin_tenant_name admin'], null, true)
+                    } else {
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp01 --host_ip 172.16.10.105 --api_server_ip 172.16.10.254 --oper add --admin_user admin --admin_password workshop --admin_tenant_name admin'], null, true)
                     }
 
