@@ -41,346 +41,353 @@ salt = new com.mirantis.mk.Salt()
 
 timestamps {
     node {
+        try {
+            //
+            // Prepare machines
+            //
 
-        //
-        // Prepare machines
-        //
+            stage ('Create infrastructure') {
+                if (STACK_TYPE == 'heat') {
+                    // value defaults
+                    def openstackCloud
+                    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
+                    def openstackEnv = "${env.WORKSPACE}/venv"
 
-        stage ('Create infrastructure') {
-            if (STACK_TYPE == 'heat') {
-                // value defaults
-                def openstackCloud
-                def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
-                def openstackEnv = "${env.WORKSPACE}/venv"
-
-                if (HEAT_STACK_NAME == '') {
-                    HEAT_STACK_NAME = BUILD_TAG
-                }
-
-                // get templates
-                git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
-
-                // create openstack env
-                openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
-                openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
-                openstack.getKeystoneToken(openstackCloud, openstackEnv)
-
-                // launch stack
-                if (HEAT_STACK_REUSE == 'false') {
-                    stage('Launch new Heat stack') {
-                        // create stack
-                        envParams = [
-                            'instance_zone': HEAT_STACK_ZONE,
-                            'public_net': HEAT_STACK_PUBLIC_NET
-                        ]
-                        openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+                    if (HEAT_STACK_NAME == '') {
+                        HEAT_STACK_NAME = BUILD_TAG
                     }
+
+                    // get templates
+                    git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
+
+                    // create openstack env
+                    openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
+                    openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+                    openstack.getKeystoneToken(openstackCloud, openstackEnv)
+
+                    // launch stack
+                    if (HEAT_STACK_REUSE == 'false') {
+                        stage('Launch new Heat stack') {
+                            // create stack
+                            envParams = [
+                                'instance_zone': HEAT_STACK_ZONE,
+                                'public_net': HEAT_STACK_PUBLIC_NET
+                            ]
+                            openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+                        }
+                    }
+
+                    // get SALT_MASTER_URL
+                    saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
+                    SALT_MASTER_URL = "http://${saltMasterHost}:8088"
                 }
-
-                // get SALT_MASTER_URL
-                saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
-                SALT_MASTER_URL = "http://${saltMasterHost}:8088"
             }
-        }
 
-        //
-        // Connect to Salt master
-        //
+            //
+            // Connect to Salt master
+            //
 
-        def saltMaster
-        stage('Connect to Salt API') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-        }
+            def saltMaster
+            stage('Connect to Salt API') {
+                saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            }
 
-        //
-        // Install
-        //
+            //
+            // Install
+            //
 
-        if (INSTALL.toLowerCase().contains('core')) {
-            stage('Install core infrastructure') {
-                // salt.master, reclass
-                // refresh_pillar
-                // sync_all
-                // linux,openssh,salt.minion.ntp
+            if (INSTALL.toLowerCase().contains('core')) {
+                stage('Install core infrastructure') {
+                    // salt.master, reclass
+                    // refresh_pillar
+                    // sync_all
+                    // linux,openssh,salt.minion.ntp
 
-                //orchestrate.installFoundationInfra(saltMaster)
-                salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'state.sls', ['salt.master,reclass'])
-                salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar')
-                salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all')
-                salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'state.sls', ['linux,openssh,salt.minion,ntp'])
-
-
-                if (INSTALL.toLowerCase().contains('kvm')) {
-                    //orchestrate.installInfraKvm(saltMaster)
+                    //orchestrate.installFoundationInfra(saltMaster)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'state.sls', ['salt.master,reclass'])
                     salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar')
                     salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all')
+                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'state.sls', ['linux,openssh,salt.minion,ntp'])
 
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:control', 'state.sls', ['salt.minion,linux.system,linux.network,ntp'])
-                    salt.enforceState(saltMaster, 'I@salt:control', 'libvirt', true)
-                    salt.enforceState(saltMaster, 'I@salt:control', 'salt.control', true)
 
-                    sleep(300)
+                    if (INSTALL.toLowerCase().contains('kvm')) {
+                        //orchestrate.installInfraKvm(saltMaster)
+                        salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar')
+                        salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all')
 
-                    salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.refresh_pillar')
-                    salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all')
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:control', 'state.sls', ['salt.minion,linux.system,linux.network,ntp'])
+                        salt.enforceState(saltMaster, 'I@salt:control', 'libvirt', true)
+                        salt.enforceState(saltMaster, 'I@salt:control', 'salt.control', true)
 
-                    // workaround - install apt-transport-https
-                    salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https refresh=True'])
-                    salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'state.sls', ['linux,openssh,salt.minion,ntp'])
+                        sleep(300)
+
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.refresh_pillar')
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all')
+
+                        // workaround - install apt-transport-https
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https refresh=True'])
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'state.sls', ['linux,openssh,salt.minion,ntp'])
+                    }
+
+                    //orchestrate.validateFoundationInfra(saltMaster)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['salt-key'])
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'test.version')
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['reclass-salt --top'])
+                    salt.runSaltProcessStep(saltMaster, 'I@reclass:storage', 'reclass.inventory')
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'state.show_top')
+                }
+            }
+
+            // install k8s
+            if (INSTALL.toLowerCase().contains('k8s')) {
+                stage('Install Kubernetes infra') {
+                    //orchestrate.installOpenstackMcpInfra(saltMaster)
+
+                    // Comment nameserver
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'cmd.run', ["sed -i 's/nameserver 10.254.0.10/#nameserver 10.254.0.10/g' /etc/resolv.conf"])
+
+                    // Install glusterfs
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.service'])
+
+                    // Install keepalived
+                    salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['keepalived'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'state.sls', ['keepalived'])
+
+                    // Check the keepalived VIPs
+                    salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'cmd.run', ['ip a | grep 172.16.10.2'])
+
+                    // Setup glusterfs
+                    salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['glusterfs.server.setup'])
+                    salt.runSaltProcessStep(saltMaster, 'ctl02*', 'state.sls', ['glusterfs.server.setup'])
+                    salt.runSaltProcessStep(saltMaster, 'ctl03*', 'state.sls', ['glusterfs.server.setup'])
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'])
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'])
+
+                    // Install haproxy
+                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'state.sls', ['haproxy'])
+                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.status', ['haproxy'])
+
+                    // Install docker
+                    salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'state.sls', ['docker.host'])
+                    salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'cmd.run', ['docker ps'])
+
+                    // Install bird
+                    salt.runSaltProcessStep(saltMaster, 'I@bird:server', 'state.sls', ['bird'])
+
+                    // Install etcd
+                    salt.runSaltProcessStep(saltMaster, 'I@etcd:server', 'state.sls', ['etcd.server.service'])
+                    salt.runSaltProcessStep(saltMaster, 'I@etcd:server', 'cmd.run', ['etcdctl cluster-health'])
+
                 }
 
-                //orchestrate.validateFoundationInfra(saltMaster)
-                salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['salt-key'])
-                salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'test.version')
-                salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['reclass-salt --top'])
-                salt.runSaltProcessStep(saltMaster, 'I@reclass:storage', 'reclass.inventory')
-                salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'state.show_top')
-            }
-        }
+                stage('Install Kubernetes control') {
+                    //orchestrate.installOpenstackMcpControl(saltMaster)
 
-        // install k8s
-        if (INSTALL.toLowerCase().contains('k8s')) {
-            stage('Install Kubernetes infra') {
-                //orchestrate.installOpenstackMcpInfra(saltMaster)
+                    // Install Kubernetes pool and Calico
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'state.sls', ['kubernetes.pool'])
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'cmd.run', ['calicoctl node status'])
 
-                // Comment nameserver
-                salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'cmd.run', ["sed -i 's/nameserver 10.254.0.10/#nameserver 10.254.0.10/g' /etc/resolv.conf"])
+                    // Setup etcd server
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['etcd.server.setup'])
 
-                // Install glusterfs
-                salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.service'])
+                    // Run k8s without master.setup
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['kubernetes', 'exclude=kubernetes.master.setup'])
 
-                // Install keepalived
-                salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['keepalived'])
-                salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'state.sls', ['keepalived'])
+                    // Run k8s master setup
+                    salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['kubernetes.master.setup'])
 
-                // Check the keepalived VIPs
-                salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'cmd.run', ['ip a | grep 172.16.10.2'])
+                    // Revert comment nameserver
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'cmd.run', ["sed -i 's/nameserver 10.254.0.10/#nameserver 10.254.0.10/g' /etc/resolv.conf"])
 
-                // Setup glusterfs
-                salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['glusterfs.server.setup'])
-                salt.runSaltProcessStep(saltMaster, 'ctl02*', 'state.sls', ['glusterfs.server.setup'])
-                salt.runSaltProcessStep(saltMaster, 'ctl03*', 'state.sls', ['glusterfs.server.setup'])
-                salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'])
-                salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'])
+                    // Set route
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'cmd.run', ['ip r a 10.254.0.0/16 dev ens4'])
 
-                // Install haproxy
-                salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'state.sls', ['haproxy'])
-                salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.status', ['haproxy'])
-
-                // Install docker
-                salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'state.sls', ['docker.host'])
-                salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'cmd.run', ['docker ps'])
-
-                // Install bird
-                salt.runSaltProcessStep(saltMaster, 'I@bird:server', 'state.sls', ['bird'])
-
-                // Install etcd
-                salt.runSaltProcessStep(saltMaster, 'I@etcd:server', 'state.sls', ['etcd.server.service'])
-                salt.runSaltProcessStep(saltMaster, 'I@etcd:server', 'cmd.run', ['etcdctl cluster-health'])
-
-            }
-
-            stage('Install Kubernetes control') {
-                //orchestrate.installOpenstackMcpControl(saltMaster)
-
-                // Install Kubernetes pool and Calico
-                salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'state.sls', ['kubernetes.pool'])
-                salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'cmd.run', ['calicoctl node status'])
-
-                // Setup etcd server
-                salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['etcd.server.setup'])
-
-                // Run k8s without master.setup
-                salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['kubernetes', 'exclude=kubernetes.master.setup'])
-
-                // Run k8s master setup
-                salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['kubernetes.master.setup'])
-
-                // Revert comment nameserver
-                salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'cmd.run', ["sed -i 's/nameserver 10.254.0.10/#nameserver 10.254.0.10/g' /etc/resolv.conf"])
-
-                // Set route
-                salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'cmd.run', ['ip r a 10.254.0.0/16 dev ens4'])
-
-                // Restart kubelet
-                salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'service.restart', ['kubelet'])
-            }
-
-        }
-
-        // install openstack
-        if (INSTALL.toLowerCase().contains('openstack')) {
-            // install Infra and control, tests, ...
-
-            stage('Install OpenStack infra') {
-                //orchestrate.installOpenstackMkInfra(saltMaster, physical)
-
-                // Install keepaliveds
-                //runSaltProcessStep(master, 'I@keepalived:cluster', 'state.sls', ['keepalived'], 1)
-                salt.enforceState(saltMaster, 'ctl01*', 'keepalived', true)
-                salt.enforceState(saltMaster, 'I@keepalived:cluster', 'keepalived', true)
-
-                // Check the keepalived VIPs
-                salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'cmd.run', ['ip a | grep 172.16.10.2'])
-
-                // Install glusterfs
-                salt.enforceState(saltMaster, 'I@glusterfs:server', 'glusterfs.server.service', true)
-
-                //runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.setup'], 1)
-                if (INSTALL.toLowerCase().contains('kvm')) {
-                    salt.enforceState(saltMaster, 'ctl01*', 'glusterfs.server.setup', true)
-                    salt.enforceState(saltMaster, 'ctl02*', 'glusterfs.server.setup', true)
-                    salt.enforceState(saltMaster, 'ctl03*', 'glusterfs.server.setup', true)
-                } else {
-                    salt.enforceState(saltMaster, 'kvm01*', 'glusterfs.server.setup', true)
-                    salt.enforceState(saltMaster, 'kvm02*', 'glusterfs.server.setup', true)
-                    salt.enforceState(saltMaster, 'kvm03*', 'glusterfs.server.setup', true)
-                }
-                salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'])
-                salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'])
-
-                // Install rabbitmq
-                salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true)
-
-                // Check the rabbitmq status
-                salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'])
-
-                // Install galera
-                salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
-                salt.enforceState(saltMaster, 'I@galera:slave', 'galera', true)
-
-                // Check galera status
-                salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'mysql.status')
-                salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'mysql.status')
-
-                // Install haproxy
-                salt.enforceState(saltMaster, 'I@haproxy:proxy', 'haproxy', true)
-                salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.status', ['haproxy'])
-                salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.restart', ['rsyslog'])
-
-                // Install memcached
-                salt.enforceState(saltMaster, 'I@memcached:server', 'memcached', true)
-
-            }
-
-            stage('Install OpenStack control') {
-                //orchestrate.installOpenstackMkControl(saltMaster)
-
-                // setup keystone service
-                //runSaltProcessStep(saltMaster, 'I@keystone:server', 'state.sls', ['keystone.server'], 1)
-                salt.enforceState(saltMaster, 'ctl01*', 'keystone.server', true)
-                salt.enforceState(saltMaster, 'I@keystone:server', 'keystone.server', true)
-                // populate keystone services/tenants/roles/users
-
-                // keystone:client must be called locally
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:client', 'cmd.run', ['salt-call state.sls keystone.client'])
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; keystone service-list'])
-
-                // Install glance and ensure glusterfs clusters
-                //runSaltProcessStep(saltMaster, 'I@glance:server', 'state.sls', ['glance.server'], 1)
-                salt.enforceState(saltMaster, 'ctl01*', 'glance.server', true)
-                salt.enforceState(saltMaster, 'I@glance:server', 'glance.server', true)
-                salt.enforceState(saltMaster, 'I@glance:server', 'glusterfs.client', true)
-
-                // Update fernet tokens before doing request on keystone server
-                salt.enforceState(saltMaster, 'I@keystone:server', 'keystone.server', true)
-
-                // Check glance service
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; glance image-list'])
-
-                // Install and check nova service
-                //runSaltProcessStep(saltMaster, 'I@nova:controller', 'state.sls', ['nova'], 1)
-                salt.enforceState(saltMaster, 'ctl01*', 'nova', true)
-                salt.enforceState(saltMaster, 'I@nova:controller', 'nova', true)
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova service-list'])
-
-                // Install and check cinder service
-                //runSaltProcessStep(saltMaster, 'I@cinder:controller', 'state.sls', ['cinder'], 1)
-                salt.enforceState(saltMaster, 'ctl01*', 'cinder', true)
-                salt.enforceState(saltMaster, 'I@cinder:controller', 'cinder', true)
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; cinder list'])
-
-                // Install neutron service
-                //runSaltProcessStep(saltMaster, 'I@neutron:server', 'state.sls', ['neutron'], 1)
-                salt.enforceState(saltMaster, 'ctl01*', 'neutron', true)
-                salt.enforceState(saltMaster, 'I@neutron:server', 'neutron', true)
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron agent-list'])
-
-                // Install heat service
-                //runSaltProcessStep(saltMaster, 'I@heat:server', 'state.sls', ['heat'], 1)
-                salt.enforceState(saltMaster, 'ctl01*', 'heat', true)
-                salt.enforceState(saltMaster, 'I@heat:server', 'heat', true)
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; heat resource-type-list'])
-
-                // Install horizon dashboard
-                salt.enforceState(saltMaster, 'I@horizon:server', 'horizon', true)
-                salt.enforceState(saltMaster, 'I@nginx:server', 'nginx', true)
-
-            }
-
-            stage('Install OpenStack network') {
-                //orchestrate.installOpenstackMkNetwork(saltMaster, physical)
-
-                // Install opencontrail database services
-                //runSaltProcessStep(saltMaster, 'I@opencontrail:database', 'state.sls', ['opencontrail.database'], 1)
-                salt.enforceState(saltMaster, 'ntw01*', 'opencontrail.database', true)
-                salt.enforceState(saltMaster, 'I@opencontrail:database', 'opencontrail.database', true)
-
-                // Install opencontrail control services
-                //runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail'], 1)
-                salt.enforceState(saltMaster, 'ntw01*', 'opencontrail', true)
-                salt.enforceState(saltMaster, 'I@opencontrail:control', 'opencontrail', true)
-
-                // Provision opencontrail control services
-                if (INSTALL.toLowerCase().contains('kvm')) {
-                    salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl01 --host_ip 172.16.10.101 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
-                    salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl02 --host_ip 172.16.10.102 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
-                    salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl03 --host_ip 172.16.10.103 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
+                    // Restart kubelet
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'service.restart', ['kubelet'])
                 }
 
-                // Test opencontrail
-                salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'cmd.run', ['contrail-status'])
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
             }
 
-            stage('Install OpenStack compute') {
-                //orchestrate.installOpenstackMkCompute(saltMaster, physical)
-                // Configure compute nodes
-                salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply')
-                salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply')
+            // install openstack
+            if (INSTALL.toLowerCase().contains('openstack')) {
+                // install Infra and control, tests, ...
 
-                // Provision opencontrail virtual routers
-                if (INSTALL.toLowerCase().contains('kvm')) {
-                    salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp01 --host_ip 172.16.10.105 --api_server_ip 172.16.10.254 --oper add --admin_user admin --admin_password workshop --admin_tenant_name admin'])
+                stage('Install OpenStack infra') {
+                    //orchestrate.installOpenstackMkInfra(saltMaster, physical)
+
+                    // Install keepaliveds
+                    //runSaltProcessStep(master, 'I@keepalived:cluster', 'state.sls', ['keepalived'], 1)
+                    salt.enforceState(saltMaster, 'ctl01*', 'keepalived', true)
+                    salt.enforceState(saltMaster, 'I@keepalived:cluster', 'keepalived', true)
+
+                    // Check the keepalived VIPs
+                    salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'cmd.run', ['ip a | grep 172.16.10.2'])
+
+                    // Install glusterfs
+                    salt.enforceState(saltMaster, 'I@glusterfs:server', 'glusterfs.server.service', true)
+
+                    //runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.setup'], 1)
+                    if (INSTALL.toLowerCase().contains('kvm')) {
+                        salt.enforceState(saltMaster, 'ctl01*', 'glusterfs.server.setup', true)
+                        salt.enforceState(saltMaster, 'ctl02*', 'glusterfs.server.setup', true)
+                        salt.enforceState(saltMaster, 'ctl03*', 'glusterfs.server.setup', true)
+                    } else {
+                        salt.enforceState(saltMaster, 'kvm01*', 'glusterfs.server.setup', true)
+                        salt.enforceState(saltMaster, 'kvm02*', 'glusterfs.server.setup', true)
+                        salt.enforceState(saltMaster, 'kvm03*', 'glusterfs.server.setup', true)
+                    }
+
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'])
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'])
+
+                    // Install rabbitmq
+                    salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true)
+
+                    // Check the rabbitmq status
+                    salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'])
+
+                    // Install galera
+                    salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
+                    salt.enforceState(saltMaster, 'I@galera:slave', 'galera', true)
+
+                    // Check galera status
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'mysql.status')
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'mysql.status')
+
+                    // Install haproxy
+                    salt.enforceState(saltMaster, 'I@haproxy:proxy', 'haproxy', true)
+                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.status', ['haproxy'])
+                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.restart', ['rsyslog'])
+
+                    // Install memcached
+                    salt.enforceState(saltMaster, 'I@memcached:server', 'memcached', true)
+
                 }
 
-                salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'system.reboot')
+                stage('Install OpenStack control') {
+                    //orchestrate.installOpenstackMkControl(saltMaster)
+
+                    // setup keystone service
+                    //runSaltProcessStep(saltMaster, 'I@keystone:server', 'state.sls', ['keystone.server'], 1)
+                    salt.enforceState(saltMaster, 'ctl01*', 'keystone.server', true)
+                    salt.enforceState(saltMaster, 'I@keystone:server', 'keystone.server', true)
+                    // populate keystone services/tenants/roles/users
+
+                    // keystone:client must be called locally
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:client', 'cmd.run', ['salt-call state.sls keystone.client'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; keystone service-list'])
+
+                    // Install glance and ensure glusterfs clusters
+                    //runSaltProcessStep(saltMaster, 'I@glance:server', 'state.sls', ['glance.server'], 1)
+                    salt.enforceState(saltMaster, 'ctl01*', 'glance.server', true)
+                    salt.enforceState(saltMaster, 'I@glance:server', 'glance.server', true)
+                    salt.enforceState(saltMaster, 'I@glance:server', 'glusterfs.client', true)
+
+                    // Update fernet tokens before doing request on keystone server
+                    salt.enforceState(saltMaster, 'I@keystone:server', 'keystone.server', true)
+
+                    // Check glance service
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; glance image-list'])
+
+                    // Install and check nova service
+                    //runSaltProcessStep(saltMaster, 'I@nova:controller', 'state.sls', ['nova'], 1)
+                    salt.enforceState(saltMaster, 'ctl01*', 'nova', true)
+                    salt.enforceState(saltMaster, 'I@nova:controller', 'nova', true)
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova service-list'])
+
+                    // Install and check cinder service
+                    //runSaltProcessStep(saltMaster, 'I@cinder:controller', 'state.sls', ['cinder'], 1)
+                    salt.enforceState(saltMaster, 'ctl01*', 'cinder', true)
+                    salt.enforceState(saltMaster, 'I@cinder:controller', 'cinder', true)
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; cinder list'])
+
+                    // Install neutron service
+                    //runSaltProcessStep(saltMaster, 'I@neutron:server', 'state.sls', ['neutron'], 1)
+                    salt.enforceState(saltMaster, 'ctl01*', 'neutron', true)
+                    salt.enforceState(saltMaster, 'I@neutron:server', 'neutron', true)
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron agent-list'])
+
+                    // Install heat service
+                    //runSaltProcessStep(saltMaster, 'I@heat:server', 'state.sls', ['heat'], 1)
+                    salt.enforceState(saltMaster, 'ctl01*', 'heat', true)
+                    salt.enforceState(saltMaster, 'I@heat:server', 'heat', true)
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; heat resource-type-list'])
+
+                    // Install horizon dashboard
+                    salt.enforceState(saltMaster, 'I@horizon:server', 'horizon', true)
+                    salt.enforceState(saltMaster, 'I@nginx:server', 'nginx', true)
+
+                }
+
+                stage('Install OpenStack network') {
+                    //orchestrate.installOpenstackMkNetwork(saltMaster, physical)
+
+                    // Install opencontrail database services
+                    //runSaltProcessStep(saltMaster, 'I@opencontrail:database', 'state.sls', ['opencontrail.database'], 1)
+                    salt.enforceState(saltMaster, 'ntw01*', 'opencontrail.database', true)
+                    salt.enforceState(saltMaster, 'I@opencontrail:database', 'opencontrail.database', true)
+
+                    // Install opencontrail control services
+                    //runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail'], 1)
+                    salt.enforceState(saltMaster, 'ntw01*', 'opencontrail', true)
+                    salt.enforceState(saltMaster, 'I@opencontrail:control', 'opencontrail', true)
+
+                    // Provision opencontrail control services
+                    if (INSTALL.toLowerCase().contains('kvm')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl01 --host_ip 172.16.10.101 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl02 --host_ip 172.16.10.102 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl03 --host_ip 172.16.10.103 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
+                    }
+
+                    // Test opencontrail
+                    salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'cmd.run', ['contrail-status'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
+                }
+
+                stage('Install OpenStack compute') {
+                    //orchestrate.installOpenstackMkCompute(saltMaster, physical)
+                    // Configure compute nodes
+                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply')
+                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply')
+
+                    // Provision opencontrail virtual routers
+                    if (INSTALL.toLowerCase().contains('kvm')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp01 --host_ip 172.16.10.105 --api_server_ip 172.16.10.254 --oper add --admin_user admin --admin_password workshop --admin_tenant_name admin'])
+                    }
+
+                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'system.reboot')
+                }
             }
-        }
 
-        //
-        // Test
-        //
+            //
+            // Test
+            //
 
-        if (TEST.toLowerCase().contains('k8s')) {
-            stage('Run k8s bootstrap tests') {
-                orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+            if (TEST.toLowerCase().contains('k8s')) {
+                stage('Run k8s bootstrap tests') {
+                    orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+                }
+
+                stage('Run k8s conformance e2e tests') {
+                    orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
+                }
             }
 
-            stage('Run k8s conformance e2e tests') {
-                orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
-            }
-        }
 
+        } catch (Throwable e) {
+            currentBuild.result = 'FAILURE'
+            throw e
+        } finaly {
 
-        //
-        // Clean
-        //
+            //
+            // Clean
+            //
 
-        if (HEAT_STACK_DELETE == 'true' && STACK_TYPE == 'heat') {
-            stage('Trigger cleanup job') {
-                build job: 'deploy_heat_cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+            if (HEAT_STACK_DELETE == 'true' && STACK_TYPE == 'heat') {
+                stage('Trigger cleanup job') {
+                    build job: 'deploy_heat_cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+                }
             }
         }
     }
