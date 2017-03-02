@@ -57,6 +57,9 @@ timestamps {
                         HEAT_STACK_NAME = BUILD_TAG
                     }
 
+                    // set description
+                    currentBuild.description = "stack: ${HEAT_STACK_NAME}"
+
                     // get templates
                     git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
 
