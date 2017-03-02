@@ -125,7 +125,7 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all')
 
                     // workaround - install apt-transport-https
-                    salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https'])
+                    salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https refresh=True'])
                     salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'state.sls', ['linux,openssh,salt.minion,ntp'])
                 }
 
