@@ -104,10 +104,10 @@ timestamps {
                     // linux,openssh,salt.minion.ntp
 
                     //orchestrate.installFoundationInfra(saltMaster)
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'state.sls', ['salt.master,reclass'])
-                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar')
-                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all')
-                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'state.sls', ['linux,openssh,salt.minion,ntp'])
+                    salt.enforceState(saltMaster, 'I@salt:master', ['salt.master', 'reclass'], true)
+                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', null, true)
+                    salt.enforceState(saltMaster, 'I@linux:system', ['linux', 'openssh', 'salt.minion', 'ntp'], true)
 
 
                     if (INSTALL.toLowerCase().contains('kvm')) {
@@ -115,26 +115,26 @@ timestamps {
                         salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar')
                         salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all')
 
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:control', 'state.sls', ['salt.minion,linux.system,linux.network,ntp'])
+                        salt.enforceState(saltMaster, 'I@salt:control', ['salt.minion', 'linux.system', 'linux.network', 'ntp'], true)
                         salt.enforceState(saltMaster, 'I@salt:control', 'libvirt', true)
                         salt.enforceState(saltMaster, 'I@salt:control', 'salt.control', true)
 
                         sleep(300)
 
-                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.refresh_pillar')
-                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all')
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.refresh_pillar', null, true)
+                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all', null, true)
 
                         // workaround - install apt-transport-https
                         salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https refresh=True'])
-                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'state.sls', ['linux,openssh,salt.minion,ntp'])
+                        salt.enforceState(saltMaster, 'I@linux:system', ['linux', 'openssh', 'salt.minion', 'ntp'], true)
                     }
 
                     //orchestrate.validateFoundationInfra(saltMaster)
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['salt-key'])
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'test.version')
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['reclass-salt --top'])
-                    salt.runSaltProcessStep(saltMaster, 'I@reclass:storage', 'reclass.inventory')
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'state.show_top')
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['salt-key'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'test.version', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'cmd.run', ['reclass-salt --top'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@reclass:storage', 'reclass.inventory', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:minion', 'state.show_top', null, true)
                 }
             }
 
@@ -237,27 +237,27 @@ timestamps {
                         salt.enforceState(saltMaster, 'ctl03*', 'glusterfs.server.setup', true)
                     }
 
-                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'])
-                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'])
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'], null, true)
 
                     // Install rabbitmq
                     salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true)
 
                     // Check the rabbitmq status
-                    salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'])
+                    salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'], null, ture)
 
                     // Install galera
                     salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
                     salt.enforceState(saltMaster, 'I@galera:slave', 'galera', true)
 
                     // Check galera status
-                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'mysql.status')
-                    salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'mysql.status')
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'mysql.status', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'mysql.status', null, true)
 
                     // Install haproxy
                     salt.enforceState(saltMaster, 'I@haproxy:proxy', 'haproxy', true)
-                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.status', ['haproxy'])
-                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.restart', ['rsyslog'])
+                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.status', ['haproxy'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.restart', ['rsyslog'], null, true)
 
                     // Install memcached
                     salt.enforceState(saltMaster, 'I@memcached:server', 'memcached', true)
@@ -274,8 +274,8 @@ timestamps {
                     // populate keystone services/tenants/roles/users
 
                     // keystone:client must be called locally
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:client', 'cmd.run', ['salt-call state.sls keystone.client'])
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; keystone service-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:client', 'cmd.run', ['salt-call state.sls keystone.client'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; keystone service-list'], null, true)
 
                     // Install glance and ensure glusterfs clusters
                     //runSaltProcessStep(saltMaster, 'I@glance:server', 'state.sls', ['glance.server'], 1)
@@ -287,31 +287,31 @@ timestamps {
                     salt.enforceState(saltMaster, 'I@keystone:server', 'keystone.server', true)
 
                     // Check glance service
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; glance image-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; glance image-list'], null, true)
 
                     // Install and check nova service
                     //runSaltProcessStep(saltMaster, 'I@nova:controller', 'state.sls', ['nova'], 1)
                     salt.enforceState(saltMaster, 'ctl01*', 'nova', true)
                     salt.enforceState(saltMaster, 'I@nova:controller', 'nova', true)
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova service-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova service-list'], null, true)
 
                     // Install and check cinder service
                     //runSaltProcessStep(saltMaster, 'I@cinder:controller', 'state.sls', ['cinder'], 1)
                     salt.enforceState(saltMaster, 'ctl01*', 'cinder', true)
                     salt.enforceState(saltMaster, 'I@cinder:controller', 'cinder', true)
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; cinder list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; cinder list'], null, true)
 
                     // Install neutron service
                     //runSaltProcessStep(saltMaster, 'I@neutron:server', 'state.sls', ['neutron'], 1)
                     salt.enforceState(saltMaster, 'ctl01*', 'neutron', true)
                     salt.enforceState(saltMaster, 'I@neutron:server', 'neutron', true)
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron agent-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron agent-list'], null, true)
 
                     // Install heat service
                     //runSaltProcessStep(saltMaster, 'I@heat:server', 'state.sls', ['heat'], 1)
                     salt.enforceState(saltMaster, 'ctl01*', 'heat', true)
                     salt.enforceState(saltMaster, 'I@heat:server', 'heat', true)
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; heat resource-type-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; heat resource-type-list'], null, true)
 
                     // Install horizon dashboard
                     salt.enforceState(saltMaster, 'I@horizon:server', 'horizon', true)
@@ -334,29 +334,29 @@ timestamps {
 
                     // Provision opencontrail control services
                     if (INSTALL.toLowerCase().contains('kvm')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl01 --host_ip 172.16.10.101 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
-                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl02 --host_ip 172.16.10.102 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
-                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl03 --host_ip 172.16.10.103 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'])
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl01 --host_ip 172.16.10.101 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl02 --host_ip 172.16.10.102 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl03 --host_ip 172.16.10.103 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
                     }
 
                     // Test opencontrail
-                    salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'cmd.run', ['contrail-status'])
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'cmd.run', ['contrail-status'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'], null, true)
                 }
 
                 stage('Install OpenStack compute') {
                     //orchestrate.installOpenstackMkCompute(saltMaster, physical)
                     // Configure compute nodes
-                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply')
-                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply')
+                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply', null, true)
 
                     // Provision opencontrail virtual routers
                     if (INSTALL.toLowerCase().contains('kvm')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp01 --host_ip 172.16.10.105 --api_server_ip 172.16.10.254 --oper add --admin_user admin --admin_password workshop --admin_tenant_name admin'])
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp01 --host_ip 172.16.10.105 --api_server_ip 172.16.10.254 --oper add --admin_user admin --admin_password workshop --admin_tenant_name admin'], null, true)
                     }
 
-                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'system.reboot')
+                    salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'system.reboot', null, true)
                 }
             }
 
