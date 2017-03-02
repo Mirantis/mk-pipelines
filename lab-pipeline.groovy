@@ -251,7 +251,7 @@ timestamps {
                     salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true)
 
                     // Check the rabbitmq status
-                    salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'], null, ture)
+                    salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'], null, true)
 
                     // Install galera
                     salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
