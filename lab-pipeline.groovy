@@ -251,20 +251,20 @@ timestamps {
                     salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true)
 
                     // Check the rabbitmq status
-                    salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'])
 
                     // Install galera
                     salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
                     salt.enforceState(saltMaster, 'I@galera:slave', 'galera', true)
 
                     // Check galera status
-                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'mysql.status', null, true)
-                    salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'mysql.status', null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'mysql.status')
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'mysql.status')
 
                     // Install haproxy
                     salt.enforceState(saltMaster, 'I@haproxy:proxy', 'haproxy', true)
-                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.status', ['haproxy'], null, true)
-                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.restart', ['rsyslog'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.status', ['haproxy'])
+                    salt.runSaltProcessStep(saltMaster, 'I@haproxy:proxy', 'service.restart', ['rsyslog'])
 
                     // Install memcached
                     salt.enforceState(saltMaster, 'I@memcached:server', 'memcached', true)
