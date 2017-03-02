@@ -39,9 +39,15 @@ git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 
+
+// Set decription and information
+currentBuild.description = "Install: ${INSTALL}<br>Test: ${TEST}"
+
 timestamps {
     node {
         try {
+
+
             //
             // Prepare machines
             //
@@ -58,7 +64,7 @@ timestamps {
                     }
 
                     // set description
-                    currentBuild.description = "stack: ${HEAT_STACK_NAME}"
+                    currentBuild.description = "${currentBuild.description}<br>Stack: ${HEAT_STACK_NAME}"
 
                     // get templates
                     git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
