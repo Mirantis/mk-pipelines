@@ -221,18 +221,18 @@ timestamps {
                 //
                 // Deploy user's ssh key
                 //
-                if (sshPubKey) {
-                    def out = salt.cmdRun(saltMaster, 'I@salt:master', "[ -d /home/ubuntu ] && echo 'ubuntu user exists'")
-                    def adminUser
-                    def authorizedKeysFile
-                    if (out =~ /ubuntu user exists/) {
-                        adminUser = "ubuntu"
-                        authorizedKeysFile = "/home/ubuntu/.ssh/authorized_keys"
-                    } else {
-                        adminUser = "root"
-                        authorizedKeysFile = "/root/.ssh/authorized_keys"
-                    }
+                def adminUser
+                def authorizedKeysFile
+                def out = salt.cmdRun(saltMaster, 'I@salt:master', "[ -d /home/ubuntu ] && echo 'ubuntu user exists'")
+                if (out =~ /ubuntu user exists/) {
+                    adminUser = "ubuntu"
+                    authorizedKeysFile = "/home/ubuntu/.ssh/authorized_keys"
+                } else {
+                    adminUser = "root"
+                    authorizedKeysFile = "/root/.ssh/authorized_keys"
+                }
 
+                if (sshPubKey) {
                     println "Deploying provided ssh key at ${authorizedKeysFile}"
                     salt.cmdRun(saltMaster, '*', "echo '${sshPubKey}' | tee -a ${authorizedKeysFile}")
                 }
