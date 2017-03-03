@@ -393,7 +393,10 @@ timestamps {
                     sleep(10)
                 }
 
+            }
 
+
+            if (INSTALL.toLowerCase().contains('stacklight')) {
                 stage('Install StackLight') {
                     // infra install
                     // Install the StackLight backends
