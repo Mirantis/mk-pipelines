@@ -69,7 +69,11 @@ timestamps {
             if (HEAT_STACK_REUSE.toBoolean() == false) {
                 // Don't allow to set custom heat stack name
                 wrap([$class: 'BuildUser']) {
-                    HEAT_STACK_NAME = "${env.BUILD_USER_ID}-${JOB_NAME}-${BUILD_NUMBER}"
+                    if (env.BUILD_USER_ID) {
+                        HEAT_STACK_NAME = "${env.BUILD_USER_ID}-${JOB_NAME}-${BUILD_NUMBER}"
+                    } else {
+                        HEAT_STACK_NAME = "jenkins-${JOB_NAME}-${BUILD_NUMBER}"
+                    }
                     currentBuild.description = HEAT_STACK_NAME
                 }
             }
