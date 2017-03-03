@@ -392,6 +392,101 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'system.reboot', [], null, true)
                     sleep(10)
                 }
+
+
+                stage('Install StackLight') {
+                    // infra install
+                    // Install the StackLight backends
+                    salt.enforceState(saltMaster, '*01* and  I@elasticsearch:server', 'elasticsearch.server', true)
+                    salt.enforceState(saltMaster, 'I@elasticsearch:server', 'elasticsearch.server', true)
+
+                    salt.enforceState(saltMaster, '*01* and I@influxdb:server', 'influxdb', true)
+                    salt.enforceState(saltMaster, 'I@influxdb:server', 'influxdb', true)
+
+                    salt.enforceState(saltMaster, '*01* and I@kibana:server', 'kibana.server', true)
+                    salt.enforceState(saltMaster, 'I@kibana:server', 'kibana.server', true)
+
+                    salt.enforceState(saltMaster, '*01* and I@grafana:server','grafana.server', true)
+                    salt.enforceState(saltMaster, 'I@grafana:server','grafana.server', true)
+
+                    salt.enforceState(saltMaster, 'I@nagios:server', 'nagios.server', true)
+                    salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client.service', true)
+                    salt.enforceState(saltMaster, 'I@kibana:client', 'kibana.client.service', true)
+                    // nw salt.enforceState('I@kibana:client or I@elasticsearch:client' --async service.restart salt-minion
+
+                    sleep(10)
+                    salt.enforceState(saltMaster, 'I@redis:cluster:role:master', 'redis', true)
+                    salt.enforceState(saltMaster, 'I@redis:cluster:role:slave', 'redis', true)
+
+                    salt.enforceState(saltMaster, '*01 and I@sensu:server', 'sensu', true)
+                    salt.enforceState(saltMaster, 'I@sensu:server', 'sensu', true)
+
+                    salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
+                    salt.enforceState(saltMaster, 'I@kibana:client', 'kibana.client', true)
+
+                    // install monitor
+                    // Restart salt-minion to make sure that it uses the latest Jinja library
+                    // no way: salt '*' --async service.restart salt-minion; sleep 15
+
+                    // Start by flusing Salt Mine to make sure it is clean
+                    // Also clean-up the grains files to make sure that we start from a clean state
+                    // nw salt "*" mine.flush
+                    // nw salt "*" file.remove /etc/salt/grains.d/collectd
+                    // nw salt "*" file.remove /etc/salt/grains.d/grafana
+                    // nw salt "*" file.remove /etc/salt/grains.d/heka
+                    // nw salt "*" file.remove /etc/salt/grains.d/sensu
+                    // nw salt "*" file.remove /etc/salt/grains
+
+                    // Install collectd, heka and sensu services on the nodes, this will also
+                    // generate the metadata that goes into the grains and eventually into Salt Mine
+                    salt.enforceState(saltMaster, '*', 'collectd, true)
+                    salt.enforceState(saltMaster, '*', 'heka', true)
+                    salt.enforceState(saltMaster, 'I@sensu:client', 'sensu', true)
+
+                    // Gather the Grafana metadata as grains
+                    salt.enforceState(saltMaster, 'I@grafana:collector', 'grafana.collector', true)
+
+                    // Update Salt Mine
+                    salt.enforceState(saltMaster, '*', 'salt.minion.grains', true)
+                    salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_modules', [], null, true)
+                    salt.runSaltProcessStep(saltMaster, '*', 'mine.update', [], null, true)
+
+                    sleep(5)
+
+                    // Update Heka
+                    salt.enforceState(saltMaster, 'I@heka:aggregator:enabled:True or I@heka:remote_collector:enabled:True', 'heka', true)
+
+                    // Update collectd
+                    salt.enforceState(saltMaster, 'I@collectd:remote_client:enabled:True', 'collectd', true)
+
+                    // Update Nagios
+                    salt.enforceState(saltMaster, 'I@nagios:server', 'nagios', true)
+                    // Stop the Nagios service because the package starts it by default and it will
+                    // started later only on the node holding the VIP address
+                    salt.runSaltProcessStep(saltMaster, 'I@nagios:server', 'service.stop', ['nagios3'], null, true)
+
+                    // Update Sensu
+                    salt.enforceState(saltMaster, 'I@sensu:server', 'sensu', true)
+
+                    // Finalize the configuration of Grafana (add the dashboards...)
+                    salt.enforceState(saltMaster, 'I@grafana:client', 'grafana.client.service', true)
+                    // nw salt -C 'I@grafana:client' --async service.restart salt-minion; sleep 10
+                    salt.enforceState(saltMaster, 'I@grafana:client', 'grafana.client', true)
+
+                    // Get the StackLight monitoring VIP addres
+                    // TODO
+                    //vip=$(salt-call pillar.data _param:stacklight_monitor_address --out key|grep _param: |awk '{print $2}')
+                    //vip=${vip:=172.16.10.253}
+                    salt.runSaltProcessStep(saltMaster, cmd.run
+                    def tmp = salt.pillarGet(saltMaster, 'ctl01*', '_param:stacklight_monitor_address')
+                    print(tmp)
+
+                    // (re)Start manually the services that are bound to the monitoring VIP
+                    //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['remote_collectd'], true)
+                    //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['remote_collector'], true)
+                    //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['aggregator'], true)
+                    //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['nagios3'], true), true)
+                }
             }
 
             //
