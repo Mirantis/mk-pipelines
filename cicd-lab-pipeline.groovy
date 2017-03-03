@@ -192,7 +192,7 @@ timestamps {
                     try {
                         salt.enforceState(saltMaster, 'I@gerrit:client', 'gerrit', true)
                     } catch (Exception e) {
-                        print "Restarting Salt minion"
+                        common.infoMsg("Restarting Salt minion")
                         salt.cmdRun(saltMaster, 'I@gerrit:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
                         sleep(5)
                         throw e
@@ -209,7 +209,7 @@ timestamps {
                     try {
                         salt.enforceState(saltMaster, 'I@jenkins:client', 'jenkins', true)
                     } catch (Exception e) {
-                        print "Restarting Salt minion"
+                        common.infoMsg("Restarting Salt minion")
                         salt.cmdRun(saltMaster, 'I@jenkins:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
                         sleep(5)
                         throw e
@@ -223,10 +223,13 @@ timestamps {
                 //
                 if (sshPubKey) {
                     def out = salt.cmdRun(saltMaster, 'I@salt:master', "[ -d /home/ubuntu ] && echo 'ubuntu user exists'")
+                    def adminUser
                     def authorizedKeysFile
                     if (out =~ /ubuntu user exists/) {
+                        adminUser = "ubuntu"
                         authorizedKeysFile = "/home/ubuntu/.ssh/authorized_keys"
                     } else {
+                        adminUser = "root"
                         authorizedKeysFile = "/root/.ssh/authorized_keys"
                     }
 
@@ -254,12 +257,12 @@ timestamps {
                 }
                 salt.enforceState(saltMaster, 'I@nginx:server', 'nginx')
 
-                print """
+                successMsg("""
     ============================================================
     Your CI/CD lab has been deployed and you can enjoy it:
     Use sshuttle to connect to your private subnet:
 
-        sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24
+        sshuttle -r ${adminUser}@${saltMasterHost} 172.16.10.0/24
 
     And visit services running at 172.16.10.254 (vip address):
 
@@ -274,7 +277,7 @@ timestamps {
     heat template.
 
     DON'T FORGET TO TERMINATE YOUR STACK WHEN YOU DON'T NEED IT!
-    ============================================================"""
+    ============================================================""")
             }
         } catch (Throwable e) {
             // If there was an error or exception thrown, the build failed
