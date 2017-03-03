@@ -418,8 +418,6 @@ timestamps {
                     // nw salt.enforceState('I@kibana:client or I@elasticsearch:client' --async service.restart salt-minion
 
                     sleep(10)
-                    salt.enforceState(saltMaster, 'I@redis:cluster:role:master', 'redis', true)
-                    salt.enforceState(saltMaster, 'I@redis:cluster:role:slave', 'redis', true)
 
                     salt.enforceState(saltMaster, '*01 and I@sensu:server', 'sensu', true)
                     salt.enforceState(saltMaster, 'I@sensu:server', 'sensu', true)
