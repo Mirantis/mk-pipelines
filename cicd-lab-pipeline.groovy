@@ -62,8 +62,16 @@ timestamps {
             def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
             def openstackEnv = "${env.WORKSPACE}/venv"
 
-            if (HEAT_STACK_NAME == '') {
-                HEAT_STACK_NAME = BUILD_TAG
+            if (HEAT_STACK_REUSE.toBoolean() == true && HEAT_STACK_NAME == '') {
+                error("If you want to reuse existing stack you need to provide it's name")
+            }
+
+            if (HEAT_STACK_REUSE.toBoolean() == false) {
+                // Don't allow to set custom heat stack name
+                wrap([$class: 'BuildUser']) {
+                    HEAT_STACK_NAME = "${env.BUILD_USER_ID}-${JOB_NAME}-${BUILD_NUMBER}"
+                    currentBuild.description = HEAT_STACK_NAME
+                }
             }
 
             //
@@ -83,7 +91,7 @@ timestamps {
                 openstack.getKeystoneToken(openstackCloud, openstackEnv)
             }
 
-            if (HEAT_STACK_REUSE == 'false') {
+            if (HEAT_STACK_REUSE.toBoolean() == false) {
                 stage('Launch new Heat stack') {
                     envParams = [
                         'instance_zone': HEAT_STACK_ZONE,
@@ -220,7 +228,8 @@ timestamps {
                 }
                 salt.enforceState(saltMaster, 'I@nginx:server', 'nginx')
 
-                print """============================================================
+                print """
+    ============================================================
     Your CI/CD lab has been deployed and you can enjoy it:
     Use sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24
     to connect to your private subnet and visit services
@@ -240,7 +249,7 @@ timestamps {
             throw e
         } finally {
             // Cleanup
-            if (HEAT_STACK_DELETE == 'true') {
+            if (HEAT_STACK_DELETE.toBoolean() == true) {
                 stage('Trigger cleanup job') {
                     build job: 'deploy_heat_cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
                 }
