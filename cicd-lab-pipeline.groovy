@@ -62,6 +62,12 @@ timestamps {
             def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
             def openstackEnv = "${env.WORKSPACE}/venv"
 
+            try {
+                sshPubKey = SSH_PUBLIC_KEY
+            } catch (MissingPropertyException e) {
+                sshPubKey = false
+            }
+
             if (HEAT_STACK_REUSE.toBoolean() == true && HEAT_STACK_NAME == '') {
                 error("If you want to reuse existing stack you need to provide it's name")
             }
@@ -213,6 +219,22 @@ timestamps {
 
             stage("Finalize") {
                 //
+                // Deploy user's ssh key
+                //
+                if (sshPubKey) {
+                    def out = salt.cmdRun(saltMaster, 'I@salt:master', "[ -d /home/ubuntu ] && echo 'ubuntu user exists'")
+                    def authorizedKeysFile
+                    if (out =~ /ubuntu user exists/) {
+                        authorizedKeysFile = "/home/ubuntu/.ssh/authorized_keys"
+                    } else {
+                        authorizedKeysFile = "/root/.ssh/authorized_keys"
+                    }
+
+                    println "Deploying provided ssh key at ${authorizedKeysFile}"
+                    cmdRun(saltMaster, '*', "echo '${sshPubKey}' | tee -a ${authorizedKeysFile}")
+                }
+
+                //
                 // Generate docs
                 //
                 try {
@@ -235,16 +257,23 @@ timestamps {
                 print """
     ============================================================
     Your CI/CD lab has been deployed and you can enjoy it:
-    Use sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24
-    to connect to your private subnet and visit services
-    running at 172.16.10.254 (vip address):
+    Use sshuttle to connect to your private subnet:
+
+        sshuttle -r ubuntu@${saltMasterHost} 172.16.10.0/24
+
+    And visit services running at 172.16.10.254 (vip address):
+
         9600    haproxy stats
         8080    gerrit
         8081    jenkins
         8091    Docker swarm visualizer
         8090    Reclass-generated documentation
 
-    Don't forget to terminate your stack when you don't need it!
+    If you provided SSH_PUBLIC_KEY, you can use it to login,
+    otherwise you need to get private key connected to this
+    heat template.
+
+    DON'T FORGET TO TERMINATE YOUR STACK WHEN YOU DON'T NEED IT!
     ============================================================"""
             }
         } catch (Throwable e) {
