@@ -284,7 +284,7 @@ timestamps {
             // Cleanup
             if (HEAT_STACK_DELETE.toBoolean() == true) {
                 stage('Trigger cleanup job') {
-                    build job: 'deploy_heat_cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+                    build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
                 }
             }
         }
