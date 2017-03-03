@@ -231,7 +231,7 @@ timestamps {
                     }
 
                     println "Deploying provided ssh key at ${authorizedKeysFile}"
-                    cmdRun(saltMaster, '*', "echo '${sshPubKey}' | tee -a ${authorizedKeysFile}")
+                    salt.cmdRun(saltMaster, '*', "echo '${sshPubKey}' | tee -a ${authorizedKeysFile}")
                 }
 
                 //
