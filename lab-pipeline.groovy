@@ -419,7 +419,7 @@ timestamps {
 
                     sleep(10)
 
-                    salt.enforceState(saltMaster, '*01 and I@sensu:server', 'sensu', true)
+                    salt.enforceState(saltMaster, '*01* and I@sensu:server', 'sensu', true)
                     salt.enforceState(saltMaster, 'I@sensu:server', 'sensu', true)
 
                     salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
