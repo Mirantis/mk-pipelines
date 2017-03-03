@@ -419,9 +419,6 @@ timestamps {
 
                     sleep(10)
 
-                    salt.enforceState(saltMaster, '*01* and I@sensu:server', 'sensu', true)
-                    salt.enforceState(saltMaster, 'I@sensu:server', 'sensu', true)
-
                     salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
                     salt.enforceState(saltMaster, 'I@kibana:client', 'kibana.client', true)
 
@@ -442,7 +439,6 @@ timestamps {
                     // generate the metadata that goes into the grains and eventually into Salt Mine
                     salt.enforceState(saltMaster, '*', 'collectd', true)
                     salt.enforceState(saltMaster, '*', 'heka', true)
-                    salt.enforceState(saltMaster, 'I@sensu:client', 'sensu', true)
 
                     // Gather the Grafana metadata as grains
                     salt.enforceState(saltMaster, 'I@grafana:collector', 'grafana.collector', true)
