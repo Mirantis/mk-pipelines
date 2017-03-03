@@ -207,7 +207,11 @@ timestamps {
                     retry(3) {
                         // TODO: fix salt.orchestrateSystem
                         // print salt.orchestrateSystem(saltMaster, ['expression': '*', 'type': 'compound'], 'sphinx.orch.generate_doc')
-                        print salt.cmdRun(saltMaster, 'I@salt:master', 'salt-run state.orchestrate sphinx.orch.generate_doc')
+                        def out = salt.cmdRun(saltMaster, 'I@salt:master', 'salt-run state.orchestrate sphinx.orch.generate_doc || echo "Command execution failed"')
+                        print out
+                        if (out =~ /Command execution failed/) {
+                            throw new Exception("Command execution failed")
+                        }
                     }
                 } catch (Throwable e) {
                     // We don't want sphinx docs to ruin whole build, so possible
