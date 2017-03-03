@@ -480,7 +480,6 @@ timestamps {
                     // TODO
                     //vip=$(salt-call pillar.data _param:stacklight_monitor_address --out key|grep _param: |awk '{print $2}')
                     //vip=${vip:=172.16.10.253}
-                    salt.runSaltProcessStep(saltMaster, cmd.run
                     def tmp = salt.pillarGet(saltMaster, 'ctl01*', '_param:stacklight_monitor_address')
                     print(tmp)
 
