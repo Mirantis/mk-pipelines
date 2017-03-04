@@ -257,7 +257,7 @@ timestamps {
                 }
                 salt.enforceState(saltMaster, 'I@nginx:server', 'nginx')
 
-                successMsg("""
+                common.successMsg("""
     ============================================================
     Your CI/CD lab has been deployed and you can enjoy it:
     Use sshuttle to connect to your private subnet:
