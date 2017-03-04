@@ -26,6 +26,7 @@
  *
  */
 
+common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
