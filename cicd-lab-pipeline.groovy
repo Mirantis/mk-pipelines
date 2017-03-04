@@ -223,8 +223,8 @@ timestamps {
                 //
                 def adminUser
                 def authorizedKeysFile
-                def out = salt.cmdRun(saltMaster, 'I@salt:master', "[ -d /home/ubuntu ] && echo 'ubuntu user exists'")
-                if (out =~ /ubuntu user exists/) {
+                def adminUserCmdOut = salt.cmdRun(saltMaster, 'I@salt:master', "[ -d /home/ubuntu ] && echo 'ubuntu user exists'")
+                if (adminUserCmdOut =~ /ubuntu user exists/) {
                     adminUser = "ubuntu"
                     authorizedKeysFile = "/home/ubuntu/.ssh/authorized_keys"
                 } else {
