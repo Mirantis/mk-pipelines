@@ -98,7 +98,14 @@ timestamps {
                     // get SALT_MASTER_URL
                     saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
                     currentBuild.description = "${HEAT_STACK_NAME}: ${saltMasterHost}"
-                    SALT_MASTER_URL = "http://${saltMasterHost}:8088"
+
+                    if (INSTALL.toLowerCase().contains('kvm')) {
+                        saltPort = 8088
+                    } else {
+                        saltPort = 8000
+                    }
+
+                    SALT_MASTER_URL = "http://${saltMasterHost}:saltPort"
                 }
             }
 
