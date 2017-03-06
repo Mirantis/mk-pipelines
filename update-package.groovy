@@ -27,12 +27,11 @@ timestamps {
           salt.runSaltProcessStep(saltMaster, UPDATE_SERVERS, 'pkg.list_upgrades', [], null, true)
         }
 
-        if (UPDATE_COMMIT == true) {
+        if (UPDATE_COMMIT.toBoolean() == true) {
           stage("Update packages") {
             if (UPDATE_PACKAGES == "") {
               salt.runSaltProcessStep(saltMaster, UPDATE_SERVERS, 'pkg.install', [], null, true)
-            }
-            else {
+            } else {
               salt.runSaltProcessStep(saltMaster, UPDATE_SERVERS, 'pkg.install', UPDATE_PACKAGES.split(' '), null, true)
             }
           }
