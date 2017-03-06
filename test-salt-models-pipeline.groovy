@@ -10,7 +10,7 @@ node("python") {
           credentialsId : CREDENTIALS_ID
       ])
 
-      if (fileExists('classes/system') {
+      if (fileExists('classes/system')) {
         ssh.prepareSshAgentKey(CREDENTIALS_ID)
         dir('classes/system') {
           remoteUrl = git.getGitRemote()
