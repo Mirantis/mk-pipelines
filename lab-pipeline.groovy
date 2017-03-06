@@ -470,7 +470,8 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@nagios:server', 'service.stop', ['nagios3'], null, true)
 
                     // Update Sensu
-                    salt.enforceState(saltMaster, 'I@sensu:server', 'sensu', true)
+                    // TODO for stacklight team, should be fixed in model
+                    //salt.enforceState(saltMaster, 'I@sensu:server', 'sensu', true)
 
                     // Finalize the configuration of Grafana (add the dashboards...)
                     salt.enforceState(saltMaster, 'I@grafana:client', 'grafana.client.service', true)
