@@ -20,8 +20,10 @@ node("python") {
       }
     }
     stage("test") {
-      wrap([$class: 'AnsiColorBuildWrapper']) {
-        sh("make test")
+      timeout(10800) {
+        wrap([$class: 'AnsiColorBuildWrapper']) {
+          sh("make test")
+        }
       }
     }
   } catch (Throwable e) {
