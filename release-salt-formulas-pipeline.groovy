@@ -1,13 +1,14 @@
 def common = new com.mirantis.mk.Common()
+def ssh = new com.mirantis.mk.Ssh()
 node() {
   try{
     stage("checkout") {
       dir("src") {
-        common.prepareSshAgentKey(CREDENTIALS_ID)
-        common.ensureKnownHosts(SOURCE_URL)
+        ssh.prepareSshAgentKey(CREDENTIALS_ID)
+        ssh.ensureKnownHosts(SOURCE_URL)
         git url: SOURCE_URL, branch: "master", credentialsId: CREDENTIALS_ID, poll: false
         sh("git branch --set-upstream-to=origin/master")
-        common.agentSh("make update")
+        ssh.agentSh("make update")
       }
     }
     stage("tag") {
@@ -17,7 +18,7 @@ node() {
     }
     stage("push") {
       dir("src/formulas") {
-        common.agentSh("mr --trust-all -j4 --force run git push gerrit $TAG")
+        ssh.agentSh("mr --trust-all -j4 --force run git push gerrit $TAG")
       }
     }
   } catch (Throwable e) {
