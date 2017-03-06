@@ -29,6 +29,7 @@ openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 orchestrate = new com.mirantis.mk.Orchestrate()
 test = new com.mirantis.mk.Test()
+artifacts_dir = "_artifacts"
 
 node {
 
@@ -96,6 +97,21 @@ node {
 
         stage("Copy k8s e2e test output to config node ") {
             test.copyTestsOutput(saltMaster,CONFORMANCE_IMAGE)
+        }
+
+        stage("Copy k8s e2e test output to host ") {
+            sh '''
+                mkdir ${env.WORKSPACE}/${artifacts_dir}
+               '''
+            try {
+                test.catTestsOutput(saltMaster,CONFORMANCE_IMAGE) >> ${env.WORKSPACE}/${artifacts_dir}/$CONFORMANCE_IMAGE
+            } catch (InterruptedException x) {
+                echo "The job was aborted"
+            } finally {
+                archiveArtifacts allowEmptyArchive: true, artifacts: '_artifacts/*', excludes: null
+                junit keepLongStdio: true, testResults: '_artifacts/**.xml'
+                sh "sudo chown -R jenkins:jenkins ${env.WORKSPACE}"
+
         }
     }
 
