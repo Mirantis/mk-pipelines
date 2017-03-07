@@ -242,6 +242,13 @@ timestamps {
                 // Generate docs
                 //
                 try {
+                    try {
+                        // Run sphinx state to install sphinx-build needed in
+                        // upcomming orchestrate
+                        salt.enforceState(saltMaster, 'I@sphinx:server', 'sphinx')
+                    } catch (Throwable e) {
+                        true
+                    }
                     retry(3) {
                         // TODO: fix salt.orchestrateSystem
                         // print salt.orchestrateSystem(saltMaster, ['expression': '*', 'type': 'compound'], 'sphinx.orch.generate_doc')
