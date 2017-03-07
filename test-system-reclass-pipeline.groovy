@@ -1,4 +1,5 @@
 def gerrit = new com.mirantis.mk.Gerrit()
+def common = new com.mirantis.mk.Common()
 
 def gerritCredentials
 try {
