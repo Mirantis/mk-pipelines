@@ -505,10 +505,10 @@ timestamps {
                         throw new Exception("Missing stacklight_vip")
                     } else {
                         // (re)Start manually the services that are bound to the monitoring VIP
-                        salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['remote_collectd'], true)
-                        salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['remote_collector'], true)
-                        salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['aggregator'], true)
-                        salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['nagios3'], true)
+                        salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['remote_collectd'], null, true)
+                        salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['remote_collector'], null, true)
+                        salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['aggregator'], null, true)
+                        salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['nagios3'], null, true)
                     }
                 }
             }
