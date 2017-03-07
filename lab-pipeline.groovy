@@ -38,6 +38,7 @@
 git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
+common = new com.mirantis.mk.Common()
 
 
 timestamps {
@@ -482,14 +483,19 @@ timestamps {
                     // TODO
                     //vip=$(salt-call pillar.data _param:stacklight_monitor_address --out key|grep _param: |awk '{print $2}')
                     //vip=${vip:=172.16.10.253}
-                    def tmp = salt.pillarGet(saltMaster, 'ctl01*', '_param:stacklight_monitor_address')
-                    print(tmp)
+                    //def pillar = salt.pillarGet(saltMaster, 'ctl01*', '_param:stacklight_monitor_address')
+                    def pillar = salt.pillarGet(saltMaster, '')
+                    print(pillar)
+                    //def stacklight_vip = pillar['return'][0]['ctl01.nfv-lab.local']
 
-                    // (re)Start manually the services that are bound to the monitoring VIP
+
+                    //common.infoMsg("restart services on node with IP: ${stacklight_vip}")
+
+                    //// (re)Start manually the services that are bound to the monitoring VIP
                     //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['remote_collectd'], true)
                     //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['remote_collector'], true)
                     //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['aggregator'], true)
-                    //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['nagios3'], true), true)
+                    //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['nagios3'], true)
                 }
             }
 
