@@ -10,9 +10,10 @@ try {
   gerritRef = null
 }
 
+def systemGitRef, systemGitUrl
 try {
-    systemGitRef = RECLAS_SYSTEM_GIT_REF
-    systemGitUrl = RECLAS_SYSTEM_GIT_URL
+    systemGitRef = RECLASS_SYSTEM_GIT_REF
+    systemGitUrl = RECLASS_SYSTEM_GIT_URL
 } catch (MissingPropertyException e) {
     systemGitRef = null
     systemGitUrl = null
