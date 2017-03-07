@@ -544,11 +544,12 @@ timestamps {
                         build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
                     }
                 } else {
-                    common.errorMsg("""
-    Deploy job FAILED and was not deleted.
-    Please fix the problem and delete stack on you own.
+                    common.errorMsg("Deploy job FAILED and was not deleted. Please fix the problem and delete stack on you own.")
 
-    Salt master URL: ${SALT_MASTER_URL}""")
+                    if (SALT_MASTER_URL) {
+                        common.errorMsg("Salt master URL: ${SALT_MASTER_URL}")
+                    }
+
                 }
             }
         }
