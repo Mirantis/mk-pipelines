@@ -537,9 +537,18 @@ timestamps {
             // Clean
             //
 
-            if (HEAT_STACK_DELETE.toBoolean() == true && STACK_TYPE == 'heat') {
-                stage('Trigger cleanup job') {
-                    build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+            if (STACK_TYPE == 'heat') {
+                if (HEAT_STACK_DELETE.toBoolean() == true) {
+                    common.errorMsg('Heat job cleanup triggered')
+                    stage('Trigger cleanup job') {
+                        build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+                    }
+                } else {
+                    common.errorMsg("""
+    Deploy job FAILED and was not deleted.
+    Please fix the problem and delete stack on you own.
+
+    Salt master URL: ${SALT_MASTER_URL}""")
                 }
             }
         }
