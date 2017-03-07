@@ -487,14 +487,12 @@ timestamps {
                     //vip=$(salt-call pillar.data _param:stacklight_monitor_address --out key|grep _param: |awk '{print $2}')
                     //vip=${vip:=172.16.10.253}
                     //def pillar = salt.pillarGet(saltMaster, 'ctl01*', '_param:stacklight_monitor_address')
-                    def pillar = salt.pillarGet(saltMaster, 'ctl01*')
+                    def pillar = salt.pillarGet(saltMaster, 'ctl01*', '')
                     print(pillar)
-                    //def stacklight_vip = pillar['return'][0]['ctl01.nfv-lab.local']
+                    def stacklight_vip = pillar['return'][0]['ctl01.nfv-lab.local']
+                    common.infoMsg("restart services on node with IP: ${stacklight_vip}")
 
-
-                    //common.infoMsg("restart services on node with IP: ${stacklight_vip}")
-
-                    //// (re)Start manually the services that are bound to the monitoring VIP
+                    // (re)Start manually the services that are bound to the monitoring VIP
                     //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['remote_collectd'], true)
                     //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['remote_collector'], true)
                     //salt.runSaltProcessStep(saltMaster, "ipv4:${stacklight_vip}", 'service.restart', ['aggregator'], true)
