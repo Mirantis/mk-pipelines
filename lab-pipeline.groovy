@@ -533,6 +533,9 @@ timestamps {
             throw e
         } finally {
 
+            // send notification
+            common.sendNotification(currentBuild.result,HEAT_STACK_NAME,["slack"])
+
             //
             // Clean
             //
