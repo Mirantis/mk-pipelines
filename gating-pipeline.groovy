@@ -27,6 +27,7 @@ node("python") {
       ssh.ensureKnownHosts(GERRIT_HOST)
       ssh.agentSh(String.format("ssh -p 29418 %s gerrit review --submit %s,%s", GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
       println(String.format("Gerrit review %s,%s submitted", GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+    }
   } catch (Throwable e) {
      // If there was an error or exception thrown, the build failed
      currentBuild.result = "FAILURE"
