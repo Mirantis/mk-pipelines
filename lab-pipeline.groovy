@@ -283,7 +283,7 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'mysql.status')
 
                     // Setup mysql client
-                    salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client', true)
+                    // TODO salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client', true)
 
                     // Install haproxy
                     salt.enforceState(saltMaster, 'I@haproxy:proxy', 'haproxy', true)
