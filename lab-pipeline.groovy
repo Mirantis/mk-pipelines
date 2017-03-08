@@ -152,9 +152,10 @@ timestamps {
                         salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all', [], null, true)
 
                         // workaround - install apt-transport-https
-                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'cmd.run', ['apt-get update -y && apt-get install -y apt-transport-https'], null, true)
-                        salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https', 'refresh=True'], null, true)
-                        salt.enforceState(saltMaster, 'I@linux:system', ['linux', 'openssh', 'salt.minion', 'ntp'], true)
+                        //salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'cmd.run', ['apt-get update -y && apt-get install -y apt-transport-https'], null, true)
+                        //salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'pkg.install', ['apt-transport-https', 'refresh=True'], null, true)
+                        salt.enforceState(saltMaster, 'I@linux:system', ['linux', 'salt.minion'], true)
+                        salt.enforceState(saltMaster, 'I@linux:system', ['openssh', 'salt.minion', 'ntp'], true)
                     }
 
                     //orchestrate.validateFoundationInfra(saltMaster)
@@ -283,7 +284,7 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'mysql.status')
 
                     // Setup mysql client
-                    // TODO salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client', true)
+                    salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client', true)
 
                     // Install haproxy
                     salt.enforceState(saltMaster, 'I@haproxy:proxy', 'haproxy', true)
