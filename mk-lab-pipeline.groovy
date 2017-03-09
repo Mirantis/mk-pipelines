@@ -26,6 +26,8 @@
  *   K8S_API_SERVER             Kubernetes API address
  *   K8S_CONFORMANCE_IMAGE      Path to docker image with conformance e2e tests
  *
+ *   TEMPEST_IMAGE_LINK         Tempest image link
+ *
  *   INSTALL                    What should be installed (k8s, openstack, ...)
  *   TESTS                      Run tests (bool)
  */
@@ -141,11 +143,15 @@ node {
             orchestrate.installOpenstackMkCompute(saltMaster)
         }
 
-        //if (TESTS.toLowerCase().contains('openstack')) {
-        //    stage('Run OpenStack tests') {
-        //        orchestrate...
-        //    }
-        //}
+        if (TESTS.toLowerCase().contains('openstack')) {
+            stage('Run OpenStack tests') {
+                test.runTempestTests(saltMaster, TEMPEST_IMAGE_LINK)
+            }
+
+            stage('Copy Tempest results to config node') {
+                test.copyTempestResults(saltMaster)
+            }
+        }
     }
 
     //

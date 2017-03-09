@@ -33,6 +33,8 @@
  *   K8S_API_SERVER             Kubernetes API address
  *   K8S_CONFORMANCE_IMAGE      Path to docker image with conformance e2e tests
  *
+ *   TEMPEST_IMAGE_LINK         Tempest image link
+ *
  */
 
 git = new com.mirantis.mk.Git()
@@ -520,6 +522,16 @@ timestamps {
 
                 stage('Run k8s conformance e2e tests') {
                     orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
+                }
+            }
+
+            if (TEST.toLowerCase().contains('openstack')) {
+                stage('Run OpenStack tests') {
+                    test.runTempestTests(saltMaster, TEMPEST_IMAGE_LINK)
+                }
+
+                stage('Copy Tempest results to config node') {
+                    test.copyTempestResults(saltMaster)
                 }
             }
 
