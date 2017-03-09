@@ -457,6 +457,7 @@ timestamps {
                     // Install collectd, heka and sensu services on the nodes, this will also
                     // generate the metadata that goes into the grains and eventually into Salt Mine
                     salt.enforceState(saltMaster, '*', 'collectd', true)
+                    salt.enforceState(saltMaster, '*', 'salt.minion', true)
                     salt.enforceState(saltMaster, '*', 'heka', true)
 
                     // Gather the Grafana metadata as grains
