@@ -148,7 +148,7 @@ timestamps {
                         salt.enforceState(saltMaster, 'I@salt:control', 'libvirt', true)
                         salt.enforceState(saltMaster, 'I@salt:control', 'salt.control', true)
 
-                        sleep(300)
+                        sleep(600)
 
                         salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.refresh_pillar', [], null, true)
                         salt.runSaltProcessStep(saltMaster, '* and not kvm*', 'saltutil.sync_all', [], null, true)
