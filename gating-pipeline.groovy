@@ -6,7 +6,7 @@
 
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
-def ssh = new com.mirantis.mk.Salt()
+def ssh = new com.mirantis.mk.Ssh()
 node("python") {
   try{
     stage("test") {
