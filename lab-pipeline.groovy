@@ -440,7 +440,8 @@ timestamps {
 
                     salt.runSaltProcessStep(saltMaster, 'I@elasticsearch.client', 'cmd.run', ['salt-call state.sls elasticsearch.client'], null, true)
                     // salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
-                    salt.enforceState(saltMaster, 'I@kibana:client', 'kibana.client', true)
+                    salt.runSaltProcessStep(saltMaster, 'I@kibana.client', 'cmd.run', ['salt-call state.sls kibana.client'], null, true)
+                    // salt.enforceState(saltMaster, 'I@kibana:client', 'kibana.client', true)
 
                     // install monitor
                     // Restart salt-minion to make sure that it uses the latest Jinja library
