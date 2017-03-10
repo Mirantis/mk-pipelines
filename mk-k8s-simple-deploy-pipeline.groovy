@@ -111,6 +111,7 @@ node {
                 archiveArtifacts allowEmptyArchive: true, artifacts: '_artifacts/*', excludes: null
                 junit keepLongStdio: true, testResults: '_artifacts/**.xml'
                 sh "sudo chown -R jenkins:jenkins ${env.WORKSPACE}"
+            }
 
         }
     }
