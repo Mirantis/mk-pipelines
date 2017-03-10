@@ -10,17 +10,21 @@ def ssh = new com.mirantis.mk.Ssh()
 node("python") {
   try{
     stage("test") {
-      /*
       wrap([$class: 'AnsiColorBuildWrapper']) {
-        build job: "test-${GERRIT_PROJECT}", parameters: [
-          [$class: 'StringParameterValue', name: 'GERRIT_BRANCH', value: GERRIT_BRANCH],
-          [$class: 'StringParameterValue', name: 'GERRIT_NAME', value: GERRIT_NAME],
-          [$class: 'StringParameterValue', name: 'GERRIT_HOST', value: GERRIT_HOST],
-          [$class: 'StringParameterValue', name: 'GERRIT_PORT', value: GERRIT_PORT],
-          [$class: 'StringParameterValue', name: 'GERRIT_PROJECT', value: GERRIT_PROJECT],
-          [$class: 'StringParameterValue', name: 'GERRIT_REFSPEC', value: GERRIT_REFSPEC]
-        ]
-      }*/
+        if(TEST_JOBS != ""){
+          def testJobs = TEST_JOBS.tokenize(" ")
+          for(int i=0; i<testJobs.size(); i++){
+            build job: testJobs.get(i), parameters: [
+              [$class: 'StringParameterValue', name: 'GERRIT_BRANCH', value: GERRIT_BRANCH],
+              [$class: 'StringParameterValue', name: 'GERRIT_NAME', value: GERRIT_NAME],
+              [$class: 'StringParameterValue', name: 'GERRIT_HOST', value: GERRIT_HOST],
+              [$class: 'StringParameterValue', name: 'GERRIT_PORT', value: GERRIT_PORT],
+              [$class: 'StringParameterValue', name: 'GERRIT_PROJECT', value: GERRIT_PROJECT],
+              [$class: 'StringParameterValue', name: 'GERRIT_REFSPEC', value: GERRIT_REFSPEC]
+            ]
+          }
+        }
+      }
     }
     stage("submit review"){
       ssh.prepareSshAgentKey(CREDENTIALS_ID)
