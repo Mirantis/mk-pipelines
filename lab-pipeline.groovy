@@ -361,13 +361,13 @@ timestamps {
                         //runSaltProcessStep(saltMaster, 'I@opencontrail:database', 'state.sls', ['opencontrail.database'], 1)
                         try {
                             salt.enforceState(saltMaster, 'ntw01*', 'opencontrail.database', true)
-                        } catch (Exception e)
+                        } catch (Exception e) {
                             print.warningMsg('Exception in state opencontrail.database on ntw01*')
                         }
 
                         try {
                             salt.enforceState(saltMaster, 'I@opencontrail:database', 'opencontrail.database', true)
-                        } catch (Exception e)
+                        } catch (Exception e) {
                             print.warningMsg('Exception in state opencontrail.database on I@opencontrail:database')
                         }
 
