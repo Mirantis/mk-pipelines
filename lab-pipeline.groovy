@@ -359,8 +359,17 @@ timestamps {
                     if (INSTALL.toLowerCase().contains('contrail')) {
                         // Install opencontrail database services
                         //runSaltProcessStep(saltMaster, 'I@opencontrail:database', 'state.sls', ['opencontrail.database'], 1)
-                        salt.enforceState(saltMaster, 'ntw01*', 'opencontrail.database', true)
-                        salt.enforceState(saltMaster, 'I@opencontrail:database', 'opencontrail.database', true)
+                        try {
+                            salt.enforceState(saltMaster, 'ntw01*', 'opencontrail.database', true)
+                        } catch (Exception e)
+                            print.warningMsg('Exception in state opencontrail.database on ntw01*')
+                        }
+
+                        try {
+                            salt.enforceState(saltMaster, 'I@opencontrail:database', 'opencontrail.database', true)
+                        } catch (Exception e)
+                            print.warningMsg('Exception in state opencontrail.database on I@opencontrail:database')
+                        }
 
                         // Install opencontrail control services
                         //runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail'], 1)
