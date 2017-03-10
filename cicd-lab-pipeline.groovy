@@ -117,7 +117,7 @@ timestamps {
                 try {
                     saltMasterPort = SALT_MASTER_PORT
                 } catch (MissingPropertyException e) {
-                    saltMasterPort = 8000
+                    saltMasterPort = 6969
                 }
                 saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
                 saltMasterUrl = "http://${saltMasterHost}:${saltMasterPort}"
