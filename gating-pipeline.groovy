@@ -25,7 +25,7 @@ node("python") {
     stage("submit review"){
       ssh.prepareSshAgentKey(CREDENTIALS_ID)
       ssh.ensureKnownHosts(GERRIT_HOST)
-      ssh.agentSh(String.format("ssh -p 29418 %s gerrit review --submit %s,%s", GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+      ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit review --submit %s,%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
       println(String.format("Gerrit review %s,%s submitted", GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
     }
   } catch (Throwable e) {
