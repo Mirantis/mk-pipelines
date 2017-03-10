@@ -438,7 +438,8 @@ timestamps {
 
                     sleep(10)
 
-                    salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
+                    salt.runSaltProcessStep(saltMaster, 'I@elasticsearch.client', 'cmd.run', ['salt-call state.sls elasticsearch.client'], null, true)
+                    // salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
                     salt.enforceState(saltMaster, 'I@kibana:client', 'kibana.client', true)
 
                     // install monitor
