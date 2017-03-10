@@ -500,7 +500,9 @@ timestamps {
                     // Finalize the configuration of Grafana (add the dashboards...)
                     salt.enforceState(saltMaster, 'I@grafana:client', 'grafana.client.service', true)
                     // nw salt -C 'I@grafana:client' --async service.restart salt-minion; sleep 10
-                    salt.enforceState(saltMaster, 'I@grafana:client', 'grafana.client', true)
+
+                    salt.runSaltProcessStep(saltMaster, 'I@grafana.client and *01*', 'cmd.run', ['salt-call state.sls grafana.client'], null, true)
+                    // salt.enforceState(saltMaster, 'I@grafana:client and *01*', 'grafana.client', true)
 
                     // Get the StackLight monitoring VIP addres
                     // TODO
