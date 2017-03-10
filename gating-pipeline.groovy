@@ -11,10 +11,9 @@ node("python") {
   try{
     stage("test") {
       wrap([$class: 'AnsiColorBuildWrapper']) {
-        if(TEST_JOBS != ""){
-          def testJobs = TEST_JOBS.tokenize(" ")
-          for(int i=0; i<testJobs.size(); i++){
-            build job: testJobs.get(i), parameters: [
+          def testJob = String.format("test-%s-%s-latest", JOBS_NAMESPACE, GERRIT_PROJECT)
+          if(_jobExists(testJob)){
+            build job: testJob, parameters: [
               [$class: 'StringParameterValue', name: 'GERRIT_BRANCH', value: GERRIT_BRANCH],
               [$class: 'StringParameterValue', name: 'GERRIT_NAME', value: GERRIT_NAME],
               [$class: 'StringParameterValue', name: 'GERRIT_HOST', value: GERRIT_HOST],
@@ -39,4 +38,9 @@ node("python") {
   } finally {
      common.sendNotification(currentBuild.result,"",["slack"])
   }
+}
+
+@NonCPS
+def _jobExists(jobName){
+  return Jenkins.instance.items.find{it.name.equals(jobName)}
 }
