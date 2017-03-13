@@ -181,16 +181,16 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.service'])
 
                     // Install keepalived
-                    salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['keepalived'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster and *01*', 'state.sls', ['keepalived'])
                     salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'state.sls', ['keepalived'])
 
                     // Check the keepalived VIPs
                     salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'cmd.run', ['ip a | grep 172.16.10.2'])
 
                     // Setup glusterfs
-                    salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['glusterfs.server.setup'])
-                    salt.runSaltProcessStep(saltMaster, 'ctl02*', 'state.sls', ['glusterfs.server.setup'])
-                    salt.runSaltProcessStep(saltMaster, 'ctl03*', 'state.sls', ['glusterfs.server.setup'])
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server and *01*', 'state.sls', ['glusterfs.server.setup'])
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server and *02*', 'state.sls', ['glusterfs.server.setup'])
+                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server and *03*', 'state.sls', ['glusterfs.server.setup'])
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'])
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'])
 
@@ -225,7 +225,7 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['kubernetes', 'exclude=kubernetes.master.setup'])
 
                     // Run k8s master setup
-                    salt.runSaltProcessStep(saltMaster, 'ctl01*', 'state.sls', ['kubernetes.master.setup'])
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master and *01*', 'state.sls', ['kubernetes.master.setup'])
 
                     // Revert comment nameserver
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'cmd.run', ["sed -i 's/nameserver 10.254.0.10/#nameserver 10.254.0.10/g' /etc/resolv.conf"])
@@ -248,7 +248,7 @@ timestamps {
 
                     // Install keepaliveds
                     //runSaltProcessStep(master, 'I@keepalived:cluster', 'state.sls', ['keepalived'], 1)
-                    salt.enforceState(saltMaster, 'ctl01*', 'keepalived', true)
+                    salt.enforceState(saltMaster, 'I@keepalived:cluster and *01*', 'keepalived', true)
                     salt.enforceState(saltMaster, 'I@keepalived:cluster', 'keepalived', true)
 
                     // Check the keepalived VIPs
@@ -258,15 +258,9 @@ timestamps {
                     salt.enforceState(saltMaster, 'I@glusterfs:server', 'glusterfs.server.service', true)
 
                     //runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.setup'], 1)
-                    if (INSTALL.toLowerCase().contains('kvm')) {
-                        salt.enforceState(saltMaster, 'kvm01*', 'glusterfs.server.setup', true)
-                        salt.enforceState(saltMaster, 'kvm02*', 'glusterfs.server.setup', true)
-                        salt.enforceState(saltMaster, 'kvm03*', 'glusterfs.server.setup', true)
-                    } else {
-                        salt.enforceState(saltMaster, 'ctl01*', 'glusterfs.server.setup', true)
-                        salt.enforceState(saltMaster, 'ctl02*', 'glusterfs.server.setup', true)
-                        salt.enforceState(saltMaster, 'ctl03*', 'glusterfs.server.setup', true)
-                    }
+                    salt.enforceState(saltMaster, 'I@glusterfs:server and *01*', 'glusterfs.server.setup', true)
+                    salt.enforceState(saltMaster, 'I@glusterfs:server and *02*', 'glusterfs.server.setup', true)
+                    salt.enforceState(saltMaster, 'I@glusterfs:server and *03*', 'glusterfs.server.setup', true)
 
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'], null, true)
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'], null, true)
@@ -303,7 +297,7 @@ timestamps {
 
                     // setup keystone service
                     //runSaltProcessStep(saltMaster, 'I@keystone:server', 'state.sls', ['keystone.server'], 1)
-                    salt.enforceState(saltMaster, 'ctl01*', 'keystone.server', true)
+                    salt.enforceState(saltMaster, 'I@keystone:server and *01*', 'keystone.server', true)
                     salt.enforceState(saltMaster, 'I@keystone:server', 'keystone.server', true)
                     // populate keystone services/tenants/roles/users
 
@@ -313,7 +307,7 @@ timestamps {
 
                     // Install glance and ensure glusterfs clusters
                     //runSaltProcessStep(saltMaster, 'I@glance:server', 'state.sls', ['glance.server'], 1)
-                    salt.enforceState(saltMaster, 'ctl01*', 'glance.server', true)
+                    salt.enforceState(saltMaster, 'I@glance:server and *01*', 'glance.server', true)
                     salt.enforceState(saltMaster, 'I@glance:server', 'glance.server', true)
                     salt.enforceState(saltMaster, 'I@glance:server', 'glusterfs.client', true)
 
@@ -325,25 +319,25 @@ timestamps {
 
                     // Install and check nova service
                     //runSaltProcessStep(saltMaster, 'I@nova:controller', 'state.sls', ['nova'], 1)
-                    salt.enforceState(saltMaster, 'ctl01*', 'nova', true)
+                    salt.enforceState(saltMaster, 'I@nova:controller and *01*', 'nova', true)
                     salt.enforceState(saltMaster, 'I@nova:controller', 'nova', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova service-list'], null, true)
 
                     // Install and check cinder service
                     //runSaltProcessStep(saltMaster, 'I@cinder:controller', 'state.sls', ['cinder'], 1)
-                    salt.enforceState(saltMaster, 'ctl01*', 'cinder', true)
+                    salt.enforceState(saltMaster, 'I@cinder:controller and *01*', 'cinder', true)
                     salt.enforceState(saltMaster, 'I@cinder:controller', 'cinder', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; cinder list'], null, true)
 
                     // Install neutron service
                     //runSaltProcessStep(saltMaster, 'I@neutron:server', 'state.sls', ['neutron'], 1)
 
-                    salt.enforceState(saltMaster, '*01* and I@neutron:server', 'neutron', true)
+                    salt.enforceState(saltMaster, 'I@neutron:server and *01*', 'neutron', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron agent-list'], null, true)
 
                     // Install heat service
                     //runSaltProcessStep(saltMaster, 'I@heat:server', 'state.sls', ['heat'], 1)
-                    salt.enforceState(saltMaster, 'ctl01*', 'heat', true)
+                    salt.enforceState(saltMaster, 'I@heat:server and *01*', 'heat', true)
                     salt.enforceState(saltMaster, 'I@heat:server', 'heat', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; heat resource-type-list'], null, true)
 
@@ -360,9 +354,9 @@ timestamps {
                         // Install opencontrail database services
                         //runSaltProcessStep(saltMaster, 'I@opencontrail:database', 'state.sls', ['opencontrail.database'], 1)
                         try {
-                            salt.enforceState(saltMaster, 'ntw01*', 'opencontrail.database', true)
+                            salt.enforceState(saltMaster, 'I@opencontrail:database and *01*', 'opencontrail.database', true)
                         } catch (Exception e) {
-                            print.warningMsg('Exception in state opencontrail.database on ntw01*')
+                            print.warningMsg('Exception in state opencontrail.database on I@opencontrail:database and *01*')
                         }
 
                         try {
@@ -373,21 +367,9 @@ timestamps {
 
                         // Install opencontrail control services
                         //runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail'], 1)
-                        salt.enforceState(saltMaster, 'ntw01*', 'opencontrail', true)
+                        salt.enforceState(saltMaster, 'I@opencontrail:control and *01*', 'opencontrail', true)
                         salt.enforceState(saltMaster, 'I@opencontrail:control', 'opencontrail', true)
                         salt.enforceState(saltMaster, 'I@opencontrail:collector', 'opencontrail', true)
-
-                        // Provision opencontrail control services
-                        if (INSTALL.toLowerCase().contains('kvm')) {
-                            // psysical contrail (kvm)
-                            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 10.167.4.20 --api_server_port 8082 --host_name ntw01 --host_ip 10.167.4.21 --router_asn 64512 --admin_password password --admin_user admin --admin_tenant_name admin --oper add'], null, true)
-                            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 10.167.4.20 --api_server_port 8082 --host_name ntw02 --host_ip 10.167.4.22 --router_asn 64512 --admin_password password --admin_user admin --admin_tenant_name admin --oper add'], null, true)
-                            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 10.167.4.20 --api_server_port 8082 --host_name ntw03 --host_ip 10.167.4.23 --router_asn 64512 --admin_password password --admin_user admin --admin_tenant_name admin --oper add'], null, true)
-                        } else {
-                            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl01 --host_ip 172.16.10.101 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
-                            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl02 --host_ip 172.16.10.102 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
-                            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_control.py --api_server_ip 172.16.10.254 --api_server_port 8082 --host_name ctl03 --host_ip 172.16.10.103 --router_asn 64512 --admin_password workshop --admin_user admin --admin_tenant_name admin --oper add'], null, true)
-                        }
 
                         // Test opencontrail
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'cmd.run', ['contrail-status'], null, true)
@@ -409,12 +391,10 @@ timestamps {
                     }
 
                     if (INSTALL.toLowerCase().contains('contrail')) {
+                        // Provision opencontrail control services
+                        salt.enforceState(saltMaster, 'I@opencontrail:database:id:1', 'opencontrail.client', true)
                         // Provision opencontrail virtual routers
-                        if (INSTALL.toLowerCase().contains('kvm')) {
-                            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp001 --host_ip 10.167.4.101 --api_server_ip 10.167.4.20 --oper add --admin_user admin --admin_password password --admin_tenant_name admin'], null, true)
-                        } else {
-                            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control:id:1', 'cmd.run', ['/usr/share/contrail-utils/provision_vrouter.py --host_name cmp01 --host_ip 172.16.10.105 --api_server_ip 172.16.10.254 --oper add --admin_user admin --admin_password workshop --admin_tenant_name admin'], null, true)
-                        }
+                        salt.enforceState(saltMaster, 'I@opencontrail:compute', 'opencontrail.client', true)
 
                         salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'cmd.run', ['exec 0>&-; exec 1>&-; exec 2>&-; nohup bash -c "ip link | grep vhost && echo no_reboot || sleep 5 && reboot & "'], null, true)
                         sleep(300)
