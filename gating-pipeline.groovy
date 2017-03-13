@@ -45,5 +45,5 @@ node("python") {
 
 @NonCPS
 def _jobExists(jobName){
-  return Jenkins.instance.items.find{it.name.equals(jobName)}
+  return Jenkins.instance.items.find{it -> it.name.equals(jobName)}
 }
