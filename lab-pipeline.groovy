@@ -367,7 +367,7 @@ timestamps {
 
                         // Install opencontrail control services
                         //runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail'], 1)
-                        salt.enforceState(saltMaster, 'I@opencontrail:control and *01*', 'opencontrail', true)
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control and *01*', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:collector', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
 
