@@ -356,13 +356,13 @@ timestamps {
                         try {
                             salt.enforceState(saltMaster, 'I@opencontrail:database and *01*', 'opencontrail.database', true)
                         } catch (Exception e) {
-                            print.warningMsg('Exception in state opencontrail.database on I@opencontrail:database and *01*')
+                            common.warningMsg('Exception in state opencontrail.database on I@opencontrail:database and *01*')
                         }
 
                         try {
                             salt.enforceState(saltMaster, 'I@opencontrail:database', 'opencontrail.database', true)
                         } catch (Exception e) {
-                            print.warningMsg('Exception in state opencontrail.database on I@opencontrail:database')
+                            common.warningMsg('Exception in state opencontrail.database on I@opencontrail:database')
                         }
 
                         // Install opencontrail control services
