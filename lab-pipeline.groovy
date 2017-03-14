@@ -266,7 +266,7 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'], null, true)
 
                     // Install rabbitmq
-                    salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true)
+                    salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true, false)
 
                     // Check the rabbitmq status
                     salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'])
@@ -368,8 +368,8 @@ timestamps {
                         // Install opencontrail control services
                         //runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail'], 1)
                         salt.enforceState(saltMaster, 'I@opencontrail:control and *01*', 'opencontrail', true)
-                        salt.enforceState(saltMaster, 'I@opencontrail:control', 'opencontrail', true)
-                        salt.enforceState(saltMaster, 'I@opencontrail:collector', 'opencontrail', true)
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+                        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:collector', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
 
                         // Test opencontrail
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'cmd.run', ['contrail-status'], null, true)
