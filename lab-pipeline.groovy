@@ -246,6 +246,9 @@ timestamps {
                 stage('Install OpenStack infra') {
                     //orchestrate.installOpenstackMkInfra(saltMaster, physical)
 
+                    // Install glusterfs
+                    salt.enforceState(saltMaster, 'I@glusterfs:server', 'glusterfs.server.service', true)
+
                     // Install keepaliveds
                     //runSaltProcessStep(master, 'I@keepalived:cluster', 'state.sls', ['keepalived'], 1)
                     salt.enforceState(saltMaster, 'I@keepalived:cluster and *01*', 'keepalived', true)
@@ -253,9 +256,6 @@ timestamps {
 
                     // Check the keepalived VIPs
                     salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'cmd.run', ['ip a | grep 172.16.10.2'])
-
-                    // Install glusterfs
-                    salt.enforceState(saltMaster, 'I@glusterfs:server', 'glusterfs.server.service', true)
 
                     //runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.setup'], 1)
                     salt.enforceState(saltMaster, 'I@glusterfs:server and *01*', 'glusterfs.server.setup', true)
