@@ -189,8 +189,6 @@ timestamps {
 
                     // Setup glusterfs
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server and *01*', 'state.sls', ['glusterfs.server.setup'])
-                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server and *02*', 'state.sls', ['glusterfs.server.setup'])
-                    salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server and *03*', 'state.sls', ['glusterfs.server.setup'])
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'])
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'])
 
@@ -257,10 +255,7 @@ timestamps {
                     // Check the keepalived VIPs
                     salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'cmd.run', ['ip a | grep 172.16.10.2'])
 
-                    //runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.setup'], 1)
                     salt.enforceState(saltMaster, 'I@glusterfs:server and *01*', 'glusterfs.server.setup', true)
-                    salt.enforceState(saltMaster, 'I@glusterfs:server and *02*', 'glusterfs.server.setup', true)
-                    salt.enforceState(saltMaster, 'I@glusterfs:server and *03*', 'glusterfs.server.setup', true)
 
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster peer status'], null, true)
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'], null, true)
@@ -272,7 +267,9 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'])
 
                     // Install galera
-                    salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
+                    retry(2) {
+                        salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
+                    }
                     salt.enforceState(saltMaster, 'I@galera:slave', 'galera', true)
 
                     // Check galera status
