@@ -1,48 +1,88 @@
 /**
- * Update packages pipeline script
+ * Update packages on given nodes
  *
  * Expected parameters:
- * SALT_MASTER_CREDENTIALS     Credentials to the Salt API (str)
- * SALT_MASTER_URL             URL of Salt-API (str)
- *
- * UPDATE_SERVERS              Salt target for updated servers (str)
- * UPDATE_COMMIT               Confirm update should be performed (boot)
- * UPDATE_PACKAGES             List of packages to update
+ *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API.
+ *   SALT_MASTER_URL            Full Salt API address [https://10.10.10.1:8000].
+ *   TARGET_SERVERS             Salt compound target to match nodes to be updated [*, G@osfamily:debian].
+ *   TARGET_PACKAGES            Space delimited list of packages to be updates [package1=version package2=version], empty string means all updating all packages to the latest version.
+ *   TARGET_SIZE_TEST           Number of nodes to list package updates, empty string means all targetted nodes.
+ *   TARGET_SIZE_SAMPLE         Number of selected noded to live apply selected package update.
+ *   TARGET_SIZE_BATCH          Batch size for the complete live package update on all nodes, empty string means apply to all targetted nodes.
  *
 **/
 
-
-
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
-timestamps {
-    node() {
-      try {
 
-        stage("Connect to Salt master") {
-          saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+def saltMaster
+def targetAll = ['expression': TARGET_SERVERS, 'type': 'compound']
+def targetTestSubset
+def targetLiveSubset
+def targetLiveAll
+def minions
+def result
+def packages
+
+node() {
+    try {
+
+        if (TARGET_PACKAGES != "") {
+            packages = TARGET_PACKAGES.split(' ')
+        }
+        else {
+            packages = []
         }
 
-        stage("Get package versions") {
-          salt.runSaltProcessStep(saltMaster, UPDATE_SERVERS, 'pkg.list_upgrades', [], null, true)
+        stage('Connect to Salt master') {
+            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
-        if (UPDATE_COMMIT.toBoolean() == true) {
-          stage("Update packages") {
-            if (UPDATE_PACKAGES == "") {
-              salt.runSaltProcessStep(saltMaster, UPDATE_SERVERS, 'pkg.install', [], null, true)
-            } else {
-              salt.runSaltProcessStep(saltMaster, UPDATE_SERVERS, 'pkg.install', UPDATE_PACKAGES.split(' '), null, true)
+        stage('List target servers') {
+            minions = salt.getMinions(saltMaster, targetAll)
+            if (TARGET_SUBSET_TEST != "") {
+                targetTestSubset = minions.subList(0, Integer.valueOf(TARGET_SUBSET_TEST)).join(' or ')
             }
-          }
+            else {
+                targetTestSubset = minions.join(' or ')
+            }
+            targetLiveSubset = minions.subList(0, Integer.valueOf(TARGET_SUBSET_LIVE)).join(' or ')
+            targetLiveAll = minions.join(' or ')
+            common.infoMsg("Found nodes: ${targetLiveAll}")
+            common.infoMsg("Selected test nodes: ${targetTestSubset}")
+            common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
         }
 
-      } catch (Throwable e) {
-         // If there was an error or exception thrown, the build failed
-         currentBuild.result = "FAILURE"
-         throw e
-      } finally {
-         // common.sendNotification(currentBuild.result,"",["slack"])
-      }
+        stage("List package upgrades") {
+            salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.list_upgrades', [], null, true)
+        }
+
+        stage('Confirm live package upgrades on sample') {
+            timeout(time: 2, unit: 'HOURS') {
+               input message: "Approve live package upgrades on ${targetLiveSubset} nodes?"
+            }
+        }
+
+        stage('Apply package upgrades on sample') {
+            salt.runSaltProcessStep(saltMaster, targetLiveSubset, 'pkg.install', packages, null, true)
+
+        }
+
+        stage('Confirm package upgrades on all nodes') {
+            timeout(time: 2, unit: 'HOURS') {
+               input message: "Approve live package upgrades on ${targetLiveAll} nodes?"
+            }
+        }
+
+        stage('Apply package upgrades on all nodes') {
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'pkg.install', packages, null, true)
+        }
+
+    } catch (Throwable e) {
+        // If there was an error or exception thrown, the build failed
+        currentBuild.result = "FAILURE"
+        throw e
+    } finally {
+        // common.sendNotification(currentBuild.result,"",["slack"])
     }
 }
