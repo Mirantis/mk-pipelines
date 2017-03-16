@@ -30,7 +30,7 @@ node() {
 
         if (TARGET_PACKAGES != "") {
             command = "pkg.install"
-            packages = TARGET_PACKAGES.split(' ')
+            packages = TARGET_PACKAGES.tokenize(' ')
         }
         else {
             command = "pkg.upgrade"
@@ -61,8 +61,20 @@ node() {
         }
 
         stage('Confirm live package upgrades on sample') {
-            timeout(time: 2, unit: 'HOURS') {
-               input message: "Approve live package upgrades on ${targetLiveSubset} nodes?"
+            if(TARGET_PACKAGES==""){
+                timeout(time: 2, unit: 'HOURS') {
+                    def userInput = input(
+                     id: 'userInput', message: 'Insert package names for update', parameters: [
+                     [$class: 'TextParameterDefinition', defaultValue: '', description: 'Package names (or *)', name: 'packages']
+                    ])
+                    if(userInput['packages'] != ""){
+                        packages = userInput['packages'].tokenize(" ")
+                    }
+                }
+            }else{
+                timeout(time: 2, unit: 'HOURS') {
+                   input message: "Approve live package upgrades on ${targetLiveSubset} nodes?"
+                }
             }
         }
 
