@@ -22,20 +22,11 @@ def targetLiveSubset
 def targetLiveAll
 def minions
 def result
-def command
 def packages
+def command
 
 node() {
     try {
-
-        if (TARGET_PACKAGES != "") {
-            command = "pkg.install"
-            packages = TARGET_PACKAGES.tokenize(' ')
-        }
-        else {
-            command = "pkg.upgrade"
-            packages = null
-        }
 
         stage('Connect to Salt master') {
             saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
@@ -67,8 +58,8 @@ node() {
                      id: 'userInput', message: 'Insert package names for update', parameters: [
                      [$class: 'TextParameterDefinition', defaultValue: '', description: 'Package names (or *)', name: 'packages']
                     ])
-                    if(userInput!= ""){
-                        packages = userInput.tokenize(" ")
+                    if(userInput!= "" && userInput!= "*"){
+                        TARGET_PACKAGES = userInput
                     }
                 }
             }else{
@@ -76,11 +67,17 @@ node() {
                    input message: "Approve live package upgrades on ${targetLiveSubset} nodes?"
                 }
             }
+            if (TARGET_PACKAGES != "") {
+                command = "pkg.install";
+                packages = TARGET_PACKAGES.tokenize(' ')
+            }else {
+                command = "pkg.upgrade"
+                packages = null
+            }
         }
 
         stage('Apply package upgrades on sample') {
             salt.runSaltProcessStep(saltMaster, targetLiveSubset, command, packages, null, true)
-
         }
 
         stage('Confirm package upgrades on all nodes') {
