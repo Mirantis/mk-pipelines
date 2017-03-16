@@ -67,8 +67,8 @@ node() {
                      id: 'userInput', message: 'Insert package names for update', parameters: [
                      [$class: 'TextParameterDefinition', defaultValue: '', description: 'Package names (or *)', name: 'packages']
                     ])
-                    if(userInput['packages'] != ""){
-                        packages = userInput['packages'].tokenize(" ")
+                    if(userInput!= ""){
+                        packages = userInput.tokenize(" ")
                     }
                 }
             }else{
