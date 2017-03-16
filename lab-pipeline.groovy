@@ -330,6 +330,7 @@ timestamps {
                     //runSaltProcessStep(saltMaster, 'I@neutron:server', 'state.sls', ['neutron'], 1)
 
                     salt.enforceState(saltMaster, 'I@neutron:server and *01*', 'neutron', true)
+                    salt.enforceState(saltMaster, 'I@neutron:server', 'neutron', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron agent-list'], null, true)
 
                     // Install heat service
