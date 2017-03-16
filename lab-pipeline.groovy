@@ -103,9 +103,9 @@ timestamps {
                     currentBuild.description = "${HEAT_STACK_NAME}: ${saltMasterHost}"
 
                     if (INSTALL.toLowerCase().contains('kvm')) {
-                        saltPort = 8088
+                        saltPort = 6969
                     } else {
-                        saltPort = 8000
+                        saltPort = 6969
                     }
 
                     SALT_MASTER_URL = "http://${saltMasterHost}:${saltPort}"
