@@ -22,16 +22,19 @@ def targetLiveSubset
 def targetLiveAll
 def minions
 def result
+def command
 def packages
 
 node() {
     try {
 
         if (TARGET_PACKAGES != "") {
+            command = "pkg.install"
             packages = TARGET_PACKAGES.split(' ')
         }
         else {
-            packages = []
+            command = "pkg.upgrade"
+            packages = null
         }
 
         stage('Connect to Salt master') {
@@ -64,7 +67,7 @@ node() {
         }
 
         stage('Apply package upgrades on sample') {
-            salt.runSaltProcessStep(saltMaster, targetLiveSubset, 'pkg.install', packages, null, true)
+            salt.runSaltProcessStep(saltMaster, targetLiveSubset, command, packages, null, true)
 
         }
 
@@ -75,7 +78,7 @@ node() {
         }
 
         stage('Apply package upgrades on all nodes') {
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'pkg.install', packages, null, true)
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, command, packages, null, true)
         }
 
     } catch (Throwable e) {
