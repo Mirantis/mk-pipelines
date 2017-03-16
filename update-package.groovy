@@ -67,13 +67,14 @@ node() {
                    input message: "Approve live package upgrades on ${targetLiveSubset} nodes?"
                 }
             }
-            if (TARGET_PACKAGES != "") {
-                command = "pkg.install";
-                packages = TARGET_PACKAGES.tokenize(' ')
-            }else {
-                command = "pkg.upgrade"
-                packages = null
-            }
+        }
+
+        if (TARGET_PACKAGES != "") {
+            command = "pkg.install";
+            packages = TARGET_PACKAGES.tokenize(' ')
+        }else {
+            command = "pkg.upgrade"
+            packages = null
         }
 
         stage('Apply package upgrades on sample') {
