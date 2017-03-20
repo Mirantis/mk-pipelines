@@ -20,6 +20,21 @@ try {
 } catch (MissingPropertyException e) {
   revisionPostfix = null
 }
+
+def uploadPpa
+try {
+  uploadPpa = UPLOAD_PPA
+} catch (MissingPropertyException e) {
+  uploadPpa = null
+}
+
+def uploadAptly
+try {
+  uploadAptly = UPLOAD_APTLY
+} catch (MissingPropertyException e) {
+  uploadAptly = true
+}
+
 def timestamp = common.getDatetime()
 node("docker") {
   try{
@@ -64,25 +79,35 @@ node("docker") {
         currentBuild.result = 'UNSTABLE'
       }
     }
-    lock("aptly-api") {
-      stage("upload") {
-        buildSteps = [:]
-        debFiles = sh script: "ls build-area/*.deb", returnStdout: true
-        for (file in debFiles.tokenize()) {
+
+    if (uploadAptly) {
+      lock("aptly-api") {
+        stage("upload") {
+          buildSteps = [:]
+          debFiles = sh script: "ls build-area/*.deb", returnStdout: true
+          for (file in debFiles.tokenize()) {
             workspace = common.getWorkspace()
             def fh = new File((workspace+"/"+file).trim())
             buildSteps[fh.name.split('_')[0]] = aptly.uploadPackageStep(
-                "build-area/"+fh.name,
-                APTLY_URL,
-                APTLY_REPO,
-                true
-            )
+                  "build-area/"+fh.name,
+                  APTLY_URL,
+                  APTLY_REPO,
+                  true
+              )
+          }
+          parallel buildSteps
         }
-        parallel buildSteps
-      }
-      stage("publish") {
+
+        stage("publish") {
           aptly.snapshotRepo(APTLY_URL, APTLY_REPO, timestamp)
           aptly.publish(APTLY_URL)
+        }
+      }
+    }
+    if (uploadPpa) {
+      stage("upload launchpad") {
+        debian.importGpgKey("launchpad-private")
+        debian.uploadPpa(PPA, "build-area", "launchpad-private")
       }
     }
   } catch (Throwable e) {
