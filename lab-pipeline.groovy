@@ -292,6 +292,10 @@ timestamps {
                 stage('Install OpenStack control') {
                     //orchestrate.installOpenstackMkControl(saltMaster)
 
+                    // Install horizon dashboard
+                    salt.enforceState(saltMaster, 'I@horizon:server', 'horizon', true)
+                    salt.enforceState(saltMaster, 'I@nginx:server', 'nginx', true)
+
                     // setup keystone service
                     //runSaltProcessStep(saltMaster, 'I@keystone:server', 'state.sls', ['keystone.server'], 1)
                     salt.enforceState(saltMaster, 'I@keystone:server and *01*', 'keystone.server', true)
@@ -338,10 +342,6 @@ timestamps {
                     salt.enforceState(saltMaster, 'I@heat:server and *01*', 'heat', true)
                     salt.enforceState(saltMaster, 'I@heat:server', 'heat', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; heat resource-type-list'], null, true)
-
-                    // Install horizon dashboard
-                    salt.enforceState(saltMaster, 'I@horizon:server', 'horizon', true)
-                    salt.enforceState(saltMaster, 'I@nginx:server', 'nginx', true)
 
                 }
 
