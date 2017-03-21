@@ -316,8 +316,8 @@ timestamps {
 
                     // Install and check nova service
                     //runSaltProcessStep(saltMaster, 'I@nova:controller', 'state.sls', ['nova'], 1)
-                    salt.enforceState(saltMaster, 'I@nova:controller and *01*', 'nova', true)
-                    salt.enforceState(saltMaster, 'I@nova:controller', 'nova', true)
+                    salt.enforceState(saltMaster, 'I@nova:controller and *01*', 'nova.controller', true)
+                    salt.enforceState(saltMaster, 'I@nova:controller', 'nova.controller', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova service-list'], null, true)
 
                     // Install and check cinder service
@@ -329,8 +329,8 @@ timestamps {
                     // Install neutron service
                     //runSaltProcessStep(saltMaster, 'I@neutron:server', 'state.sls', ['neutron'], 1)
 
-                    salt.enforceState(saltMaster, 'I@neutron:server and *01*', 'neutron', true)
-                    salt.enforceState(saltMaster, 'I@neutron:server', 'neutron', true)
+                    salt.enforceState(saltMaster, 'I@neutron:server and *01*', 'neutron.server', true)
+                    salt.enforceState(saltMaster, 'I@neutron:server', 'neutron.server', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron agent-list'], null, true)
 
                     // Install heat service
