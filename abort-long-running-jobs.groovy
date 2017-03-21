@@ -15,9 +15,9 @@ for (int i=0; i < Jenkins.instance.items.size(); i++) {
     def build = runningBuilds[j]
     int durationInSeconds = (System.currentTimeMillis() - build.getTimeInMillis())/1000.0
     if(durationInSeconds > MAX_ALLOWED_DURATION_IN_SECONDS){
-      common.infoMsg("Aborting ${job.name}-${build.id} takes ${durationInSeconds}s")
+      common.infoMsg("Aborting ${job.name}-${build.id} which is running for ${durationInSeconds}s")
       try{
-        build.finish(hudson.model.Result.ABORTED, new java.io.IOException("Aborting build"));
+        build.finish(hudson.model.Result.ABORTED, new java.io.IOException("Aborting build by long running jobs killer"));
       }catch(e){
         common.errorMsg("Error occured during aborting build: Exception: ${e}")
       }
