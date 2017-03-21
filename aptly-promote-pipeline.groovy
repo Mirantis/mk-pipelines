@@ -1,11 +1,27 @@
 def common = new com.mirantis.mk.Common()
 def aptly = new com.mirantis.mk.Aptly()
+
+
+def packages
+try {
+  packages = PACKAGES
+} catch (MissingPropertyException e) {
+  packages = ""
+}
+
+def components
+try {
+  components = COMPONENTS
+} catch (MissingPropertyException e) {
+  components = ""
+}
+
 node() {
   try{
     stage("promote") {
       lock("aptly-api") {
         wrap([$class: 'AnsiColorBuildWrapper']) {
-          aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, null, null, DIFF_ONLY)
+          aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY)
         }
       }
     }
