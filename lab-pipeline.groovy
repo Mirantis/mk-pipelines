@@ -526,6 +526,13 @@ timestamps {
                 }
             }
 
+            stage('Finalize') {
+                try {
+                    salt.runSaltProcessStep(saltMaster, '*', 'state.apply', [], null, true)
+                } catch (Exception e) {
+                    common.warningMsg('State apply failed but we should continue to run')
+                }
+            }
 
         } catch (Throwable e) {
             currentBuild.result = 'FAILURE'
