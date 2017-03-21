@@ -20,7 +20,7 @@ node("python") {
           if (JOBS_NAMESPACE[JOBS_NAMESPACE.length() - 1].equals("s")){
             jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
           }
-          def testJob = "test-${jobsNamespace}-${gerritProject}"
+          def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
           if (_jobExists(testJob)) {
             common.infoMsg("Test job ${testJob} found, running")
             build job: testJob, parameters: [
