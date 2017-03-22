@@ -31,10 +31,12 @@ node("docker"){
 
     } catch (Throwable e) {
         currentBuild.result = 'FAILURE'
-        def errLog = readFile('build/reports/codenarc/main.txt')
-        if(errLog){
-            print "Error log: ${errLog}"
-        }
+        try{
+            def errLog = readFile('build/reports/codenarc/main.txt')
+            if(errLog){
+                common.errorMsg("Error log: ${errLog}")
+            }
+        }catch(ex){}
         throw e
     } finally {
         // send notification
