@@ -487,17 +487,17 @@ timestamps {
                     //vip=${vip:=172.16.10.253}
                     def pillar = salt.getPillar(saltMaster, 'ctl01*', '_param:stacklight_monitor_address')
                     print(pillar)
-                    def stacklight_vip = pillar['return'][0]['ctl01.nfv-lab.local']
-                    common.infoMsg("restart services on node with IP: ${stacklight_vip}")
+                    def stacklight_vip = pillar['return'][0].values()[0]
 
-                    if (stacklight_vip == "") {
-                        throw new Exception("Missing stacklight_vip")
-                    } else {
+                    if (stacklight_vip) {
                         // (re)Start manually the services that are bound to the monitoring VIP
+                        common.infoMsg("restart services on node with IP: ${stacklight_vip}")
                         salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['remote_collectd'], null, true)
                         salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['remote_collector'], null, true)
                         salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['aggregator'], null, true)
                         salt.runSaltProcessStep(saltMaster, "G@ipv4:${stacklight_vip}", 'service.restart', ['nagios3'], null, true)
+                    } else {
+                        throw new Exception("Missing stacklight_vip")
                     }
                 }
             }
