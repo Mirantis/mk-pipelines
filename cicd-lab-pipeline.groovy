@@ -244,6 +244,12 @@ timestamps {
                 }
                 salt.enforceState(saltMaster, 'I@nginx:server', 'nginx')
 
+                def failedSvc = salt.cmdRun(saltMaster, '*', """systemctl --failed | grep -E 'loaded[ \t]+failed' && echo 'Command execution failed'""")
+                print failedSvc
+                if (failedSvc =~ /Command execution failed/) {
+                    common.errorMsg("Some services are not running. Environment may not be fully functional!")
+                }
+
                 common.successMsg("""
     ============================================================
     Your CI/CD lab has been deployed and you can enjoy it:
