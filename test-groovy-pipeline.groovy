@@ -19,8 +19,9 @@ node("docker"){
         }
         stage ('Run Codenarc tests'){
             def workspace = common.getWorkspace()
-            def gradle_report = sh (script: "docker run --rm -v ${workspace}:/usr/bin/app:rw ${GRADLE_IMAGE} ${GRADLE_CMD}",
-                                    returnStdout: true).trim()
+            def jenkinsUID = common.getJenkinsUid()
+            def jenkinsGID = common.getJenkinsGid()
+            def gradle_report = sh (script: "docker run --rm -v ${workspace}:/usr/bin/app:rw -u ${jenkinsUID}:${jenkinsGID} ${GRADLE_IMAGE} ${GRADLE_CMD}", returnStdout: true).trim()
             // Compilation failure doesn't fail the build
             // Check gradle output explicitly
             common.infoMsg(gradle_report)
