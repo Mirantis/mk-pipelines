@@ -51,6 +51,12 @@ timestamps {
             // Prepare machines
             //
             stage ('Create infrastructure') {
+
+                // ensure STACK_TYPE is set
+                if (!binding.variables.containsKey('STACK_TYPE')) {
+                    STACK_TYPE = ''
+                }
+
                 if (STACK_TYPE == 'heat') {
                     // value defaults
                     def openstackCloud
@@ -100,7 +106,7 @@ timestamps {
                     saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
                     currentBuild.description = "${HEAT_STACK_NAME}: ${saltMasterHost}"
 
-                    if (INSTALL.toLowerCase().contains('kvm')) {
+                    if (common.checkContains('INSTALL', 'kvm')) {
                         saltPort = 6969
                     } else {
                         saltPort = 6969
@@ -123,7 +129,7 @@ timestamps {
             // Install
             //
 
-            if (INSTALL.toLowerCase().contains('core')) {
+            if (common.checkContains('INSTALL', 'core')) {
                 stage('Install core infrastructure') {
                     // salt.master, reclass
                     // refresh_pillar
@@ -137,7 +143,7 @@ timestamps {
                     salt.enforceState(saltMaster, 'I@linux:system', ['linux', 'openssh', 'salt.minion', 'ntp'], true)
 
 
-                    if (INSTALL.toLowerCase().contains('kvm')) {
+                    if (common.checkContains('INSTALL', 'kvm')) {
                         //orchestrate.installInfraKvm(saltMaster)
                         salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', [], null, true)
                         salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', [], null, true)
@@ -168,7 +174,7 @@ timestamps {
             }
 
             // install k8s
-            if (INSTALL.toLowerCase().contains('k8s')) {
+            if (common.checkContains('INSTALL', 'k8s')) {
                 stage('Install Kubernetes infra') {
                     //orchestrate.installOpenstackMcpInfra(saltMaster)
 
@@ -236,7 +242,7 @@ timestamps {
             }
 
             // install openstack
-            if (INSTALL.toLowerCase().contains('openstack')) {
+            if (common.checkContains('INSTALL', 'openstack')) {
                 // install Infra and control, tests, ...
 
                 stage('Install OpenStack infra') {
@@ -349,7 +355,7 @@ timestamps {
                 stage('Install OpenStack network') {
                     //orchestrate.installOpenstackMkNetwork(saltMaster, physical)
 
-                    if (INSTALL.toLowerCase().contains('contrail')) {
+                    if (common.checkContains('INSTALL', 'contrail')) {
                         // Install opencontrail database services
                         //runSaltProcessStep(saltMaster, 'I@opencontrail:database', 'state.sls', ['opencontrail.database'], 1)
                         try {
@@ -372,7 +378,7 @@ timestamps {
 
                         // Test opencontrail
                         salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'cmd.run', ['contrail-status'], null, true)
-                    } else if (INSTALL.toLowerCase().contains('ovs')) {
+                    } else if (common.checkContains('INSTALL', 'ovs')) {
                         // Apply gateway
                         salt.runSaltProcessStep(saltMaster, 'I@neutron:gateway', 'state.apply', [], null, true)
                     }
@@ -389,7 +395,7 @@ timestamps {
                         salt.runSaltProcessStep(saltMaster, 'I@nova:compute', 'state.apply', [], null, true)
                     }
 
-                    if (INSTALL.toLowerCase().contains('contrail')) {
+                    if (common.checkContains('INSTALL', 'contrail')) {
                         // Provision opencontrail control services
                         salt.enforceState(saltMaster, 'I@opencontrail:database:id:1', 'opencontrail.client', true)
                         // Provision opencontrail virtual routers
@@ -403,7 +409,7 @@ timestamps {
             }
 
 
-            if (INSTALL.toLowerCase().contains('stacklight')) {
+            if (common.checkContains('INSTALL', 'stacklight')) {
                 stage('Install StackLight') {
                     // infra install
                     // Install the StackLight backends
@@ -507,7 +513,7 @@ timestamps {
             // Test
             //
 
-            if (TEST.toLowerCase().contains('k8s')) {
+            if (common.checkContains('TEST', 'k8s')) {
                 stage('Run k8s bootstrap tests') {
                     orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
                 }
@@ -517,7 +523,7 @@ timestamps {
                 }
             }
 
-            if (TEST.toLowerCase().contains('openstack')) {
+            if (common.checkContains('TEST', 'openstack')) {
                 stage('Run OpenStack tests') {
                     test.runTempestTests(saltMaster, TEMPEST_IMAGE_LINK)
                 }
