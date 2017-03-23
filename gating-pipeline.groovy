@@ -11,7 +11,9 @@ def ssh = new com.mirantis.mk.Ssh()
 node("python") {
   try{
     stage("test") {
-      if (!SKIP_TEST.equals("true")){
+      // TEST JOBS ARE DISABLED
+      // because you cannot pass GERRIT_REFSPEC like variables to another pipeline
+      if (false && !SKIP_TEST.equals("true")){
         wrap([$class: 'AnsiColorBuildWrapper']) {
           def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
           def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
