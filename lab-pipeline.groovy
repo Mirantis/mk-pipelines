@@ -138,6 +138,7 @@ timestamps {
 
                     //orchestrate.installFoundationInfra(saltMaster)
                     salt.enforceState(saltMaster, 'I@salt:master', ['salt.master', 'reclass'], true)
+                    salt.enforceState(saltMaster, '*', ['salt.minion'], true)
                     salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', [], null, true)
                     salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', [], null, true)
                     salt.enforceState(saltMaster, 'I@linux:system', ['linux', 'openssh', 'salt.minion', 'ntp'], true)
@@ -145,10 +146,10 @@ timestamps {
 
                     if (common.checkContains('INSTALL', 'kvm')) {
                         //orchestrate.installInfraKvm(saltMaster)
-                        salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', [], null, true)
-                        salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', [], null, true)
+                        //salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', [], null, true)
+                        //salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', [], null, true)
 
-                        salt.enforceState(saltMaster, 'I@salt:control', ['salt.minion', 'linux.system', 'linux.network', 'ntp'], true)
+                        //salt.enforceState(saltMaster, 'I@salt:control', ['salt.minion', 'linux.system', 'linux.network', 'ntp'], true)
                         salt.enforceState(saltMaster, 'I@salt:control', 'libvirt', true)
                         salt.enforceState(saltMaster, 'I@salt:control', 'salt.control', true)
 
