@@ -546,14 +546,15 @@ timestamps {
             throw e
         } finally {
 
-            // send notification
-            common.sendNotification(currentBuild.result,HEAT_STACK_NAME,["slack"])
 
             //
             // Clean
             //
 
             if (STACK_TYPE == 'heat') {
+                // send notification
+                common.sendNotification(currentBuild.result, HEAT_STACK_NAME, ["slack"])
+
                 if (HEAT_STACK_DELETE.toBoolean() == true) {
                     common.errorMsg('Heat job cleanup triggered')
                     stage('Trigger cleanup job') {
