@@ -138,6 +138,7 @@ timestamps {
 
                     //orchestrate.installFoundationInfra(saltMaster)
                     salt.enforceState(saltMaster, 'I@salt:master', ['salt.master', 'reclass'], true)
+                    salt.enforceState(saltMaster, '*', ['linux.system'], true)
                     salt.enforceState(saltMaster, '*', ['salt.minion'], true)
                     salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.refresh_pillar', [], null, true)
                     salt.runSaltProcessStep(saltMaster, 'I@linux:system', 'saltutil.sync_all', [], null, true)
