@@ -14,7 +14,13 @@ node("docker"){
         stage ('Checkout source code'){
             gerrit.gerritPatchsetCheckout ([
               credentialsId : CREDENTIALS_ID,
-              withWipeOut : true
+              withWipeOut : true,
+              gerritRefSpec: GERRIT_REFSPEC,
+              gerritName: GERRIT_NAME,
+              gerritHost: GERRIT_HOST,
+              gerritPort: GERRIT_PORT,
+              gerritProject: GERRIT_PROJECT,
+              gerritBranch: GERRIT_BRANCH,
             ])
         }
         stage ('Run Codenarc tests'){
