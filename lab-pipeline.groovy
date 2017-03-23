@@ -343,6 +343,9 @@ timestamps {
                     salt.enforceState(saltMaster, 'I@heat:server', 'heat', true)
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; heat resource-type-list'], null, true)
 
+                    // Restart nova api
+                    salt.runSaltProcessStep(saltMaster, 'I@nova:controller', 'service.restart', ['nova-api'])
+
                 }
 
                 stage('Install OpenStack network') {
