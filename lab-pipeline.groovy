@@ -46,12 +46,10 @@ common = new com.mirantis.mk.Common()
 timestamps {
     node {
         try {
-
-
+            withEnv(["ASK_ON_ERROR=${ASK_ON_ERROR}"]){
             //
             // Prepare machines
             //
-
             stage ('Create infrastructure') {
                 if (STACK_TYPE == 'heat') {
                     // value defaults
@@ -536,7 +534,7 @@ timestamps {
                     common.warningMsg('State apply failed but we should continue to run')
                 }
             }
-
+          }
         } catch (Throwable e) {
             currentBuild.result = 'FAILURE'
             throw e
