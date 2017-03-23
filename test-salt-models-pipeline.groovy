@@ -24,7 +24,13 @@ node("python") {
     stage("checkout") {
       if (gerritRef) {
         gerrit.gerritPatchsetCheckout ([
-          credentialsId : CREDENTIALS_ID
+          credentialsId : CREDENTIALS_ID,
+          gerritRefSpec: GERRIT_REFSPEC,
+          gerritName: GERRIT_NAME,
+          gerritHost: GERRIT_HOST,
+          gerritPort: GERRIT_PORT,
+          gerritProject: GERRIT_PROJECT,
+          gerritBranch: GERRIT_BRANCH,
         ])
       } else {
         git.checkoutGitRepository('.', GIT_URL, "master", CREDENTIALS_ID)
@@ -48,7 +54,7 @@ node("python") {
       }
     }
     stage("test") {
-      timeout(10800) {
+      timeout(1440) {
         wrap([$class: 'AnsiColorBuildWrapper']) {
           sh("make test")
         }
