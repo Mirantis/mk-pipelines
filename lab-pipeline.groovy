@@ -52,11 +52,6 @@ timestamps {
             //
             stage ('Create infrastructure') {
 
-                // ensure STACK_TYPE is set
-                if (!binding.variables.containsKey('STACK_TYPE')) {
-                    STACK_TYPE = ''
-                }
-
                 if (STACK_TYPE == 'heat') {
                     // value defaults
                     def openstackCloud
