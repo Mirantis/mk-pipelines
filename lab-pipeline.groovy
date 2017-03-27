@@ -261,14 +261,19 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'cmd.run', ['gluster volume status'], null, true)
 
                     // Install rabbitmq
-                    salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true, false)
-
+                    withEnv(['ASK_ON_ERROR=false']){
+                        retry(2) {
+                            salt.enforceState(saltMaster, 'I@rabbitmq:server', 'rabbitmq', true)
+                        }
+                    }
                     // Check the rabbitmq status
                     salt.runSaltProcessStep(saltMaster, 'I@rabbitmq:server', 'cmd.run', ['rabbitmqctl cluster_status'])
 
                     // Install galera
-                    retry(2) {
-                        salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
+                    withEnv(['ASK_ON_ERROR=false']){
+                        retry(2) {
+                            salt.enforceState(saltMaster, 'I@galera:master', 'galera', true)
+                        }
                     }
                     salt.enforceState(saltMaster, 'I@galera:slave', 'galera', true)
 
