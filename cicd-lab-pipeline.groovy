@@ -123,7 +123,7 @@ timestamps {
                 salt.enforceState(saltMaster, 'ci01*', 'glusterfs.server.setup', true)
                 sleep(5)
                 salt.enforceState(saltMaster, 'I@glusterfs:client', 'glusterfs.client', true)
-                print salt.cmdRun(saltMaster, 'I@glusterfs:client', 'mount|grep fuse.glusterfs || echo "Command failed"')
+                print common.prettyPrint(salt.cmdRun(saltMaster, 'I@glusterfs:client', 'mount|grep fuse.glusterfs || echo "Command failed"'))
             }
 
             stage("Deploy GlusterFS") {
@@ -137,14 +137,14 @@ timestamps {
                 salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.flush')
                 salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.update')
                 salt.enforceState(saltMaster, 'I@docker:swarm', 'docker.swarm', true)
-                print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'docker node ls')
+                print common.prettyPrint(salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'docker node ls'))
             }
 
             stage("Deploy Docker services") {
                 salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
 
                 // XXX: Hack to fix dependency of gerrit on mysql
-                print salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "docker service rm gerrit; sleep 5; rm -rf /srv/volumes/gerrit/*")
+                print common.prettyPrint(salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "docker service rm gerrit; sleep 5; rm -rf /srv/volumes/gerrit/*"))
 
                 timeout(10) {
                     salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'apt-get install -y mysql-client')
@@ -232,7 +232,7 @@ timestamps {
                         // TODO: fix salt.orchestrateSystem
                         // print salt.orchestrateSystem(saltMaster, ['expression': '*', 'type': 'compound'], 'sphinx.orch.generate_doc')
                         def out = salt.cmdRun(saltMaster, 'I@salt:master', 'salt-run state.orchestrate sphinx.orch.generate_doc || echo "Command execution failed"')
-                        print out
+                        print common.prettyPrint(out)
                         if (out =~ /Command execution failed/) {
                             throw new Exception("Command execution failed")
                         }
@@ -245,7 +245,7 @@ timestamps {
                 salt.enforceState(saltMaster, 'I@nginx:server', 'nginx')
 
                 def failedSvc = salt.cmdRun(saltMaster, '*', """systemctl --failed | grep -E 'loaded[ \t]+failed' && echo 'Command execution failed'""")
-                print failedSvc
+                print common.prettyPrint(failedSvc)
                 if (failedSvc =~ /Command execution failed/) {
                     common.errorMsg("Some services are not running. Environment may not be fully functional!")
                 }

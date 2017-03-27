@@ -486,7 +486,7 @@ timestamps {
                     //vip=$(salt-call pillar.data _param:stacklight_monitor_address --out key|grep _param: |awk '{print $2}')
                     //vip=${vip:=172.16.10.253}
                     def pillar = salt.getPillar(saltMaster, 'ctl01*', '_param:stacklight_monitor_address')
-                    print(pillar)
+                    print(common.prettyPrint(pillar))
                     def stacklight_vip = pillar['return'][0].values()[0]
 
                     if (stacklight_vip) {
