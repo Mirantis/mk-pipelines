@@ -166,7 +166,7 @@ timestamps {
                     println "Waiting for Gerrit to come up.."
                     salt.cmdRun(saltMaster, 'I@gerrit:client', 'while true; do curl -svf 172.16.10.254:8080 >/dev/null && break; done')
                 }
-                retry(2) {
+                retry(3) {
                     // Needs to run twice to pass __virtual__ method of gerrit module
                     // after installation of dependencies
                     try {
