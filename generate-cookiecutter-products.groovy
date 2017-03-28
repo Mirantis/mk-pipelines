@@ -123,6 +123,7 @@ parameters:
                 def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
                 sh(returnStdout: true, script: "cp ${outputSource} ${outputDestination} -r")
                 git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
+                archiveArtifacts artifacts: modelEnv
             }
 
             stage ('Push changes to Reclass model') {
