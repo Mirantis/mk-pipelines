@@ -148,6 +148,10 @@ timestamps {
                 salt.syncAll(saltMaster, '*')
 
                 // Aptly
+                timeout(10) {
+                    println "Waiting for Aptly to come up.."
+                    salt.cmdRun(saltMaster, 'I@aptly:server', 'while true; do curl -svf http://172.16.10.254:8084 >/dev/null && break; done')
+                }
                 salt.enforceState(saltMaster, 'I@aptly:server', 'aptly', true)
 
                 // OpenLDAP
