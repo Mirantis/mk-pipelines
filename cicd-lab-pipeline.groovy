@@ -142,17 +142,6 @@ timestamps {
 
             stage("Deploy Docker services") {
                 salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
-
-                // XXX: Hack to fix dependency of gerrit on mysql
-                print common.prettyPrint(salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', "docker service rm gerrit; sleep 5; rm -rf /srv/volumes/gerrit/*"))
-
-                timeout(10) {
-                    salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'apt-get install -y mysql-client')
-                    println "Waiting for MySQL to come up.."
-                    salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'while true; do mysql -h172.16.10.254 -ppassword -e"show status;" >/dev/null && break; done')
-                }
-                salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
-                // ---- cut here (end of hack) ----
             }
 
             stage("Configure CI/CD services") {
@@ -160,6 +149,13 @@ timestamps {
 
                 // Aptly
                 salt.enforceState(saltMaster, 'I@aptly:server', 'aptly', true)
+
+                // OpenLDAP
+                timeout(10) {
+                    println "Waiting for OpenLDAP to come up.."
+                    salt.cmdRun(saltMaster, 'I@openldap:client', 'while true; do curl -svf ldap://172.16.10.254 >/dev/null && break; done')
+                }
+                salt.enforceState(saltMaster, 'I@openldap:client', 'openldap', true)
 
                 // Gerrit
                 timeout(10) {
