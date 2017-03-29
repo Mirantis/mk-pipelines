@@ -23,12 +23,13 @@ python = new com.mirantis.mk.Python()
 
 timestamps {
     node() {
+        def templateEnv = "${env.WORKSPACE}/template"
+        def modelEnv = "${env.WORKSPACE}/model"
+
         try {
-            def templateEnv = "${env.WORKSPACE}/template"
             def templateContext = python.loadJson(COOKIECUTTER_TEMPLATE_CONTEXT)
             def templateDir = "${templateEnv}/template/dir"
             def templateOutputDir = "${env.WORKSPACE}/template"
-            def modelEnv = "${env.WORKSPACE}/model"
             def cutterEnv = "${env.WORKSPACE}/cutter"
             def jinjaEnv = "${env.WORKSPACE}/jinja"
             def clusterName = templateContext.cluster_name
