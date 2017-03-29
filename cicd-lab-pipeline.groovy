@@ -262,6 +262,7 @@ timestamps {
         9600    haproxy stats
         8080    gerrit
         8081    jenkins
+        8089    LDAP administration
         8091    Docker swarm visualizer
         8090    Reclass-generated documentation
 
