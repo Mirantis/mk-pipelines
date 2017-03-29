@@ -129,16 +129,15 @@ parameters:
                 git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
             }
 
-            stage ('Clean workspace directories') {
-                sh(returnStdout: true, script: "rm ${templateEnv} -rf")
-                sh(returnStdout: true, script: "rm ${modelEnv} -rf")
-            }
-
         } catch (Throwable e) {
              // If there was an error or exception thrown, the build failed
              currentBuild.result = "FAILURE"
              throw e
         } finally {
+            stage ('Clean workspace directories') {
+                sh(returnStdout: true, script: "rm ${templateEnv} -rf")
+                sh(returnStdout: true, script: "rm ${modelEnv} -rf")
+            }
              // common.sendNotification(currentBuild.result,"",["slack"])
         }
     }
