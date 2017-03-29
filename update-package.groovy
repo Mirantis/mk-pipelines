@@ -24,6 +24,7 @@ def minions
 def result
 def packages
 def command
+def commandKwargs
 
 node() {
     try {
@@ -70,15 +71,17 @@ node() {
         }
 
         if (TARGET_PACKAGES != "") {
-            command = "pkg.install";
+            command = "pkg.install"
             packages = TARGET_PACKAGES.tokenize(' ')
+            commandKwargs = ['only_upgrade': 'true']
         }else {
             command = "pkg.upgrade"
             packages = null
         }
 
         stage('Apply package upgrades on sample') {
-            salt.runSaltProcessStep(saltMaster, targetLiveSubset, command, packages, null, true)
+            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, packages, commandKwargs)
+            salt.printSaltCommandResult(out)
         }
 
         stage('Confirm package upgrades on all nodes') {
@@ -88,7 +91,8 @@ node() {
         }
 
         stage('Apply package upgrades on all nodes') {
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, command, packages, null, true)
+            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, packages, commandKwargs)
+            salt.printSaltCommandResult(out)
         }
 
     } catch (Throwable e) {
