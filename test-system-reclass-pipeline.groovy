@@ -48,9 +48,10 @@ try {
       def testModels = TEST_MODELS.split(',')
         for (int i = 0; i < testModels.size(); i++) {
           def cluster = testModels[i]
+          def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
           branches["${cluster}"] = {
             build job: "test-salt-model-${cluster}", parameters: [
-              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef]
             ]
           }
