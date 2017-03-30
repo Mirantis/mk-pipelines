@@ -140,8 +140,8 @@ parameters:
              throw e
         } finally {
             stage ('Clean workspace directories') {
-                sh(returnStdout: true, script: "rm ${templateEnv} -rf")
-                sh(returnStdout: true, script: "rm ${modelEnv} -rf")
+                sh(returnStatus: true, script: "rm -rfv ${templateEnv}")
+                sh(returnStatus: true, script: "rm -rfv ${modelEnv}")
             }
              // common.sendNotification(currentBuild.result,"",["slack"])
         }
