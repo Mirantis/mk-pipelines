@@ -65,8 +65,8 @@ timestamps {
 
             stage('Generate product OpenContrail') {
                 if (COOKIECUTTER_INSTALL_CONTRAIL.toBoolean()) {
-                    templateDir = "${templateEnv}/cluster_product/contrail"
-                    templateOutputDir = "${env.WORKSPACE}/template/output_contrail"
+                    templateDir = "${templateEnv}/cluster_product/opencontrail"
+                    templateOutputDir = "${env.WORKSPACE}/template/output_opencontrail"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
                     python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
