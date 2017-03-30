@@ -41,7 +41,7 @@ git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 common = new com.mirantis.mk.Common()
-
+test = new com.mirantis.mk.Test()
 
 timestamps {
     node {
