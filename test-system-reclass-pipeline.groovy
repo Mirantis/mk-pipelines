@@ -8,29 +8,57 @@ try {
     gerritCredentials = "gerrit"
 }
 
+def gerritRef
+try {
+  gerritRef = GERRIT_REFSPEC
+} catch (MissingPropertyException e) {
+  gerritRef = null
+}
+
+def defaultGitRef, defaultGitUrl
+try {
+    defaultGitRef = DEFAULT_GIT_REF
+    defaultGitUrl = DEFAULT_GIT_URL
+} catch (MissingPropertyException e) {
+    defaultGitRef = null
+    defaultGitUrl = null
+}
+def checkouted = false
+
 try {
   stage("Checkout") {
     node() {
-      gerrit.gerritPatchsetCheckout ([
-        credentialsId : gerritCredentials
-      ])
+      if (gerritRef) {
+        // job is triggered by Gerrit
+        checkouted = gerrit.gerritPatchsetCheckout ([
+          credentialsId : gerritCredentials
+        ])
+        // change defaultGit variables if job triggered from Gerrit
+        defaultGitRef = GERRIT_REFSPEC
+        defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}.git"
+      } else if(defaultGitRef && defaultGitUrl) {
+          checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", gerritCredentials)
+      }
     }
   }
 
   stage("Test") {
-    def branches = [:]
-    def testModels = TEST_MODELS.split(',')
-
-    for (int i = 0; i < testModels.size(); i++) {
-      def cluster = testModels[i]
-      branches["${cluster}"] = {
-        build job: "test-salt-model-${cluster}", parameters: [
-          [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}.git"],
-          [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
-        ]
-      }
+    if(checkouted){
+      def branches = [:]
+      def testModels = TEST_MODELS.split(',')
+        for (int i = 0; i < testModels.size(); i++) {
+          def cluster = testModels[i]
+          branches["${cluster}"] = {
+            build job: "test-salt-model-${cluster}", parameters: [
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef]
+            ]
+          }
+        }
+      parallel branches
+    }else{
+       common.errorMsg("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
     }
-    parallel branches
   }
 } catch (Throwable e) {
     // If there was an error or exception thrown, the build failed
