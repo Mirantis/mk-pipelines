@@ -119,19 +119,19 @@ parameters:
                 writeFile(file: nodeFile, text: nodeString)
             }
 
-            if (COMMIT_CHANGES.toBoolean()) {
-                stage('Inject changes to Reclass model') {
-                    git.changeGitBranch(modelEnv, targetBranch)
-                    def outputSource = "${templateOutputDir}/${clusterName}"
-                    def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
-                    sh(returnStdout: true, script: "cp ${outputSource} ${outputDestination} -r")
-                    git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
-                    archiveArtifacts artifacts: modelEnv
-                }
+            stage('Inject changes to Reclass model') {
+                git.changeGitBranch(modelEnv, targetBranch)
+                def outputSource = "${templateOutputDir}/${clusterName}"
+                def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
+                sh(returnStdout: true, script: "cp ${outputSource} ${outputDestination} -r")
+            }
 
-                stage ('Push changes to Reclass model') {
+            stage ('Save changes to Reclass model') {
+                if (COMMIT_CHANGES.toBoolean()) {
+                    git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
                     git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
                 }
+                archiveArtifacts artifacts: modelEnv
             }
 
         } catch (Throwable e) {
