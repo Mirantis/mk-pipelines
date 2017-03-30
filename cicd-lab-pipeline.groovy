@@ -140,6 +140,10 @@ timestamps {
                 print common.prettyPrint(salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'docker node ls'))
             }
 
+            stage("Configure OSS services") {
+                salt.enforceState(saltMaster, 'I@devops_portal:config', 'devops_portal.config')
+            }
+
             stage("Deploy Docker services") {
                 salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
             }
@@ -259,10 +263,12 @@ timestamps {
 
     And visit services running at 172.16.10.254 (vip address):
 
-        9600    haproxy stats
-        8080    gerrit
-        8081    jenkins
+        9600    HAProxy statistics
+        8080    Gerrit
+        8081    Jenkins
         8089    LDAP administration
+        4440    Rundeck
+        8084    DevOps Portal
         8091    Docker swarm visualizer
         8090    Reclass-generated documentation
 
