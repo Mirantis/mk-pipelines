@@ -27,7 +27,7 @@ node("docker") {
         stage ('Execute commands') {
             assert containerID != null
             def cmds = COMMANDS.tokenize('\n')
-            for (int i = 0; i < cmds.size(), i++) {
+            for (int i = 0; i < cmds.size(); i++) {
                def cmd = cmds[i]
                def output = sh(
                    script: "docker exec ${containerID} ${cmd}",
