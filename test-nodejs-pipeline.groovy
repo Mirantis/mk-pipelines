@@ -8,44 +8,53 @@
 gerrit = new com.mirantis.mk.Gerrit()
 common = new com.mirantis.mk.Common()
 
+def executeCmd(containerId, cmd) {
+    stage(cmd) {
+        assert containerId != null
+        common.infoMsg("Starting command: ${cmd}")
+        def output = sh(
+            script: "docker exec ${containerId} ${cmd}",
+            returnStdout: true,
+        )
+        common.infoMsg(output)
+        common.successMsg("Successfully completed: ${cmd}")
+    }
+}
+
 node("docker") {
-    def containerID
+    def containerId
     try {
-        stage ('Checkout source code') {
+        stage('Checkout source code') {
             gerrit.gerritPatchsetCheckout ([
               credentialsId : CREDENTIALS_ID,
               withWipeOut : true,
             ])
         }
-        stage ('Start container') {
-           def workspace = common.getWorkspace()
-           containerID = sh(
-               script: "docker run -d -v ${workspace}:/opt/workspace:rw ${NODE_IMAGE}",
-               returnStdout: true,
-           ).trim()
+        stage('Start container') {
+            def workspace = common.getWorkspace()
+            containerId = sh(
+                script: "docker run -d ${NODE_IMAGE}",
+                returnStdout: true,
+            ).trim()
+            common.successMsg("Container with id ${containerId} started.")
+            sh("docker cp ${workspace}/ ${containerId}:/opt/workspace/")
         }
-        stage ('Execute commands') {
-            assert containerID != null
-            def cmds = COMMANDS.tokenize('\n')
-            for (int i = 0; i < cmds.size(); i++) {
-               def cmd = cmds[i]
-               def output = sh(
-                   script: "docker exec ${containerID} ${cmd}",
-                   returnStdout: true,
-               ).trim()
-               common.infoMsg(output)
-            }
+        executeCmd(containerId, "npm install")
+        def cmds = COMMANDS.tokenize('\n')
+        for (int i = 0; i < cmds.size(); i++) {
+           executeCmd(containerId, cmds[i])
         }
-    } catch (Throwable e) {
+    } catch (err) {
         currentBuild.result = 'FAILURE'
-        common.errorMsg("Build failed due to some commands failed.")
-        throw e
+        common.errorMsg("Build failed due to error: ${err}")
+        throw err
     } finally {
         common.sendNotification(currentBuild.result, "" ,["slack"])
-        stage ('Remove container') {
-            if (containerID != null) {
-                sh "docker stop -t 0 ${containerID}"
-                sh "docker rm ${containerID}"
+        stage('Cleanup') {
+            if (containerId != null) {
+                sh("docker stop -t 0 ${containerId}")
+                sh("docker rm ${containerId}")
+                common.infoMsg("Container with id ${containerId} was removed.")
             }
         }
     }
