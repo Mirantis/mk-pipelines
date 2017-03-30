@@ -1,3 +1,11 @@
+
+/**
+ *  Test salt models pipeline
+ *  DEFAULT_GIT_REF
+ *  DEFAULT_GIT_URL
+ *  CREDENTIALS_ID
+ */
+
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
@@ -10,53 +18,46 @@ try {
   gerritRef = null
 }
 
-def systemGitRef, systemGitUrl
+def defaultGitRef, defaultGitUrl
 try {
-    systemGitRef = RECLASS_SYSTEM_GIT_REF
-    systemGitUrl = RECLASS_SYSTEM_GIT_URL
+    defaultGitRef = DEFAULT_GIT_REF
+    defaultGitUrl = DEFAULT_GIT_URL
 } catch (MissingPropertyException e) {
-    systemGitRef = null
-    systemGitUrl = null
+    defaultGitRef = null
+    defaultGitUrl = null
 }
+def checkouted = false
 
 node("python") {
   try{
     stage("checkout") {
       if (gerritRef) {
-        gerrit.gerritPatchsetCheckout ([
-          credentialsId : CREDENTIALS_ID,
-          gerritRefSpec: GERRIT_REFSPEC,
-          gerritName: GERRIT_NAME,
-          gerritHost: GERRIT_HOST,
-          gerritPort: GERRIT_PORT,
-          gerritProject: GERRIT_PROJECT,
-          gerritBranch: GERRIT_BRANCH,
+        // job is triggered by Gerrit
+        checkouted = gerrit.gerritPatchsetCheckout ([
+          credentialsId : CREDENTIALS_ID
         ])
-      } else {
-        git.checkoutGitRepository('.', GIT_URL, "master", CREDENTIALS_ID)
+      } else if(defaultGitRef && defaultGitUrl) {
+          checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "master", CREDENTIALS_ID)
       }
-
-      if (fileExists('classes/system')) {
-        ssh.prepareSshAgentKey(CREDENTIALS_ID)
-        dir('classes/system') {
-          remoteUrl = git.getGitRemote()
-          ssh.ensureKnownHosts(remoteUrl)
-        }
-        ssh.agentSh("git submodule init; git submodule sync; git submodule update --recursive")
-
-        if (systemGitRef) {
-          common.infoMsg("Fetching alternate system reclass (${systemGitUrl} ${systemGitRef})")
+      if(checkouted){
+        if (fileExists('classes/system')) {
+          ssh.prepareSshAgentKey(CREDENTIALS_ID)
           dir('classes/system') {
-            ssh.ensureKnownHosts(RECLASS_SYSTEM_GIT_URL)
-            ssh.agentSh("git fetch ${systemGitUrl} ${systemGitRef} && git checkout FETCH_HEAD")
+            remoteUrl = git.getGitRemote()
+            ssh.ensureKnownHosts(remoteUrl)
           }
+          ssh.agentSh("git submodule init; git submodule sync; git submodule update --recursive")
         }
+      }else{
+        common.errorMsg("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
       }
     }
     stage("test") {
-      timeout(1440) {
-        wrap([$class: 'AnsiColorBuildWrapper']) {
-          sh("make test")
+      if(checkouted){
+        timeout(1440) {
+          wrap([$class: 'AnsiColorBuildWrapper']) {
+            sh("make test")
+          }
         }
       }
     }

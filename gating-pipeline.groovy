@@ -11,9 +11,7 @@ def ssh = new com.mirantis.mk.Ssh()
 node("python") {
   try{
     stage("test") {
-      // TEST JOBS ARE DISABLED
-      // because you cannot pass GERRIT_REFSPEC like variables to another pipeline
-      if (false && !SKIP_TEST.equals("true")){
+      if (!SKIP_TEST.equals("true")){
         wrap([$class: 'AnsiColorBuildWrapper']) {
           def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
           def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
@@ -26,12 +24,8 @@ node("python") {
           if (_jobExists(testJob)) {
             common.infoMsg("Test job ${testJob} found, running")
             build job: testJob, parameters: [
-              [$class: 'StringParameterValue', name: 'GERRIT_BRANCH', value: GERRIT_BRANCH],
-              [$class: 'StringParameterValue', name: 'GERRIT_NAME', value: GERRIT_NAME],
-              [$class: 'StringParameterValue', name: 'GERRIT_HOST', value: GERRIT_HOST],
-              [$class: 'StringParameterValue', name: 'GERRIT_PORT', value: GERRIT_PORT],
-              [$class: 'StringParameterValue', name: 'GERRIT_PROJECT', value: GERRIT_PROJECT],
-              [$class: 'StringParameterValue', name: 'GERRIT_REFSPEC', value: GERRIT_REFSPEC]
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}.git"],
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
             ]
           } else {
             common.infoMsg("Test job ${testJob} not found")
@@ -52,7 +46,7 @@ node("python") {
      currentBuild.result = "FAILURE"
      throw e
   } finally {
-     common.sendNotification(currentBuild.result,"",["slack"])
+     //common.sendNotification(currentBuild.result,"",["slack"])
   }
 }
 

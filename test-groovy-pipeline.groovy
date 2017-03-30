@@ -9,30 +9,43 @@
 gerrit = new com.mirantis.mk.Gerrit()
 common = new com.mirantis.mk.Common()
 
+def defaultGitRef, defaultGitUrl
+try {
+    defaultGitRef = DEFAULT_GIT_REF
+    defaultGitUrl = DEFAULT_GIT_URL
+} catch (MissingPropertyException e) {
+    defaultGitRef = null
+    defaultGitUrl = null
+}
+def checkouted = false
+
 node("docker"){
     try {
         stage ('Checkout source code'){
-            gerrit.gerritPatchsetCheckout ([
-              credentialsId : CREDENTIALS_ID,
-              withWipeOut : true,
-              gerritRefSpec: GERRIT_REFSPEC,
-              gerritName: GERRIT_NAME,
-              gerritHost: GERRIT_HOST,
-              gerritPort: GERRIT_PORT,
-              gerritProject: GERRIT_PROJECT,
-              gerritBranch: GERRIT_BRANCH,
+          if (gerritRef) {
+            // job is triggered by Gerrit
+            checkouted = gerrit.gerritPatchsetCheckout ([
+              credentialsId : CREDENTIALS_ID
             ])
+          } else if(defaultGitRef && defaultGitUrl) {
+              checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "master", CREDENTIALS_ID)
+          }
+          if(!checkouted){
+            common.errorMsg("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
+          }
         }
         stage ('Run Codenarc tests'){
-            def workspace = common.getWorkspace()
-            def jenkinsUID = common.getJenkinsUid()
-            def jenkinsGID = common.getJenkinsGid()
-            def gradle_report = sh (script: "docker run --rm -v ${workspace}:/usr/bin/app:rw -u ${jenkinsUID}:${jenkinsGID} ${GRADLE_IMAGE} ${GRADLE_CMD}", returnStdout: true).trim()
-            // Compilation failure doesn't fail the build
-            // Check gradle output explicitly
-            common.infoMsg(gradle_report)
-            if ( gradle_report =~ /Compilation failed/ ) {
-                throw new Exception("COMPILATION FAILED!")
+            if(checkouted){
+              def workspace = common.getWorkspace()
+              def jenkinsUID = common.getJenkinsUid()
+              def jenkinsGID = common.getJenkinsGid()
+              def gradle_report = sh (script: "docker run --rm -v ${workspace}:/usr/bin/app:rw -u ${jenkinsUID}:${jenkinsGID} ${GRADLE_IMAGE} ${GRADLE_CMD}", returnStdout: true).trim()
+              // Compilation failure doesn't fail the build
+              // Check gradle output explicitly
+              common.infoMsg(gradle_report)
+              if ( gradle_report =~ /Compilation failed/ ) {
+                  throw new Exception("COMPILATION FAILED!")
+              }
             }
         }
 
