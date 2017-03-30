@@ -35,7 +35,7 @@ try {
         ])
         // change defaultGit variables if job triggered from Gerrit
         defaultGitRef = GERRIT_REFSPEC
-        defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}.git"
+        defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
       } else if(defaultGitRef && defaultGitUrl) {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", gerritCredentials)
       }
