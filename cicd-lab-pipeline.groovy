@@ -120,7 +120,9 @@ timestamps {
 
             stage("Deploy GlusterFS") {
                 salt.enforceState(saltMaster, 'I@glusterfs:server', 'glusterfs.server.service', true)
-                salt.enforceState(saltMaster, 'ci01*', 'glusterfs.server.setup', true)
+                retry(2) {
+                    salt.enforceState(saltMaster, 'ci01*', 'glusterfs.server.setup', true)
+                }
                 sleep(5)
                 salt.enforceState(saltMaster, 'I@glusterfs:client', 'glusterfs.client', true)
                 print common.prettyPrint(salt.cmdRun(saltMaster, 'I@glusterfs:client', 'mount|grep fuse.glusterfs || echo "Command failed"'))
