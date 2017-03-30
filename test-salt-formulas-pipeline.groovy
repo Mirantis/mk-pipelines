@@ -34,7 +34,7 @@ node("python") {
           credentialsId : CREDENTIALS_ID
         ])
       } else if(defaultGitRef && defaultGitUrl) {
-          checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "master", CREDENTIALS_ID)
+          checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
       }
       if(!checkouted){
         common.errorMsg("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")

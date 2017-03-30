@@ -9,6 +9,13 @@
 gerrit = new com.mirantis.mk.Gerrit()
 common = new com.mirantis.mk.Common()
 
+def gerritRef
+try {
+  gerritRef = GERRIT_REFSPEC
+} catch (MissingPropertyException e) {
+  gerritRef = null
+}
+
 def defaultGitRef, defaultGitUrl
 try {
     defaultGitRef = DEFAULT_GIT_REF
@@ -28,7 +35,7 @@ node("docker"){
               credentialsId : CREDENTIALS_ID
             ])
           } else if(defaultGitRef && defaultGitUrl) {
-              checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "master", CREDENTIALS_ID)
+              checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
           }
           if(!checkouted){
             common.errorMsg("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
