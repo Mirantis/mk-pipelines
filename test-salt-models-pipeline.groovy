@@ -37,7 +37,7 @@ node("python") {
           credentialsId : CREDENTIALS_ID
         ])
       } else if(defaultGitRef && defaultGitUrl) {
-          checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "master", CREDENTIALS_ID)
+          checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
       }
       if(checkouted){
         if (fileExists('classes/system')) {
