@@ -34,7 +34,6 @@ try {
           credentialsId : gerritCredentials
         ])
         // change defaultGit variables if job triggered from Gerrit
-        defaultGitRef = GERRIT_REFSPEC
         defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
       } else if(defaultGitRef && defaultGitUrl) {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", gerritCredentials)
@@ -52,7 +51,7 @@ try {
           branches["${cluster}"] = {
             build job: "test-salt-model-${cluster}", parameters: [
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
-              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef]
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"]
             ]
           }
         }
