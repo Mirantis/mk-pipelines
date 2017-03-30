@@ -36,6 +36,7 @@ timestamps {
             def clusterName = templateContext.cluster_name
             def clusterDomain = templateContext.cluster_domain
             def targetBranch = "feature/${clusterName}"
+            def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
 
             stage ('Download Cookiecutter template') {
                 git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
@@ -47,59 +48,65 @@ timestamps {
 
             stage('Generate base infrastructure') {
                 templateDir = "${templateEnv}/cluster_product/infra"
-                templateOutputDir = "${env.WORKSPACE}/template/output_infra"
+                templateOutputDir = "${env.WORKSPACE}/template/output/infra"
                 sh "mkdir -p ${templateOutputDir}"
                 python.setupCookiecutterVirtualenv(cutterEnv)
                 python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
             }
 
             stage('Generate product CI/CD') {
                 if (COOKIECUTTER_INSTALL_CICD.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/cicd"
-                    templateOutputDir = "${env.WORKSPACE}/template/output_cicd"
+                    templateOutputDir = "${env.WORKSPACE}/template/output/cicd"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
                     python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
 
             stage('Generate product OpenContrail') {
                 if (COOKIECUTTER_INSTALL_CONTRAIL.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/opencontrail"
-                    templateOutputDir = "${env.WORKSPACE}/template/output_opencontrail"
+                    templateOutputDir = "${env.WORKSPACE}/template/output/opencontrail"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
                     python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
 
             stage('Generate product Kubernetes') {
                 if (COOKIECUTTER_INSTALL_KUBERNETES.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/kubernetes"
-                    templateOutputDir = "${env.WORKSPACE}/template/output_kubernetes"
+                    templateOutputDir = "${env.WORKSPACE}/template/output/kubernetes"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
                     python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
 
             stage('Generate product OpenStack') {
                 if (COOKIECUTTER_INSTALL_OPENSTACK.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/openstack"
-                    templateOutputDir = "${env.WORKSPACE}/template/output_openstack"
+                    templateOutputDir = "${env.WORKSPACE}/template/output/openstack"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
                     python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
 
             stage('Generate product StackLight') {
                 if (COOKIECUTTER_INSTALL_STACKLIGHT.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/stacklight"
-                    templateOutputDir = "${env.WORKSPACE}/template/output_stacklight"
+                    templateOutputDir = "${env.WORKSPACE}/template/output/stacklight"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
                     python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
 
@@ -121,9 +128,8 @@ parameters:
 
             stage('Inject changes to Reclass model') {
                 git.changeGitBranch(modelEnv, targetBranch)
-                def outputSource = "${templateOutputDir}/${clusterName}"
-                def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
-                sh(returnStdout: true, script: "cp ${outputSource} ${outputDestination} -r")
+                def outputSource = "${env.WORKSPACE}/template/output/"
+                sh(returnStdout: true, script: "cp -vr ${outputSource} ${outputDestination}")
             }
 
             stage ('Save changes to Reclass model') {
@@ -131,7 +137,7 @@ parameters:
                     git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
                     git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
                 }
-                sh(returnStatus: true, script: "tar zcvf ${clusterName}.tar.gz ${modelEnv}")
+                sh(returnStatus: true, script: "tar -zcvf ${clusterName}.tar.gz -C ${modelEnv} .")
                 archiveArtifacts artifacts: "${clusterName}.tar.gz"
             }
 
