@@ -14,6 +14,7 @@
  *   RECLASS_MODEL_URL                  Reclass model repo address
  *   RECLASS_MODEL_CREDENTIALS          Credentials to the Reclass model repo.
  *   RECLASS_MODEL_BRANCH               Branch for the template to push to model.
+ *   COMMIT_CHANGES                     Commit model to repo
  *
 **/
 
@@ -118,17 +119,19 @@ parameters:
                 writeFile(file: nodeFile, text: nodeString)
             }
 
-            stage('Inject changes to Reclass model') {
-                git.changeGitBranch(modelEnv, targetBranch)
-                def outputSource = "${templateOutputDir}/${clusterName}"
-                def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
-                sh(returnStdout: true, script: "cp ${outputSource} ${outputDestination} -r")
-                git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
-                archiveArtifacts artifacts: modelEnv
-            }
+            if (COMMIT_CHANGES.toBoolean()) {
+                stage('Inject changes to Reclass model') {
+                    git.changeGitBranch(modelEnv, targetBranch)
+                    def outputSource = "${templateOutputDir}/${clusterName}"
+                    def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
+                    sh(returnStdout: true, script: "cp ${outputSource} ${outputDestination} -r")
+                    git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
+                    archiveArtifacts artifacts: modelEnv
+                }
 
-            stage ('Push changes to Reclass model') {
-                git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
+                stage ('Push changes to Reclass model') {
+                    git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
+                }
             }
 
         } catch (Throwable e) {
