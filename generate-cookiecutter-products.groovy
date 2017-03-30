@@ -131,7 +131,8 @@ parameters:
                     git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
                     git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
                 }
-                archiveArtifacts artifacts: modelEnv
+                sh(returnStatus: true, script: "tar zcvf ${clusterName}.tar.gz ${modelEnv}")
+                archiveArtifacts artifacts: "${clusterName}.tar.gz"
             }
 
         } catch (Throwable e) {
