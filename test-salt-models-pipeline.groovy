@@ -49,7 +49,7 @@ node("python") {
           ssh.agentSh("git submodule init; git submodule sync; git submodule update --recursive")
         }
       }else{
-        common.errorMsg("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
+        throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
       }
     }
     stage("test") {
