@@ -50,6 +50,7 @@ timestamps {
                 templateDir = "${templateEnv}/cluster_product/infra"
                 templateOutputDir = "${env.WORKSPACE}/template/output/infra"
                 sh "mkdir -p ${templateOutputDir}"
+                sh "mkdir -p ${outputDestination}"
                 python.setupCookiecutterVirtualenv(cutterEnv)
                 python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
                 sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
