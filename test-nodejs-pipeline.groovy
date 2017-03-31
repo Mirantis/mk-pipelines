@@ -37,7 +37,7 @@ node("docker") {
                 returnStdout: true,
             ).trim()
             common.successMsg("Container with id ${containerId} started.")
-            sh("docker cp ${workspace}/ ${containerId}:/opt/workspace/")
+            sh("docker cp ${workspace}/. ${containerId}:/opt/workspace/")
         }
         executeCmd(containerId, "npm install")
         def cmds = COMMANDS.tokenize('\n')
