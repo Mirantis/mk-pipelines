@@ -43,7 +43,9 @@ timestamps {
             }
 
             stage ('Download full Reclass model') {
-                git.checkoutGitRepository(modelEnv, RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, RECLASS_MODEL_CREDENTIALS)
+                if (RECLASS_MODEL_URL != '') {
+                    git.checkoutGitRepository(modelEnv, RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, RECLASS_MODEL_CREDENTIALS)
+                }
             }
 
             stage('Generate base infrastructure') {
@@ -124,17 +126,19 @@ parameters:
             name: cfg01
             domain: ${clusterDomain}
 """
+                sh "mkdir -p ${modelEnv}/nodes/"
                 writeFile(file: nodeFile, text: nodeString)
             }
 
             stage('Inject changes to Reclass model') {
-                git.changeGitBranch(modelEnv, targetBranch)
                 def outputSource = "${env.WORKSPACE}/template/output/"
+                sh "mkdir -p ${outputDestination}"
                 sh(returnStdout: true, script: "cp -vr ${outputSource} ${outputDestination}")
             }
 
             stage ('Save changes to Reclass model') {
                 if (COMMIT_CHANGES.toBoolean()) {
+                    git.changeGitBranch(modelEnv, targetBranch)
                     git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
                     git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
                 }
