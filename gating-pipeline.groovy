@@ -4,14 +4,21 @@
  * JOBS_NAMESPACE - Gerrit gating jobs namespace (mk, contrail, ...)
  *
 **/
+import groovy.json.JsonSlurper
 
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
 node("python") {
   try{
+    // test if change is not already merged
+    ssh.prepareSshAgentKey(CREDENTIALS_ID)
+    ssh.ensureKnownHosts(GERRIT_HOST)
+    def output = ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit query --format=JSON change:%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER))
+    def jsonSlurper = new JsonSlurper()
+    def gerritChange = jsonSlurper.parseText(output)
     stage("test") {
-      if (!SKIP_TEST.equals("true")){
+      if (gerritChange.status != "MERGED" && !SKIP_TEST.equals("true")){
         wrap([$class: 'AnsiColorBuildWrapper']) {
           def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
           def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
@@ -36,10 +43,12 @@ node("python") {
       }
     }
     stage("submit review"){
-      ssh.prepareSshAgentKey(CREDENTIALS_ID)
-      ssh.ensureKnownHosts(GERRIT_HOST)
-      ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit review --submit %s,%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
-      common.infoMsg(String.format("Gerrit review %s,%s submitted", GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+      if(gerritChange.status == "MERGED"){
+        common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
+      }else{
+        ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit review --submit %s,%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+        common.infoMsg(String.format("Gerrit review %s,%s submitted", GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+      }
     }
   } catch (Throwable e) {
      // If there was an error or exception thrown, the build failed
