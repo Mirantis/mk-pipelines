@@ -35,13 +35,18 @@ node() {
 
         stage('List target servers') {
             minions = salt.getMinions(saltMaster, targetAll)
+
+            if (minions.isEmpty()) {
+                throw new Exception("No minion was targeted")
+            }
+
             if (TARGET_SUBSET_TEST != "") {
                 targetTestSubset = minions.subList(0, Integer.valueOf(TARGET_SUBSET_TEST)).join(' or ')
-            }
-            else {
+            } else {
                 targetTestSubset = minions.join(' or ')
             }
             targetLiveSubset = minions.subList(0, Integer.valueOf(TARGET_SUBSET_LIVE)).join(' or ')
+
             targetLiveAll = minions.join(' or ')
             common.infoMsg("Found nodes: ${targetLiveAll}")
             common.infoMsg("Selected test nodes: ${targetTestSubset}")
