@@ -14,9 +14,9 @@ node("python") {
     // test if change is not already merged
     ssh.prepareSshAgentKey(CREDENTIALS_ID)
     ssh.ensureKnownHosts(GERRIT_HOST)
-    def gerritChangeStatus = _getGerritChangeStatus(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER)
+    def gerritChange = _getGerritChangeStatus(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER)
     stage("test") {
-      if (gerritChangeStatus != "MERGED" && !SKIP_TEST.equals("true")){
+      if (gerritChange.status != "MERGED" && !SKIP_TEST.equals("true")){
         wrap([$class: 'AnsiColorBuildWrapper']) {
           def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
           def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
@@ -41,7 +41,7 @@ node("python") {
       }
     }
     stage("submit review"){
-      if(gerritChangeStatus == "MERGED"){
+      if(gerritChange.status == "MERGED"){
         common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
       }else{
         ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit review --submit %s,%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
@@ -62,15 +62,11 @@ def _jobExists(jobName){
   return Jenkins.instance.items.find{it -> it.name.equals(jobName)}
 }
 
-@NonCPS
 def _getGerritChangeStatus(gerritName, gerritHost, gerritChange){
    def ssh = new com.mirantis.mk.Ssh()
    def output = ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit query --format=JSON change:%s", gerritName, gerritHost, gerritChange))
-   def jsonSlurper = new JsonSlurper()
-   def gerritChangeObject = jsonSlurper.parseText(output)
-   if(gerritChangeObject["status"]){
-     return gerritChangeObject["status"]
-   }else{
-     return "ERROR"
-   }
+   // JsonSlurper returns a non-serializable LazyMap, so copy it into a regular map before returning
+   def m = [:]
+   m.putAll(new JsonSlurper().parseText(output))
+   return m
 }
