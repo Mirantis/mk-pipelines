@@ -66,9 +66,9 @@ def _jobExists(jobName){
 def _getGerritChangeStatus(gerritName, gerritHost, gerritChange){
    def output = ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit query --format=JSON change:%s", gerritName, gerritHost, gerritChange))
    def jsonSlurper = new JsonSlurper()
-   def gerritChange = jsonSlurper.parseText(output)
-   if(gerritChange["status"]){
-     return gerritChange["status"]
+   def gerritChangeObject = jsonSlurper.parseText(output)
+   if(gerritChangeObject["status"]){
+     return gerritChangeObject["status"]
    }else{
      return "ERROR"
    }
