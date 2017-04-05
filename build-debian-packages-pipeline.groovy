@@ -23,14 +23,14 @@ try {
 
 def uploadPpa
 try {
-  uploadPpa = UPLOAD_PPA
+  uploadPpa = UPLOAD_PPA.toBoolean()
 } catch (MissingPropertyException e) {
   uploadPpa = null
 }
 
 def uploadAptly
 try {
-  uploadAptly = UPLOAD_APTLY
+  uploadAptly = UPLOAD_APTLY.toBoolean()
 } catch (MissingPropertyException e) {
   uploadAptly = true
 }
