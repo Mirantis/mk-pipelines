@@ -4,7 +4,6 @@
  * JOBS_NAMESPACE - Gerrit gating jobs namespace (mk, contrail, ...)
  *
 **/
-import groovy.json.JsonSlurper
 
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
