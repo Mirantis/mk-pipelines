@@ -64,6 +64,7 @@ def _jobExists(jobName){
 
 @NonCPS
 def _getGerritChangeStatus(gerritName, gerritHost, gerritChange){
+   def ssh = new com.mirantis.mk.Ssh()
    def output = ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit query --format=JSON change:%s", gerritName, gerritHost, gerritChange))
    def jsonSlurper = new JsonSlurper()
    def gerritChangeObject = jsonSlurper.parseText(output)
