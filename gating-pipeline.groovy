@@ -14,11 +14,9 @@ node("python") {
     // test if change is not already merged
     ssh.prepareSshAgentKey(CREDENTIALS_ID)
     ssh.ensureKnownHosts(GERRIT_HOST)
-    def output = ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit query --format=JSON change:%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER))
-    def jsonSlurper = new JsonSlurper()
-    def gerritChange = jsonSlurper.parseText(output)
+    def gerritChangeStatus = _getGerritChangeStatus(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER)
     stage("test") {
-      if (gerritChange.status != "MERGED" && !SKIP_TEST.equals("true")){
+      if (gerritChangeStatus != "MERGED" && !SKIP_TEST.equals("true")){
         wrap([$class: 'AnsiColorBuildWrapper']) {
           def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
           def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
@@ -43,7 +41,7 @@ node("python") {
       }
     }
     stage("submit review"){
-      if(gerritChange.status == "MERGED"){
+      if(gerritChangeStatus == "MERGED"){
         common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
       }else{
         ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit review --submit %s,%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
@@ -62,4 +60,16 @@ node("python") {
 @NonCPS
 def _jobExists(jobName){
   return Jenkins.instance.items.find{it -> it.name.equals(jobName)}
+}
+
+@NonCPS
+def _getGerritChangeStatus(gerritName, gerritHost, gerritChange){
+   def output = ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit query --format=JSON change:%s", gerritName, gerritHost, gerritChange))
+   def jsonSlurper = new JsonSlurper()
+   def gerritChange = jsonSlurper.parseText(output)
+   if(gerritChange["status"]){
+     return gerritChange["status"]
+   }else{
+     return "ERROR"
+   }
 }
