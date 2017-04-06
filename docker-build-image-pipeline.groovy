@@ -24,6 +24,7 @@ node("docker") {
          gerrit.gerritPatchsetCheckout(IMAGE_GIT_URL, "", IMAGE_BRANCH, IMAGE_CREDENTIALS_ID)
       }
       stage("build") {
+        common.infoMsg("Building docker image ${IMAGE_NAME}")
         dockerApp = dockerLib.buildDockerImage(IMAGE_NAME, "", "${workspace}/${DOCKERFILE_PATH}", imageTagsList[0])
         if(!dockerApp){
           throw new Exception("Docker build image failed")
@@ -31,6 +32,7 @@ node("docker") {
       }
       stage("upload to docker hub"){
         for(int i=0;i<imageTagsList.size();i++){
+          common.infoMsg("Uploading image ${IMAGE_NAME} with tag ${imageTagsList[i]}")
           dockerApp.push(imageTagsList[i])
         }
       }
