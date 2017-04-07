@@ -1,24 +1,46 @@
 def common = new com.mirantis.mk.Common()
 def aptly = new com.mirantis.mk.Aptly()
+def git = new com.mirantis.mk.Git()
 def timestamp = common.getDatetime()
+
+def binaryPackages
+try {
+  binaryPackages = BINARY_PACKAGES
+} catch (MissingPropertyException e) {
+  binaryPackages = ""
+}
 
 node("docker") {
   try {
+    def workspace = common.getWorkspace()
     stage("checkout") {
       sh("test -d debs && rm -rf debs || true")
       sh("test -d build && rm -rf build || true")
-      git poll: false, url: SOURCE_URL, branch: SOURCE_BRANCH, credentialsId: SOURCE_CREDENTIALS
+      git.checkoutGitRepository(
+                            ".",
+                            SOURCE_URL,
+                            SOURCE_BRANCH,
+                            SOURCE_CREDENTIALS,
+                            false,
+                            30,
+                            1
+                        )
     }
     stage("build") {
-      sh("docker run -v "+common.getWorkspace()+":"+common.getWorkspace()+" -w "+common.getWorkspace()+" --rm=true --privileged "+OS+":"+DIST+" /bin/bash -c 'apt-get update && apt-get install -y packaging-dev && ./build-debs.sh "+DIST+"'")
-      archiveArtifacts artifacts: "debs/"+DIST+"-"+ARCH+"/*.deb"
+      if (binaryPackages == "all" || binaryPackages == "") {
+        sh("docker run -v " + workspace + ":" + workspace + " -w " + workspace + " --rm=true --privileged "+OS+":" + DIST +
+            " /bin/bash -c 'apt-get update && apt-get install -y packaging-dev && ./build-debs.sh " + DIST + "'")
+      } else {
+        sh("docker run -v " + workspace + ":" + workspace + " -w " + workspace + " --rm=true --privileged "+OS+":" + DIST +
+            " /bin/bash -c 'apt-get update && apt-get install -y packaging-dev && ./build-debs.sh " + DIST + " " + binaryPackages + "'")
+      }
+      archiveArtifacts artifacts: "debs/${DIST}-${ARCH}/*.deb"
     }
     lock("aptly-api") {
       stage("upload") {
         buildSteps = [:]
         debFiles = sh script: "ls debs/"+DIST+"-"+ARCH+"/*.deb", returnStdout: true
         for (file in debFiles.tokenize()) {
-            workspace = common.getWorkspace()
             def fh = new File((workspace+"/"+file).trim())
             buildSteps[fh.name.split('_')[0]] = aptly.uploadPackageStep(
                 "debs/"+DIST+"-"+ARCH+"/"+fh.name,
