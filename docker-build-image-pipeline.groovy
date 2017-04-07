@@ -21,7 +21,7 @@ node("docker") {
     def dockerApp
     docker.withRegistry(REGISTRY_URL, REGISTRY_CREDENTIALS_ID) {
       stage("checkout") {
-         gerrit.gerritPatchsetCheckout(IMAGE_GIT_URL, "", IMAGE_BRANCH, IMAGE_CREDENTIALS_ID)
+         gerrit.gerritPatchsetCheckout(IMAGE_GIT_URL, IMAGE_BRANCH, IMAGE_BRANCH, IMAGE_CREDENTIALS_ID)
       }
       stage("build") {
         common.infoMsg("Building docker image ${IMAGE_NAME}")
