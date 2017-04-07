@@ -100,6 +100,7 @@ timestamps {
                     saltMasterPort = 6969
                 }
                 saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
+                currentBuild.description = "${HEAT_STACK_NAME}: ${saltMasterHost}"
                 saltMasterUrl = "http://${saltMasterHost}:${saltMasterPort}"
                 saltMaster = salt.connection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
             }
