@@ -63,7 +63,9 @@ node("docker"){
             if(errLog){
                 common.errorMsg("Error log: ${errLog}")
             }
-        }catch(ex){}
+        }catch(ex){
+          common.errorMsg("Exception occured while reading codenarc output file", ex)
+        }
         throw e
     } finally {
         // send notification

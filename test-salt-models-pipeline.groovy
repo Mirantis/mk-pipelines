@@ -27,15 +27,21 @@ try {
     defaultGitUrl = null
 }
 def checkouted = false
+def merged = false
 
 node("python") {
   try{
     stage("checkout") {
       if (gerritRef) {
         // job is triggered by Gerrit
-        checkouted = gerrit.gerritPatchsetCheckout ([
-          credentialsId : CREDENTIALS_ID
-        ])
+        // test if change aren't already merged
+        def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
+        merged = gerritChange.status == "MERGED"
+        if(!merged){
+          checkouted = gerrit.gerritPatchsetCheckout ([
+            credentialsId : CREDENTIALS_ID
+          ])
+        }
       } else if(defaultGitRef && defaultGitUrl) {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
       }
@@ -48,15 +54,19 @@ node("python") {
           }
           ssh.agentSh("git submodule init; git submodule sync; git submodule update --recursive")
         }
-      }else{
+      }else if(!merged){
         throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
       }
     }
     stage("test") {
-      if(checkouted){
-        timeout(1440) {
-          wrap([$class: 'AnsiColorBuildWrapper']) {
-            sh("make test")
+      if(merged){
+        common.successMsg("Gerrit change is already merged, no need to test them")
+      }else{
+        if(checkouted){
+          timeout(1440) {
+            wrap([$class: 'AnsiColorBuildWrapper']) {
+              sh("make test")
+            }
           }
         }
       }

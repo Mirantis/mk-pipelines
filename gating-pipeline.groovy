@@ -13,7 +13,7 @@ node("python") {
     // test if change is not already merged
     ssh.prepareSshAgentKey(CREDENTIALS_ID)
     ssh.ensureKnownHosts(GERRIT_HOST)
-    def gerritChange = common.parseJSON(ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit query --format=JSON change:%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER)))
+    def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
     stage("test") {
       if (gerritChange.status != "MERGED" && !SKIP_TEST.equals("true")){
         wrap([$class: 'AnsiColorBuildWrapper']) {
@@ -51,8 +51,6 @@ node("python") {
      // If there was an error or exception thrown, the build failed
      currentBuild.result = "FAILURE"
      throw e
-  } finally {
-     //common.sendNotification(currentBuild.result,"",["slack"])
   }
 }
 

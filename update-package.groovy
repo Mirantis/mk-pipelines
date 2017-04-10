@@ -104,7 +104,5 @@ node() {
         // If there was an error or exception thrown, the build failed
         currentBuild.result = "FAILURE"
         throw e
-    } finally {
-        // common.sendNotification(currentBuild.result,"",["slack"])
     }
 }

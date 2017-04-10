@@ -24,15 +24,20 @@ try {
     defaultGitUrl = null
 }
 def checkouted = false
-
+def merged = false
 try {
   stage("Checkout") {
     node() {
       if (gerritRef) {
         // job is triggered by Gerrit
-        checkouted = gerrit.gerritPatchsetCheckout ([
-          credentialsId : gerritCredentials
-        ])
+        // test if change aren't already merged
+        def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
+        merged = gerritChange.status == "MERGED"
+        if(!merged){
+          checkouted = gerrit.gerritPatchsetCheckout ([
+            credentialsId : gerritCredentials
+          ])
+        }
         // change defaultGit variables if job triggered from Gerrit
         defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
       } else if(defaultGitRef && defaultGitUrl) {
@@ -42,22 +47,26 @@ try {
   }
 
   stage("Test") {
-    if(checkouted){
-      def branches = [:]
-      def testModels = TEST_MODELS.split(',')
-        for (int i = 0; i < testModels.size(); i++) {
-          def cluster = testModels[i]
-          def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
-          branches["${cluster}"] = {
-            build job: "test-salt-model-${cluster}", parameters: [
-              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
-              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"]
-            ]
-          }
-        }
-      parallel branches
+    if(merged){
+      common.successMsg("Gerrit change is already merged, no need to test them")
     }else{
-       throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
+      if(checkouted){
+        def branches = [:]
+        def testModels = TEST_MODELS.split(',')
+          for (int i = 0; i < testModels.size(); i++) {
+            def cluster = testModels[i]
+            def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
+            branches["${cluster}"] = {
+              build job: "test-salt-model-${cluster}", parameters: [
+                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
+                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"]
+              ]
+            }
+          }
+        parallel branches
+      }else{
+         throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
+      }
     }
   }
 } catch (Throwable e) {

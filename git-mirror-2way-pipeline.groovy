@@ -10,7 +10,7 @@ stage("Mirror") {
       }
       dir("target") {
         checkout changelog: true, poll: true,
-          scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false, submoduleCfg: [],
+          scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
           extensions: [[$class: 'CleanCheckout']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: CREDENTIALS_ID, url: TARGET_URL]]]
       }
       dir("source") {
