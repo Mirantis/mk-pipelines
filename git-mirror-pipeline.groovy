@@ -10,7 +10,7 @@ stage("Mirror") {
       }
       dir("source") {
         checkout changelog: true, poll: true,
-          scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false, submoduleCfg: [], 
+          scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
           extensions: [[$class: 'CleanCheckout']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: CREDENTIALS_ID, url: SOURCE_URL]]]
         git.mirrorGit(SOURCE_URL, TARGET_URL, CREDENTIALS_ID, BRANCHES)
       }

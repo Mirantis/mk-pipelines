@@ -6,12 +6,12 @@ def jcenterRepo = System.getenv('ARTIFACTORY_URL') ?: 'https://artifactory.mcp.m
 sourceSets {
   main {
     groovy {
-      srcDirs = ['src', 'vars']
+      srcDirs = ['.']
     }
   }
 }
 
-compileGroovy.enabled = true
+compileGroovy.enabled = false
 
 repositories {
   maven {
