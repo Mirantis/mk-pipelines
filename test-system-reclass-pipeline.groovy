@@ -31,7 +31,7 @@ try {
       if (gerritRef) {
         // job is triggered by Gerrit
         // test if change aren't already merged
-        def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
+        def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, gerritCredentials)
         merged = gerritChange.status == "MERGED"
         if(!merged){
           checkouted = gerrit.gerritPatchsetCheckout ([
