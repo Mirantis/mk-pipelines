@@ -20,8 +20,9 @@ node("python") {
           def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
           def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
           def jobsNamespace = JOBS_NAMESPACE
+          def plural_namespaces = ['salt-formulas', 'salt-models']
           // remove plural s on the end of job namespace
-          if (JOBS_NAMESPACE[JOBS_NAMESPACE.length() - 1].equals("s")){
+          if (JOBS_NAMESPACE in plural_namespaces){
             jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
           }
           def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
