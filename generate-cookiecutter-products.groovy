@@ -40,6 +40,8 @@ timestamps {
 
             currentBuild.description = clusterName
 
+            print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
+
             stage ('Download Cookiecutter template') {
                 git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
             }
