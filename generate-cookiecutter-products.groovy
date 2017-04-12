@@ -28,7 +28,7 @@ timestamps {
         def modelEnv = "${env.WORKSPACE}/model"
 
         try {
-            def templateContext = python.loadJson(COOKIECUTTER_TEMPLATE_CONTEXT)
+            def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
             def templateDir = "${templateEnv}/template/dir"
             def templateOutputDir = "${env.WORKSPACE}/template"
             def cutterEnv = "${env.WORKSPACE}/cutter"
