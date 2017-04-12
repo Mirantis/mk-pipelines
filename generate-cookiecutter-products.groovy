@@ -38,6 +38,8 @@ timestamps {
             def targetBranch = "feature/${clusterName}"
             def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
 
+            currentBuild.description = clusterName
+
             stage ('Download Cookiecutter template') {
                 git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
             }
@@ -128,12 +130,6 @@ parameters:
 """
                 sh "mkdir -p ${modelEnv}/nodes/"
                 writeFile(file: nodeFile, text: nodeString)
-            }
-
-            stage('Inject changes to Reclass model') {
-                def outputSource = "${env.WORKSPACE}/template/output/"
-                sh "mkdir -p ${outputDestination}"
-                sh(returnStdout: true, script: "cp -vr ${outputSource} ${outputDestination}")
             }
 
             stage ('Save changes to Reclass model') {
