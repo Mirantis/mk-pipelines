@@ -33,13 +33,12 @@ timestamps {
             def templateOutputDir = "${env.WORKSPACE}/template"
             def cutterEnv = "${env.WORKSPACE}/cutter"
             def jinjaEnv = "${env.WORKSPACE}/jinja"
-            def clusterName = templateContext.cluster_name
-            def clusterDomain = templateContext.cluster_domain
+            def clusterName = templateContext.default_context.cluster_name
+            def clusterDomain = templateContext.default_context.cluster_domain
             def targetBranch = "feature/${clusterName}"
             def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
 
             currentBuild.description = clusterName
-
             print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
 
             stage ('Download Cookiecutter template') {
