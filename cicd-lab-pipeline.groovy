@@ -148,7 +148,10 @@ timestamps {
             }
 
             stage("Deploy Docker services") {
-                salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
+                retry(2) {
+                    sleep(5)
+                    salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
+                }
             }
 
             stage("Configure CI/CD services") {
