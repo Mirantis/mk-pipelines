@@ -58,7 +58,7 @@ timestamps {
                 sh "mkdir -p ${templateOutputDir}"
                 sh "mkdir -p ${outputDestination}"
                 python.setupCookiecutterVirtualenv(cutterEnv)
-                python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv)
                 sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
             }
 
@@ -68,7 +68,7 @@ timestamps {
                     templateOutputDir = "${env.WORKSPACE}/template/output/cicd"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv)
                     sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
@@ -79,7 +79,7 @@ timestamps {
                     templateOutputDir = "${env.WORKSPACE}/template/output/opencontrail"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv)
                     sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
@@ -90,7 +90,7 @@ timestamps {
                     templateOutputDir = "${env.WORKSPACE}/template/output/kubernetes"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv)
                     sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
@@ -101,7 +101,7 @@ timestamps {
                     templateOutputDir = "${env.WORKSPACE}/template/output/openstack"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv)
                     sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
@@ -112,7 +112,7 @@ timestamps {
                     templateOutputDir = "${env.WORKSPACE}/template/output/stacklight"
                     sh "mkdir -p ${templateOutputDir}"
                     python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, templateContext, templateOutputDir, cutterEnv)
+                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv)
                     sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 }
             }
