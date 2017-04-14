@@ -21,14 +21,40 @@ def executeCmd(containerId, cmd) {
     }
 }
 
+
+def gerritRef
+try {
+    gerritRef = GERRIT_REFSPEC
+} catch (MissingPropertyException e) {
+    gerritRef = null
+}
+
+def defaultGitRef, defaultGitUrl
+try {
+    defaultGitRef = DEFAULT_GIT_REF
+    defaultGitUrl = DEFAULT_GIT_URL
+} catch (MissingPropertyException e) {
+    defaultGitRef = null
+    defaultGitUrl = null
+}
+def checkouted = false
+
 node("docker") {
     def containerId
     try {
         stage('Checkout source code') {
-            gerrit.gerritPatchsetCheckout ([
-              credentialsId : CREDENTIALS_ID,
-              withWipeOut : true,
-            ])
+            if (gerritRef) {
+                // job is triggered by Gerrit
+                gerrit.gerritPatchsetCheckout ([
+                    credentialsId : CREDENTIALS_ID,
+                    withWipeOut : true,
+                ])
+             } else if(defaultGitRef && defaultGitUrl) {
+                 checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
+             }
+             if(!checkouted){
+                 throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
+             }
         }
         stage('Start container') {
             def workspace = common.getWorkspace()
