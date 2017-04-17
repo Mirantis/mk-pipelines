@@ -45,7 +45,7 @@ node("docker") {
         stage('Checkout source code') {
             if (gerritRef) {
                 // job is triggered by Gerrit
-                gerrit.gerritPatchsetCheckout ([
+                checkouted = gerrit.gerritPatchsetCheckout ([
                     credentialsId : CREDENTIALS_ID,
                     withWipeOut : true,
                 ])
