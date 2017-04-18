@@ -10,9 +10,8 @@ node{
   stage("Kill long running jobs"){
     def jobKilled = false
     for (int i=0; i < Jenkins.instance.items.size(); i++) {
-      def job = Jenkins.instance.items[i]
-      def runningBuilds = _getRunningBuilds(job)
-      def jobName = job.name
+      def runningBuilds = _getRunningBuilds(Jenkins.instance.items[i])
+      def jobName = Jenkins.instance.items[i].name
       for(int j=0; j < runningBuilds.size(); j++){
         def build = runningBuilds[j]
         int durationInSeconds = (System.currentTimeMillis() - build.getTimeInMillis())/1000.0
