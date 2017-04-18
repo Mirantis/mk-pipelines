@@ -140,6 +140,13 @@ timestamps {
                 salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.flush')
                 salt.runSaltProcessStep(saltMaster, 'I@docker:swarm:role:master', 'mine.update')
                 salt.enforceState(saltMaster, 'I@docker:swarm', 'docker.swarm', true)
+                // Workaround "node lost leader status" issue by restarting
+                //  leader on our own
+                //  (https://github.com/moby/moby/issues/24643)
+                sleep(5)
+                salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'service docker restart')
+                sleep(10)
+                // -- end workaround --
                 print common.prettyPrint(salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'docker node ls'))
             }
 
@@ -148,7 +155,7 @@ timestamps {
             }
 
             stage("Deploy Docker services") {
-                retry(2) {
+                retry(3) {
                     sleep(5)
                     salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
                 }
