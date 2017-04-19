@@ -1,6 +1,6 @@
 /**
  *
- * Delete heat stack pipeline
+ * Delete broken heat stacks pipeline (in CREATE_FAILED or DELETE_FAILED state)
  *
  * Expected parameters:
  *   OPENSTACK_API_URL          OpenStack API address
@@ -8,7 +8,7 @@
  *   OPENSTACK_API_PROJECT      OpenStack project to connect to
  *   OPENSTACK_API_CLIENT       Versions of OpenStack python clients
  *   OPENSTACK_API_VERSION      Version of the OpenStack API (2/3)
- *   HEAT_STACK_NAME            Heat stack name
+ *
  *
  */
 
@@ -20,7 +20,6 @@ node {
 
     // connection objects
     def openstackCloud
-
     // value defaults
     def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
     def openstackEnv = "${env.WORKSPACE}/venv"
@@ -34,8 +33,14 @@ node {
         openstack.getKeystoneToken(openstackCloud, openstackEnv)
     }
 
-    stage('Delete Heat stack') {
-        openstack.deleteHeatStack(openstackCloud, HEAT_STACK_NAME, openstackEnv)
+    stage('Delete broken Heat stacks') {
+        // get failed stacks
+        def brokenStacks = []
+        brokenStacks.addAll(openstack.getStacksWithStatus(openstackCloud, "CREATE_FAILED", openstackEnv))
+        brokenStacks.addAll(openstack.getStacksWithStatus(openstackCloud, "DELETE_FAILED", openstackEnv))
+        for(int i=0;i<brokenStacks.size();i++){
+            openstack.deleteHeatStack(openstackCloud, brokenStacks[i], openstackEnv)
+        }
     }
 
 }
