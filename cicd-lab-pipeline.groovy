@@ -126,6 +126,11 @@ timestamps {
                 }
                 sleep(5)
                 salt.enforceState(saltMaster, 'I@glusterfs:client', 'glusterfs.client', true)
+
+                timeout(5) {
+                    println "Waiting for GlusterFS volumes to get mounted.."
+                    salt.cmdRun(saltMaster, 'I@glusterfs:client', 'while true; do systemctl -a|grep "GlusterFS File System"|grep -v mounted >/dev/null || break; done')
+                }
                 print common.prettyPrint(salt.cmdRun(saltMaster, 'I@glusterfs:client', 'mount|grep fuse.glusterfs || echo "Command failed"'))
             }
 
