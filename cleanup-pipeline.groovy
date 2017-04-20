@@ -11,7 +11,7 @@
  *   HEAT_STACK_NAME            Heat stack name
  *
  */
-
+common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
@@ -35,6 +35,7 @@ node {
     }
 
     stage('Delete Heat stack') {
+        common.infoMsg("Deleting Heat Stack " + HEAT_STACK_NAME)
         openstack.deleteHeatStack(openstackCloud, HEAT_STACK_NAME, openstackEnv)
     }
 
