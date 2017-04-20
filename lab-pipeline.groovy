@@ -206,7 +206,6 @@ timestamps {
                     // Install Kubernetes pool and Calico
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['kubernetes.master.kube-addons'])
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'state.sls', ['kubernetes.pool'])
-                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'cmd.run', ['calicoctl node status'])
 
                     // Setup etcd server
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master and *01*', 'state.sls', ['etcd.server.setup'])
