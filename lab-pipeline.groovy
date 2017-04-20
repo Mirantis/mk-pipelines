@@ -174,18 +174,12 @@ timestamps {
                 stage('Install Kubernetes infra') {
                     //orchestrate.installOpenstackMcpInfra(saltMaster)
 
-                    // Comment nameserver
-                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'cmd.run', ["sed -i 's/nameserver 10.254.0.10/#nameserver 10.254.0.10/g' /etc/resolv.conf"])
-
                     // Install glusterfs
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.service'])
 
                     // Install keepalived
                     salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster and *01*', 'state.sls', ['keepalived'])
                     salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'state.sls', ['keepalived'])
-
-                    // Check the keepalived VIPs
-                    salt.runSaltProcessStep(saltMaster, 'I@keepalived:cluster', 'cmd.run', ['ip a | grep 172.16.10.2'])
 
                     // Setup glusterfs
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server and *01*', 'state.sls', ['glusterfs.server.setup'])
@@ -200,12 +194,9 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'state.sls', ['docker.host'])
                     salt.runSaltProcessStep(saltMaster, 'I@docker:host', 'cmd.run', ['docker ps'])
 
-                    // Install bird
-                    salt.runSaltProcessStep(saltMaster, 'I@bird:server', 'state.sls', ['bird'])
-
                     // Install etcd
                     salt.runSaltProcessStep(saltMaster, 'I@etcd:server', 'state.sls', ['etcd.server.service'])
-                    salt.runSaltProcessStep(saltMaster, 'I@etcd:server', 'cmd.run', ['etcdctl cluster-health'])
+                    salt.runSaltProcessStep(saltMaster, 'I@etcd:server', 'cmd.run', ['./var/lib/etcd/configenv && etcdctl cluster-health'])
 
                 }
 
@@ -213,23 +204,18 @@ timestamps {
                     //orchestrate.installOpenstackMcpControl(saltMaster)
 
                     // Install Kubernetes pool and Calico
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['kubernetes.master.kube-addons'])
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'state.sls', ['kubernetes.pool'])
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'cmd.run', ['calicoctl node status'])
 
                     // Setup etcd server
-                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['etcd.server.setup'])
+                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master and *01*', 'state.sls', ['etcd.server.setup'])
 
                     // Run k8s without master.setup
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'state.sls', ['kubernetes', 'exclude=kubernetes.master.setup'])
 
                     // Run k8s master setup
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master and *01*', 'state.sls', ['kubernetes.master.setup'])
-
-                    // Revert comment nameserver
-                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:master', 'cmd.run', ["sed -i 's/nameserver 10.254.0.10/#nameserver 10.254.0.10/g' /etc/resolv.conf"])
-
-                    // Set route
-                    salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'cmd.run', ['ip r a 10.254.0.0/16 dev ens4'])
 
                     // Restart kubelet
                     salt.runSaltProcessStep(saltMaster, 'I@kubernetes:pool', 'service.restart', ['kubelet'])
