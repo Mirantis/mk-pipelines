@@ -42,7 +42,7 @@ node('docker') {
                         "--build-arg uid=${jenkinsUID}",
                         "--build-arg timestamp=${timestamp}",
                         "-f ${workingDir}/telegraf/docker/${OS}-${DIST}-${ARCH}.Dockerfile",
-                        "docker"
+                        "."
                     ].join(' ')
                 )
             }
