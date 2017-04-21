@@ -48,13 +48,13 @@ node('docker') {
             }
             stage("build package") {
                 img.inside{
-                    sh("wget https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz && \
-                        tar xf go1.8.1.linux-amd64.tar.gz && \
-                        export GOROOT=$PWD/go && \ 
-                        export PATH=$PATH:$GOROOT/bin && \
-                        export GOPATH=$PWD && \
-                        cd src/github.com/influxdata/telegraf && \
-                        scripts/build.py --package --version=\"${version}\" --platform=linux --arch=amd64")
+                    sh("""wget https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz &&
+                        tar xf go1.8.1.linux-amd64.tar.gz &&
+                        export GOROOT=$PWD/go &&
+                        export PATH=$PATH:$GOROOT/bin &&
+                        export GOPATH=$PWD &&
+                        cd src/github.com/influxdata/telegraf &&
+                        scripts/build.py --package --version=\"${version}\" --platform=linux --arch=amd64""")
                 }
                 archiveArtifacts artifacts: "${workingDir}/*.deb"
             }
