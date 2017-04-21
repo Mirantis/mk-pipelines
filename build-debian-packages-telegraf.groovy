@@ -50,9 +50,9 @@ node('docker') {
                 img.inside{
                     sh("""wget https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz &&
                         tar xf go1.8.1.linux-amd64.tar.gz &&
-                        export GOROOT=$PWD/go &&
-                        export PATH=$PATH:$GOROOT/bin &&
-                        export GOPATH=$PWD &&
+                        export GOROOT=\$PWD/go &&
+                        export PATH=\$PATH:\$GOROOT/bin &&
+                        export GOPATH=\$PWD &&
                         cd src/github.com/influxdata/telegraf &&
                         scripts/build.py --package --version=\"${version}\" --platform=linux --arch=amd64""")
                 }
@@ -63,11 +63,12 @@ node('docker') {
                     def buildSteps = [:]
                     def debFiles = sh script: "ls ${workingDir}/telegraf/build/*.deb", returnStdout: true
                     def debFilesArray = debFiles.trim().tokenize()
+                    def workspace = common.getWorkspace()
                     for (int i = 0; i < debFilesArray.size(); i++) {
 
-                        def debFile = debFiles[i];
+                        def debFile = debFilesArray[i];
                         buildSteps[debFiles[i]] = aptly.uploadPackageStep(
-                            "${workingDir}/telegraf/build/"+debFile,
+                            "${workspace}/${workingDir}/telegraf/build/"+debFile,
                             APTLY_URL,
                             APTLY_REPO,
                             true
