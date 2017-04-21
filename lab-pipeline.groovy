@@ -508,23 +508,37 @@ timestamps {
                     def image = 'tomkukral/k8s-scripts'
                     def output_file = image.replaceAll('/', '-')
 
-                    test.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+                    // run image
+                    test.runConformanceTests(saltMaster, K8S_API_SERVER, image)
 
                     // collect output
-                    file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/tomkukral-k8s-scripts.output')
                     sh "mkdir -p ${artifacts_dir}"
-
+                    file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/' + output_file)
                     writeFile file: "${artifacts_dir}${output_file}", text: file_content
-
                     sh "cat ${artifacts_dir}${output_file}"
 
                     // collect artifacts
                     archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
                 }
 
-                //stage('Run k8s conformance e2e tests') {
-                //    test.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
-                //}
+                stage('Run k8s conformance e2e tests') {
+                    //test.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
+
+                    def image = K8S_CONFORMANCE_IMAGE
+                    def output_file = image.replaceAll('/', '-')
+
+                    // run image
+                    test.runConformanceTests(saltMaster, K8S_API_SERVER, image)
+
+                    // collect output
+                    sh "mkdir -p ${artifacts_dir}"
+                    file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/' + output_file)
+                    writeFile file: "${artifacts_dir}${output_file}", text: file_content
+                    sh "cat ${artifacts_dir}${output_file}"
+
+                    // collect artifacts
+                    archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
+                }
             }
 
             if (common.checkContains('TEST', 'openstack')) {
