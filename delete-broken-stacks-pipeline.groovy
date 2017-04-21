@@ -11,7 +11,7 @@
  *
  *
  */
-
+common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
@@ -39,6 +39,7 @@ node {
         brokenStacks.addAll(openstack.getStacksWithStatus(openstackCloud, "CREATE_FAILED", openstackEnv))
         brokenStacks.addAll(openstack.getStacksWithStatus(openstackCloud, "DELETE_FAILED", openstackEnv))
         for(int i=0;i<brokenStacks.size();i++){
+            common.infoMsg("Deleting Heat stack " + brokenStacks[i])
             openstack.deleteHeatStack(openstackCloud, brokenStacks[i], openstackEnv)
         }
     }
