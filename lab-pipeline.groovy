@@ -501,15 +501,27 @@ timestamps {
             //
             // Test
             //
+            def artifacts_dir = '_artifacts'
 
             if (common.checkContains('TEST', 'k8s')) {
                 stage('Run k8s bootstrap tests') {
-                    orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+                    test.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+
+                    // collect output
+                    file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/tomkukral-k8s-scripts.output')
+                    sh "mkdir -p ${artifacts_dir}"
+
+                    writeFile file: "${artifacts_dir}${output_file}", text: file_content
+
+                    sh "cat ${artifacts_dir}${output_file}"
+
+                    // collect artifacts
+                    archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
                 }
 
-                stage('Run k8s conformance e2e tests') {
-                    orchestrate.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
-                }
+                //stage('Run k8s conformance e2e tests') {
+                //    test.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
+                //}
             }
 
             if (common.checkContains('TEST', 'openstack')) {
