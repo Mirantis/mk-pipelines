@@ -17,7 +17,7 @@ node('docker') {
         stage("checkout") {
             git.checkoutGitRepository(
                 "${workingDir}/telegraf",
-                "${SOURCE_URL}/telegraf",
+                "${SOURCE_URL}",
                 SOURCE_BRANCH,
                 SOURCE_CREDENTIALS,
                 true,
