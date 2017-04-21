@@ -298,7 +298,7 @@ timestamps {
                     sleep(30)
                     salt.enforceState(saltMaster, 'I@keystone:client', 'keystone.client', true)
                     salt.enforceState(saltMaster, 'I@keystone:client', 'keystone.client', true)
-                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; keystone service-list'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonercv3; openstack service list'], null, true)
 
                     // Install glance and ensure glusterfs clusters
                     //runSaltProcessStep(saltMaster, 'I@glance:server', 'state.sls', ['glance.server'], 1)
