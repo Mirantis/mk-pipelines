@@ -506,7 +506,7 @@ timestamps {
             if (common.checkContains('TEST', 'k8s')) {
                 stage('Run k8s bootstrap tests') {
                     def image = 'tomkukral/k8s-scripts'
-                    def output_file = image.replaceAll('/', '-')
+                    def output_file = image.replaceAll('/', '-') + '.output'
 
                     // run image
                     test.runConformanceTests(saltMaster, K8S_API_SERVER, image)
@@ -525,7 +525,7 @@ timestamps {
                     //test.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
 
                     def image = K8S_CONFORMANCE_IMAGE
-                    def output_file = image.replaceAll('/', '-')
+                    def output_file = image.replaceAll('/', '-') + '.output'
 
                     // run image
                     test.runConformanceTests(saltMaster, K8S_API_SERVER, image)
