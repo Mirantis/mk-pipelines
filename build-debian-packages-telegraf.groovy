@@ -68,7 +68,7 @@ node('docker') {
 
                         def debFile = debFilesArray[i];
                         buildSteps[debFiles[i]] = aptly.uploadPackageStep(
-                            "${workspace}/${workingDir}/telegraf/build/"+debFile,
+                            "${workspace}/"+debFile,
                             APTLY_URL,
                             APTLY_REPO,
                             true
