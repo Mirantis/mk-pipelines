@@ -501,10 +501,13 @@ timestamps {
             //
             // Test
             //
-            def artifacts_dir = '_artifacts'
+            def artifacts_dir = '_artifacts/'
 
             if (common.checkContains('TEST', 'k8s')) {
                 stage('Run k8s bootstrap tests') {
+                    def image = 'tomkukral/k8s-scripts'
+                    def output_file = image.replaceAll('/', '-')
+
                     test.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
 
                     // collect output
