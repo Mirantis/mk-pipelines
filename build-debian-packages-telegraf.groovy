@@ -58,27 +58,29 @@ node('docker') {
                 }
                 archiveArtifacts artifacts: "${workingDir}/*.deb"
             }
-            lock("aptly-api") {
-                stage("upload") {
-                    def buildSteps = [:]
-                    def debFiles = sh script: "ls ${workingDir}/telegraf/build/*.deb", returnStdout: true
-                    def debFilesArray = debFiles.trim().tokenize()
-                    def workspace = common.getWorkspace()
-                    for (int i = 0; i < debFilesArray.size(); i++) {
+            if (UPLOAD_APTLY.toBoolean()) {
+                lock("aptly-api") {
+                    stage("upload") {
+                        def buildSteps = [:]
+                        def debFiles = sh script: "ls ${workingDir}/telegraf/build/*.deb", returnStdout: true
+                        def debFilesArray = debFiles.trim().tokenize()
+                        def workspace = common.getWorkspace()
+                        for (int i = 0; i < debFilesArray.size(); i++) {
 
-                        def debFile = debFilesArray[i];
-                        buildSteps[debFiles[i]] = aptly.uploadPackageStep(
-                            "${workspace}/"+debFile,
-                            APTLY_URL,
-                            APTLY_REPO,
-                            true
-                        )
+                            def debFile = debFilesArray[i];
+                            buildSteps[debFiles[i]] = aptly.uploadPackageStep(
+                                "${workspace}/"+debFile,
+                                APTLY_URL,
+                                APTLY_REPO,
+                                true
+                            )
+                        }
+                        parallel buildSteps
                     }
-                    parallel buildSteps
-                }
-                stage("publish") {
-                    aptly.snapshotRepo(APTLY_URL, APTLY_REPO, timestamp)
-                    aptly.publish(APTLY_URL)
+                    stage("publish") {
+                        aptly.snapshotRepo(APTLY_URL, APTLY_REPO, timestamp)
+                        aptly.publish(APTLY_URL)
+                    }
                 }
             }
 
