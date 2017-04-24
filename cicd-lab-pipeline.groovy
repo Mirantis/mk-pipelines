@@ -150,6 +150,7 @@ timestamps {
 
             stage("Configure OSS services") {
                 salt.enforceState(saltMaster, 'I@devops_portal:config', 'devops_portal.config')
+                salt.enforceState(saltMaster, 'I@rundeck:server', 'rundeck.server')
             }
 
             stage("Deploy Docker services") {
@@ -206,6 +207,23 @@ timestamps {
                     } catch (Exception e) {
                         common.infoMsg("Restarting Salt minion")
                         salt.cmdRun(saltMaster, 'I@jenkins:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
+                        sleep(5)
+                        throw e
+                    }
+                }
+
+                // Rundeck
+                timeout(10) {
+                    println "Waiting for Rundeck to come up.."
+                    salt.cmdRun(saltMaster, 'I@rundeck:client', 'while true; do curl -svf 172.16.10.254:4440 >/dev/null && break; done')
+                }
+                retry(2) {
+                    // Same for Rundeck
+                    try {
+                        salt.enforceState(saltMaster, 'I@rundeck:client', 'rundeck', true)
+                    } catch (Exception e) {
+                        common.infoMsg("Restarting Salt minion")
+                        salt.cmdRun(saltMaster, 'I@rundeck:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
                         sleep(5)
                         throw e
                     }
