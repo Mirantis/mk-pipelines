@@ -4,7 +4,7 @@ def artifactory = new com.mirantis.mk.Artifactory()
 def aptly = new com.mirantis.mk.Aptly()
 
 def timestamp = common.getDatetime()
-def version = timestamp
+def version = "1.3~${timestamp}"
 
 node('docker') {
     try{
@@ -56,7 +56,7 @@ node('docker') {
                         cd src/github.com/influxdata/telegraf &&
                         scripts/build.py --package --version=\"${version}\" --platform=linux --arch=amd64""")
                 }
-                archiveArtifacts artifacts: "${workingDir}/*.deb"
+                archiveArtifacts artifacts: "${workingDir}/telegraf/build/*.deb"
             }
             if (UPLOAD_APTLY.toBoolean()) {
                 lock("aptly-api") {
