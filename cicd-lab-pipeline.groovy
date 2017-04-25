@@ -220,7 +220,7 @@ timestamps {
                 retry(2) {
                     // Same for Rundeck
                     try {
-                        salt.enforceState(saltMaster, 'I@rundeck:client', 'rundeck', true)
+                        salt.enforceState(saltMaster, 'I@rundeck:client', 'rundeck.client', true)
                     } catch (Exception e) {
                         common.infoMsg("Restarting Salt minion")
                         salt.cmdRun(saltMaster, 'I@rundeck:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
