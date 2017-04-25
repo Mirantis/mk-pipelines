@@ -138,6 +138,7 @@ parameters:
                 archiveArtifacts artifacts: "${clusterName}.tar.gz"
                 if(EMAIl_ADDRESS.toBoolean()){
                      //TODO: mail
+                     def TODO= "todo"
                 }
             }
 

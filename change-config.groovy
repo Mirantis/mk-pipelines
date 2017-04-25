@@ -40,6 +40,9 @@ node() {
 
         stage('List target servers') {
             minions = salt.getMinions(saltMaster, targetAll)
+            if (minions.isEmpty()) {
+                throw new Exception("No minion was targeted")
+            }
             if (TARGET_SUBSET_TEST != "") {
                 targetTestSubset = ['expression': minions.subList(0, Integer.valueOf(TARGET_SUBSET_TEST)).join(' or '), 'type': 'compound']
             }
@@ -58,7 +61,7 @@ node() {
                 'test': true
             ]
             result = salt.runSaltCommand(saltMaster, 'local', targetTestSubset, 'state.apply', null, states, kwargs)
-            salt.printSaltStateResult(result)
+            salt.checkResult(result)
         }
 
         stage('Confirm live changes on sample') {
@@ -69,7 +72,7 @@ node() {
 
         stage('Apply config changes on sample') {
             result = salt.runSaltCommand(saltMaster, 'local', targetLiveSubset, 'state.apply', null, states)
-            salt.printSaltStateResult(result)
+            salt.checkResult(result)
         }
 
         stage('Confirm live changes on all nodes') {
@@ -80,7 +83,7 @@ node() {
 
         stage('Apply config changes on all nodes') {
             result = salt.runSaltCommand(saltMaster, 'local', targetLiveAll, 'state.apply', null, states)
-            salt.printSaltStateResult(result)
+            salt.checkResult(result)
         }
 
     } catch (Throwable e) {
