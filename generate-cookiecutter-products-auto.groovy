@@ -137,7 +137,7 @@ parameters:
                 }
                 sh(returnStatus: true, script: "tar -zcvf ${clusterName}.tar.gz -C ${modelEnv} .")
                 archiveArtifacts artifacts: "${clusterName}.tar.gz"
-                if(EMAIl_ADDRESS != null && EMAIL_ADDRESS){
+                if(EMAIl_ADDRESS != null && EMAIL_ADDRESS){
                      //TODO: mail
                      def TODO= "todo"
                 }
