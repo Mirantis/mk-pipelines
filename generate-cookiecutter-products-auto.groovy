@@ -69,7 +69,7 @@ timestamps {
             }
 
             stage('Generate product OpenContrail') {
-                if (templateContext.default_context.contrail_enabled.toBoolean()) {
+                if (templateContext.default_context.opencontrail_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/opencontrail"
                     templateOutputDir = "${env.WORKSPACE}/template/output/opencontrail"
                     sh "mkdir -p ${templateOutputDir}"
@@ -137,7 +137,7 @@ parameters:
                 }
                 sh(returnStatus: true, script: "tar -zcvf ${clusterName}.tar.gz -C ${modelEnv} .")
                 archiveArtifacts artifacts: "${clusterName}.tar.gz"
-                if(EMAIl_ADDRESS.toBoolean()){
+                if(EMAIl_ADDRESS != null && EMAIL_ADDRESS){
                      //TODO: mail
                      def TODO= "todo"
                 }
