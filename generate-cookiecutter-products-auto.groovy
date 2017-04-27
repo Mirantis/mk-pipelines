@@ -138,7 +138,7 @@ parameters:
                 sh(returnStatus: true, script: "tar -zcvf ${clusterName}.tar.gz -C ${modelEnv} .")
                 archiveArtifacts artifacts: "${clusterName}.tar.gz"
                 if(EMAIl_ADDRESS != null && EMAIL_ADDRESS){
-                     emailext(to: EMAIL_ADDRESS, attachmentsPattern: '^${clusterName}\\.tar\\.gz\$', body: 'Mirantis Jenkins\n\nRequested reclass model ${clusterName} created and has been attached to this email.\nEnjoy!\n\nMirantis Inc.', subject: 'Your Salt model ${clusterName}')
+                     emailext(to: EMAIL_ADDRESS, attachmentsPattern: "^${clusterName}\\.tar\\.gz\$", body: "Mirantis Jenkins\n\nRequested reclass model ${clusterName} created and has been attached to this email.\nEnjoy!\n\nMirantis Inc.", subject: "Your Salt model ${clusterName}")
                 }
             }
 
