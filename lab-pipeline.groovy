@@ -35,6 +35,9 @@
  *
  *   TEMPEST_IMAGE_LINK         Tempest image link
  *
+ * optional parameters for overwriting soft params
+ *   KUBERNETES_HYPERKUBE_IMAGE  Docker repository and tag for hyperkube image
+ *
  */
 
 git = new com.mirantis.mk.Git()
@@ -42,6 +45,7 @@ openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 common = new com.mirantis.mk.Common()
 test = new com.mirantis.mk.Test()
+overwriteFile = "/srv/salt/reclass/classes/cluster/overwrite.yml"
 
 timestamps {
     node {
@@ -173,6 +177,11 @@ timestamps {
             if (common.checkContains('INSTALL', 'k8s')) {
                 stage('Install Kubernetes infra') {
                     //orchestrate.installOpenstackMcpInfra(saltMaster)
+
+                    // Overwrite Kubernetes vars if specified
+                    if (env.getEnvironment().containsKey("KUBERNETES_HYPERKUBE_IMAGE")) {
+                      salt.runSaltProcessStep(master, 'I@salt:master', 'file.append', overwriteFile, "  kubernetes_hyperkube_image: ${KUBERNETES_HYPERKUBE_IMAGE}")
+                    }
 
                     // Install glusterfs
                     salt.runSaltProcessStep(saltMaster, 'I@glusterfs:server', 'state.sls', ['glusterfs.server.service'])
