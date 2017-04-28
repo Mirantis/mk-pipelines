@@ -40,11 +40,13 @@
  *
  */
 
+common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
+orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
-common = new com.mirantis.mk.Common()
 test = new com.mirantis.mk.Test()
+
 overwriteFile = "/srv/salt/reclass/classes/cluster/overwrite.yml"
 
 timestamps {
