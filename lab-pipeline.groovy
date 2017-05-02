@@ -146,7 +146,7 @@ timestamps {
 
                     // Overwrite Kubernetes vars if specified
                     if (env.getEnvironment().containsKey("KUBERNETES_HYPERKUBE_IMAGE")) {
-                        salt.runSaltProcessStep(master, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_hyperkube_image: ${KUBERNETES_HYPERKUBE_IMAGE}")
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_hyperkube_image: ${KUBERNETES_HYPERKUBE_IMAGE}")
                     }
 
                     orchestrate.installKubernetesControl(saltMaster)
@@ -173,8 +173,8 @@ timestamps {
                         orchestrate.installOpenstackNetwork(saltMaster)
                     }
 
-                    salt.runSaltProcessStep(master, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
-                    salt.runSaltProcessStep(master, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
+                    salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
                 }
 
                 stage('Install OpenStack compute') {
