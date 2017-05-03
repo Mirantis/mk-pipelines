@@ -6,6 +6,7 @@
  */
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
+def ruby = new com.mirantis.mk.Ruby()
 
 def gerritRef
 try {
@@ -46,6 +47,18 @@ node("python") {
           sh("make clean")
           sh("[ $SALT_VERSION != 'latest' ] || export SALT_VERSION=''; make test")
         }
+      }
+    }
+    stage("kitchen") {
+      if (fileExists(".kitchen.yml")) {
+        common.infoMsg(".kitchen.yml found running kitchen tests")
+        ruby.ensureRubyEnv()
+        ruby.installKitchen()
+        wrap([$class: 'AnsiColorBuildWrapper']) {
+          ruby.runKitchenTests()
+        }
+      } else {
+        common.infoMsg(".kitchen.yml not found")
       }
     }
   } catch (Throwable e) {
