@@ -67,7 +67,7 @@ node("python&&docker") {
      throw e
   } finally {
      if(currentBuild.result == "FAILURE" && fileExists(".kitchen/logs/kitchen.log")){
-        println("KITCHEN LOG:")
+        common.errorMsg("----------------KITCHEN LOG:---------------")
         println readFile(".kitchen/logs/kitchen.log")
      }
      common.sendNotification(currentBuild.result,"",["slack"])
