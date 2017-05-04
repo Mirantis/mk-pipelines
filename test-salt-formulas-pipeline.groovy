@@ -26,7 +26,7 @@ try {
 
 def checkouted = false;
 
-node("python") {
+node("python&&docker") {
   try{
     stage("checkout") {
       if (gerritRef) {
@@ -51,7 +51,7 @@ node("python") {
     }
     stage("kitchen") {
       if (fileExists(".kitchen.yml")) {
-        common.infoMsg(".kitchen.yml found running kitchen tests")
+        common.infoMsg(".kitchen.yml found, running kitchen tests")
         ruby.ensureRubyEnv()
         ruby.installKitchen()
         wrap([$class: 'AnsiColorBuildWrapper']) {
@@ -66,6 +66,10 @@ node("python") {
      currentBuild.result = "FAILURE"
      throw e
   } finally {
+     if(currentBuild.result == "FAILURE" && fileExists(".kitchen/logs/kitchen.log")){
+        println("KITCHEN LOG:")
+        println readFile(".kitchen/logs/kitchen.log")
+     }
      common.sendNotification(currentBuild.result,"",["slack"])
   }
 }
