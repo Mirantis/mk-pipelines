@@ -38,7 +38,7 @@ node("docker") {
     stage("build image"){
       imageTagsList << "${GERRIT_CHANGE_NUMBER}_${GERRIT_PATCHSET_NUMBER}"
       for (imageTag in imageTagsList) {
-        sh "docker build -f ${DOCKERFILE_PATH}/Dockerfile -t ${IMAGE_NAME}:${imageTag} --rm ."
+        sh "docker build -f ${DOCKERFILE_PATH}/Dockerfile -t ${dockerRepository}/${projectNamespace}/${projectModule}:${imageTag} --rm ."
       }
     }
     stage("publish image"){
