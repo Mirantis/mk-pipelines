@@ -29,7 +29,7 @@ try {
 def checkouted = false
 def merged = false
 
-node("python") {
+node("python&&docker") {
   try{
     stage("checkout") {
       if (gerritRef) {
