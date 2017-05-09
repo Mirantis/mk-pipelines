@@ -24,6 +24,7 @@ timestamps {
         def modelEnv = "${env.WORKSPACE}/model"
 
         try {
+            def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
             def clusterDomain = templateContext.default_context.cluster_domain
             def clusterName = templateContext.default_context.cluster_name
             def cutterEnv = "${env.WORKSPACE}/cutter"
@@ -31,7 +32,6 @@ timestamps {
             def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
             def targetBranch = "feature/${clusterName}"
             def templateBaseDir = "${env.WORKSPACE}/template"
-            def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
             def templateDir = "${templateEnv}/template/dir"
             def templateOutputDir = templateBaseDir
 
