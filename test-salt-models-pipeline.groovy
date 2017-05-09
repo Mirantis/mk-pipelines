@@ -131,9 +131,9 @@ node("python&&docker") {
       nodes = findFiles(glob: "cfg*.yml")
     }
 
-    for (int i = 0; i < nodes.size(); ++i) {
-      stage(nodes[i].getName()) {
-        testMaster(nodes[i] - '.yml')
+    stage("test") {
+      for (int i = 0; i < nodes.size(); i++) {
+          testMaster(nodes[i])
       }
     }
 
