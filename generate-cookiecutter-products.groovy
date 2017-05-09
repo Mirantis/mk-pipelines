@@ -6,11 +6,7 @@
  *   COOKIECUTTER_TEMPLATE_URL          Cookiecutter template repo address.
  *   COOKIECUTTER_TEMPLATE_BRANCH       Branch for the template.
  *   COOKIECUTTER_TEMPLATE_CONTEXT      Context parameters for the template generation.
- *   COOKIECUTTER_INSTALL_CICD          Whether to install CI/CD stack.
- *   COOKIECUTTER_INSTALL_CONTRAIL      Whether to install OpenContrail SDN.
- *   COOKIECUTTER_INSTALL_KUBERNETES    Whether to install Kubernetes.
- *   COOKIECUTTER_INSTALL_OPENSTACK     Whether to install OpenStack cloud.
- *   COOKIECUTTER_INSTALL_STACKLIGHT    Whether to install StackLight monitoring.
+ *   EMAIL_ADDRESS                      Email to send a created tar file
  *   RECLASS_MODEL_URL                  Reclass model repo address
  *   RECLASS_MODEL_CREDENTIALS          Credentials to the Reclass model repo.
  *   RECLASS_MODEL_BRANCH               Branch for the template to push to model.
@@ -28,16 +24,16 @@ timestamps {
         def modelEnv = "${env.WORKSPACE}/model"
 
         try {
-            def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
-            def templateDir = "${templateEnv}/template/dir"
-            def templateBaseDir = "${env.WORKSPACE}/template"
-            def templateOutputDir = templateBaseDir
+            def clusterDomain = templateContext.default_context.cluster_domain
+            def clusterName = templateContext.default_context.cluster_name
             def cutterEnv = "${env.WORKSPACE}/cutter"
             def jinjaEnv = "${env.WORKSPACE}/jinja"
-            def clusterName = templateContext.default_context.cluster_name
-            def clusterDomain = templateContext.default_context.cluster_domain
-            def targetBranch = "feature/${clusterName}"
             def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
+            def targetBranch = "feature/${clusterName}"
+            def templateBaseDir = "${env.WORKSPACE}/template"
+            def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
+            def templateDir = "${templateEnv}/template/dir"
+            def templateOutputDir = templateBaseDir
 
             currentBuild.description = clusterName
             print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
@@ -63,7 +59,7 @@ timestamps {
             }
 
             stage('Generate product CI/CD') {
-                if (COOKIECUTTER_INSTALL_CICD.toBoolean()) {
+                if (templateContext.default_context.cicd_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/cicd"
                     templateOutputDir = "${env.WORKSPACE}/template/output/cicd"
                     sh "mkdir -p ${templateOutputDir}"
@@ -74,7 +70,7 @@ timestamps {
             }
 
             stage('Generate product OpenContrail') {
-                if (COOKIECUTTER_INSTALL_CONTRAIL.toBoolean()) {
+                if (templateContext.default_context.opencontrail_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/opencontrail"
                     templateOutputDir = "${env.WORKSPACE}/template/output/opencontrail"
                     sh "mkdir -p ${templateOutputDir}"
@@ -85,7 +81,7 @@ timestamps {
             }
 
             stage('Generate product Kubernetes') {
-                if (COOKIECUTTER_INSTALL_KUBERNETES.toBoolean()) {
+                if (templateContext.default_context.kubernetes_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/kubernetes"
                     templateOutputDir = "${env.WORKSPACE}/template/output/kubernetes"
                     sh "mkdir -p ${templateOutputDir}"
@@ -96,7 +92,7 @@ timestamps {
             }
 
             stage('Generate product OpenStack') {
-                if (COOKIECUTTER_INSTALL_OPENSTACK.toBoolean()) {
+                if (templateContext.default_context.openstack_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/openstack"
                     templateOutputDir = "${env.WORKSPACE}/template/output/openstack"
                     sh "mkdir -p ${templateOutputDir}"
@@ -107,7 +103,7 @@ timestamps {
             }
 
             stage('Generate product StackLight') {
-                if (COOKIECUTTER_INSTALL_STACKLIGHT.toBoolean()) {
+                if (templateContext.default_context.stacklight_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/stacklight"
                     templateOutputDir = "${env.WORKSPACE}/template/output/stacklight"
                     sh "mkdir -p ${templateOutputDir}"
@@ -135,13 +131,20 @@ parameters:
             }
 
             stage ('Save changes to Reclass model') {
-                if (COMMIT_CHANGES.toBoolean()) {
+                if (env.getEnvironment().containsKey('COMMIT_CHANGES') && COMMIT_CHANGES.toBoolean() && RECLASS_MODEL_URL != null && RECLASS_MODEL_URL != "") {
                     git.changeGitBranch(modelEnv, targetBranch)
                     git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
                     git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
                 }
+
                 sh(returnStatus: true, script: "tar -zcvf ${clusterName}.tar.gz -C ${modelEnv} .")
                 archiveArtifacts artifacts: "${clusterName}.tar.gz"
+                if (EMAIl_ADDRESS != null && EMAIL_ADDRESS != ""){
+                     emailext(to: EMAIL_ADDRESS,
+                              attachmentsPattern: "${clusterName}.tar.gz",
+                              body: "Mirantis Jenkins\n\nRequested reclass model ${clusterName} has been created and attached to this email.\nEnjoy!\n\nMirantis",
+                              subject: "Your Salt model ${clusterName}")
+                }
             }
 
         } catch (Throwable e) {
