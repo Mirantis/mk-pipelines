@@ -47,6 +47,7 @@ orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 
+_MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/overwrite.yml"
 
 timestamps {
@@ -89,7 +90,15 @@ timestamps {
                     openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
                     openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
                     openstack.getKeystoneToken(openstackCloud, openstackEnv)
-
+                    //
+                    // Verify possibility of create stack for given user and stack type
+                    //
+                    wrap([$class: 'BuildUser']) {
+                        def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", openstackEnv)
+                        if(existingStacks.size() > _MAX_PERMITTED_STACKS){
+                            throw new Exception("You cannot create new stack, you already have ${_MAX_PERMITTED_STACKS} stacks of this type (${JOB_NAME}). \nStack names: ${existingStacks}")
+                        }
+                    }
                     // launch stack
                     if (HEAT_STACK_REUSE.toBoolean() == false) {
                         stage('Launch new Heat stack') {

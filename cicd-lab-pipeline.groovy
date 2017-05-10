@@ -31,7 +31,7 @@ git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 orchestrate = new com.mirantis.mk.Orchestrate()
-
+_MAX_PERMITTED_STACKS = 2
 timestamps {
     node {
         try {
@@ -80,6 +80,12 @@ timestamps {
             stage('Connect to OpenStack cloud') {
                 openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
                 openstack.getKeystoneToken(openstackCloud, openstackEnv)
+                wrap([$class: 'BuildUser']) {
+                    def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", openstackEnv)
+                    if(existingStacks.size() > _MAX_PERMITTED_STACKS){
+                        throw new Exception("You cannot create new stack, you already have ${_MAX_PERMITTED_STACKS} stacks of this type (${JOB_NAME}). \nStack names: ${existingStacks}")
+                    }
+                }
             }
 
             if (HEAT_STACK_REUSE.toBoolean() == false) {
