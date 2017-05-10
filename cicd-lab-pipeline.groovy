@@ -84,6 +84,7 @@ timestamps {
                     if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins")) {
                         def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", openstackEnv)
                         if(existingStacks.size() >= _MAX_PERMITTED_STACKS){
+                            HEAT_STACK_DELETE = "false"
                             throw new Exception("You cannot create new stack, you already have ${_MAX_PERMITTED_STACKS} stacks of this type (${JOB_NAME}). \nStack names: ${existingStacks}")
                         }
                     }
