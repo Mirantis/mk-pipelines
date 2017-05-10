@@ -189,7 +189,7 @@ timestamps {
                         salt.enforceState(saltMaster, 'I@gerrit:client', 'gerrit', true)
                     } catch (Exception e) {
                         common.infoMsg("Restarting Salt minion")
-                        salt.cmdRun(saltMaster, 'I@gerrit:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
+                        salt.cmdRun(saltMaster, 'I@gerrit:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &", false)
                         sleep(5)
                         throw e
                     }
