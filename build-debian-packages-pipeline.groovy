@@ -63,7 +63,7 @@ node("docker") {
     stage("build-binary") {
       dsc = sh script: "ls build-area/*.dsc", returnStdout: true
       if(common.validInputParam("PRE_BUILD_SCRIPT")) {
-        writeFile([file:"pre-build-script.sh", text: env['PRE_BUILD_SCRIPT']])
+        writeFile([file:"pre_build_script.sh", text: env['PRE_BUILD_SCRIPT']])
       }
       debian.buildBinary(
         dsc.trim(),
