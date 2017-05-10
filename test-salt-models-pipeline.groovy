@@ -29,64 +29,45 @@ try {
 def checkouted = false
 def merged = false
 
-def testNode(node, basename, saltOpts) {
-  sh("reclass --nodeinfo ${node} >/dev/null")
-  sh("salt-call ${saltOpts} --id=${basename} state.show_top")
-  sh("salt-call ${saltOpts} --id=${basename} state.show_lowstate >/dev/null")
+def testMinion(minion, saltOpts)
+{
+  sh("reclass-salt -p ${minion} >  /tmp/${minion}.pillar_verify")
 }
 
-def testMaster(masterHostname) {
-
-  def img = docker.image("ubuntu:xenial")
+def setupandtest(master) {
+  def img = docker.image("ubuntu:trusty")
   def saltOpts = "--retcode-passthrough --force-color"
 
-  img.inside {
-    sh("apt-get update; apt-get install -y wget")
-    sh("echo 'deb [arch=amd64] http://apt-mk.mirantis.com/${DIST}/ nightly salt salt-latest' > /etc/apt/sources.list.d/apt-mk.list")
-    sh("wget -O - http://apt-mk.mirantis.com/public.gpg | apt-key add -")
-    sh("apt-get update; apt-get install -y salt-master python-psutil iproute2 curl python-dev python-pip salt-formula-* python-sphinx")
-    sh("pip install -U https://github.com/madduck/reclass/archive/master.zip")
-    sh("mkdir -p /etc/salt/grains.d && touch /etc/salt/grains.d/dummy")
-    sh("[ ! -d /etc/salt/pki/minion ] && mkdir -p /etc/salt/pki/minion")
-    sh("[ ! -d /etc/salt/master.d ] && mkdir -p /etc/salt/master.d || true")
-    def masterConf = """file_roots
-:  base:
-    - /usr/share/salt-formulas/env
-pillar_opts: False
-open_mode: True
-reclass: &reclass
-  storage_type: yaml_fs
-  inventory_base_uri: /srv/salt/reclass
-ext_pillar:
-  - reclass: *reclass
-master_tops:
-  reclass: *reclass"""
-    writeFile file: "/etc/salt/master.d/master.conf", text: masterConf
+  img.inside("-u root:root") {
+sh("apt-get update; apt-get install  software-properties-common   python-software-properties -y")
+    sh("add-apt-repository ppa:saltstack/salt -y")
+    sh("apt-get update; apt-get install -y curl subversion git python-pip sudo")
+    sh("sudo apt-get install -y salt-master salt-minion salt-ssh salt-cloud salt-doc")
+    sh("svn export --force https://github.com/chnyda/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
+    //configure git
+    sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
+    sh("git config --global user.name  || git config --global user.name 'CI'")
+    sh("mkdir -p /srv/salt/reclass; cp -r * /srv/salt/reclass")
+    //
+//    sh("cd /srv/salt/reclass; test ! -e .gitmodules || git submodule update --init --recursive")
+//    sh("cd /srv/salt/reclass; git commit -am 'Fake branch update' || true") 
 
-    sh("[ -d /srv/salt/reclass/classes/service ] || mkdir -p /srv/salt/reclass/classes/service || true")
-    sh("""for i in /usr/share/salt-formulas/reclass/service/*; do
-        [ -e /srv/salt/reclass/classes/service/\$(basename \$i) ] || ln -s \$i /srv/salt/reclass/classes/service/\$(basename \$i)
-    done""")
-    def jenkinsUID = common.getJenkinsUid()
-    def jenkinsGID = common.getJenkinsGid()
-    sh("chown -R ${jenkinsUID}:${jenkinsGID} /srv/salt/reclass/classes/service")
-    sh("[ ! -d /etc/reclass ] && mkdir /etc/reclass || true")
-    def reclassConfig = """storage_type: yaml_fs
-pretty_print: True
-output: yaml
-inventory_base_uri: /srv/salt/reclass"""
-    writeFile file: "/etc/reclass/reclass-config.yml", text: reclassConfig
-    sh("usr/bin/salt-master; sleep 3")
-    sh("salt-call saltutil.sync_all")
-    sh("reclass --nodeinfo ${masterHostname} >/dev/null")
-    sh("salt-call ${saltOpts} state.show_top")
-
+    // setup iniot and verify salt master and minions
+    sh(""". /srv/salt/scripts/salt-master-init.sh
+        export SUDO=sudo
+        export DEBUG=1
+        export MASTER_HOSTNAME=${master}
+        system_config;
+        saltmaster_bootstrap &&\
+        saltmaster_init > /tmp/${master}.init &&\
+        verify_salt_master
+      """)
 
     testSteps = [:]
-    def nodes = sh script: "find /srv/salt/reclass/nodes -type f -name *.yml ! -name cfg*", returnStdout: true
-    for (reclassNode in nodes.tokenize()) {
-      basename = sh script: "\$(basename $node .yml)", returnStdout: true
-      testSteps[basename] = { testNode(reclassNode, basename, saltOpts) }
+    nodes = sh script:"ls /srv/salt/reclass/nodes/_generated"
+    for (minion in nodes.tokenize()) {
+      def basename = sh script: "basename ${minion} .yml", returnStdout: true
+      testSteps = { testMinion(basename)}
     }
     parallel testSteps
 
@@ -128,15 +109,16 @@ node("python&&docker") {
 
     def nodes
     dir ('nodes') {
-      nodes = findFiles(glob: "cfg*.yml")
+      nodes = sh script: "find -type f -name cfg*.yml", returnStdout: true
     }
 
     stage("test") {
-      for (int i = 0; i < nodes.size(); i++) {
-          testMaster(nodes[i])
+      for (masterNode in nodes.tokenize()) {
+        basename = sh script: "basename ${masterNode} .yml", returnStdout: true
+        setupandtest(basename)
       }
-    }
 
+    }
   } catch (Throwable e) {
      // If there was an error or exception thrown, the build failed
      currentBuild.result = "FAILURE"
