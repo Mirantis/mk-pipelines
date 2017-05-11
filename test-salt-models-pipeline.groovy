@@ -31,45 +31,49 @@ def merged = false
 
 def testMinion(minion, saltOpts)
 {
-  sh("reclass-salt -p ${minion} >  /tmp/${minion}.pillar_verify")
+  sh("""bash -c ' /srv/salt/scripts/salt-master-init.sh;
+        export SUDO=sudo;
+        export DEBUG=1;
+        bash -v;
+        export MASTER_HOSTNAME=${master}; reclass-salt -p ${minion} >  /tmp/${minion}.pillar_verify'""")
 }
 
 def setupandtest(master) {
   def img = docker.image("ubuntu:trusty")
   def saltOpts = "--retcode-passthrough --force-color"
+  def common = new com.mirantis.mk.Common()
+  def workspace = common.getWorkspace()
 
-  img.inside("-u root:root") {
-sh("apt-get update; apt-get install  software-properties-common   python-software-properties -y")
-    sh("add-apt-repository ppa:saltstack/salt -y")
-    sh("apt-get update; apt-get install -y curl subversion git python-pip sudo")
-    sh("sudo apt-get install -y salt-master salt-minion salt-ssh salt-cloud salt-doc")
-    sh("svn export --force https://github.com/chnyda/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
-    //configure git
-    sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
-    sh("git config --global user.name  || git config --global user.name 'CI'")
-    sh("mkdir -p /srv/salt/reclass; cp -r * /srv/salt/reclass")
-    //
-//    sh("cd /srv/salt/reclass; test ! -e .gitmodules || git submodule update --init --recursive")
-//    sh("cd /srv/salt/reclass; git commit -am 'Fake branch update' || true") 
+  img.inside("-u root:root -v ${workspace}:/srv/salt/reclass") {
+    wrap([$class: 'AnsiColorBuildWrapper']) {
+        sh("apt-get update; apt-get install  software-properties-common   python-software-properties -y")
+        sh("add-apt-repository ppa:saltstack/salt -y")
+        sh("apt-get update; apt-get install -y curl subversion git python-pip sudo")
+        sh("sudo apt-get install -y salt-master salt-minion salt-ssh salt-cloud salt-doc")
+        sh("svn export --force https://github.com/chnyda/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
+        //configure git
+        sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
+        sh("git config --global user.name  || git config --global user.name 'CI'")
+        //
+        sh("cd /srv/salt/reclass; test ! -e .gitmodules || git submodule update --init --recursive")
+        sh("cd /srv/salt/reclass; git commit -am 'Fake branch update' || true")
 
-    // setup iniot and verify salt master and minions
-    sh(""". /srv/salt/scripts/salt-master-init.sh
-        export SUDO=sudo
-        export DEBUG=1
-        export MASTER_HOSTNAME=${master}
-        system_config;
-        saltmaster_bootstrap &&\
-        saltmaster_init > /tmp/${master}.init &&\
-        verify_salt_master
-      """)
+        // setup iniot and verify salt master and minions
+        withEnv(["SUDO=sudo","DEBUG=1", "MASTER_HOSTNAME=${master}"]){
+            sh("bash -c '/srv/salt/scripts/salt-master-init.sh system_config'")
+            sh("bash -c '/srv/salt/scripts/salt-master-init.sh saltmaster_bootstrap'")
+            sh("bash -c '/srv/salt/scripts/salt-master-init.sh saltmaster_init > /tmp/${master}.init'")
+            sh("bash -c '/srv/salt/scripts/salt-master-init.sh verify_salt_master'")
+        }
 
-    testSteps = [:]
-    nodes = sh script:"ls /srv/salt/reclass/nodes/_generated"
-    for (minion in nodes.tokenize()) {
-      def basename = sh script: "basename ${minion} .yml", returnStdout: true
-      testSteps = { testMinion(basename)}
+        testSteps = [:]
+        nodes = sh script:"ls /srv/salt/reclass/nodes/_generated"
+        for (minion in nodes.tokenize()) {
+          def basename = sh script: "basename ${minion} .yml", returnStdout: true
+          testSteps = { testMinion(basename.trim())}
+        }
+        parallel testSteps
     }
-    parallel testSteps
 
   }
 
@@ -115,7 +119,7 @@ node("python&&docker") {
     stage("test") {
       for (masterNode in nodes.tokenize()) {
         basename = sh script: "basename ${masterNode} .yml", returnStdout: true
-        setupandtest(basename)
+        setupandtest(basename.trim())
       }
 
     }
