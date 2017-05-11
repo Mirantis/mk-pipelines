@@ -47,7 +47,7 @@ orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 
-_MAX_PERMITTED_STACKS = 2
+_MAX_PERMITTED_STACKS = 20
 overwriteFile = "/srv/salt/reclass/classes/cluster/overwrite.yml"
 
 timestamps {
