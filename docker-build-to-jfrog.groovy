@@ -36,9 +36,13 @@ node("docker") {
       ])
     }
     stage("build image"){
+      containerId = sh(
+        script: "docker build -f ${DOCKERFILE_PATH}/Dockerfile -q --rm . | awk -F':' '{print \$2}'",
+        returnStdout: true
+      ).trim().take(12)
       imageTagsList << "${GERRIT_CHANGE_NUMBER}_${GERRIT_PATCHSET_NUMBER}"
       for (imageTag in imageTagsList) {
-        sh "docker build -f ${DOCKERFILE_PATH}/Dockerfile -t ${dockerRepository}/${projectNamespace}/${projectModule}:${imageTag} --rm ."
+        sh "docker tag ${containerId} ${dockerRepository}/${projectNamespace}/${projectModule}:${imageTag}"
       }
     }
     stage("publish image"){
