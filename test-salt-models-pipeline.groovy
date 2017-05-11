@@ -31,10 +31,9 @@ def merged = false
 
 def testMinion(minion, saltOpts)
 {
-  sh("""bash -c ' /srv/salt/scripts/salt-master-init.sh;
+  sh("""bash -c 'source /srv/salt/scripts/salt-master-init.sh;
         export SUDO=sudo;
         export DEBUG=1;
-        bash -v;
         export MASTER_HOSTNAME=${master}; reclass-salt -p ${minion} >  /tmp/${minion}.pillar_verify'""")
 }
 
@@ -60,10 +59,10 @@ def setupandtest(master) {
 
         // setup iniot and verify salt master and minions
         withEnv(["SUDO=sudo","DEBUG=1", "MASTER_HOSTNAME=${master}"]){
-            sh("bash -c '/srv/salt/scripts/salt-master-init.sh system_config'")
-            sh("bash -c '/srv/salt/scripts/salt-master-init.sh saltmaster_bootstrap'")
-            sh("bash -c '/srv/salt/scripts/salt-master-init.sh saltmaster_init > /tmp/${master}.init'")
-            sh("bash -c '/srv/salt/scripts/salt-master-init.sh verify_salt_master'")
+            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; system_config'")
+            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_bootstrap'")
+            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_init > /tmp/${master}.init'")
+            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; verify_salt_master'")
         }
 
         testSteps = [:]
