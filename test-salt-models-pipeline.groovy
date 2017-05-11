@@ -46,14 +46,14 @@ def setupandtest(master) {
 // 
   img.inside("-u root:root -v ${workspace}:/srv/salt/reclass") {
     wrap([$class: 'AnsiColorBuildWrapper']) {
-        sh("apt-get update; apt-get install  software-properties-common   python-software-properties -y")
+        sh("apt-get update && apt-get install software-properties-common python-software-properties -y")
         sh("add-apt-repository ppa:saltstack/salt -y")
-        sh("apt-get update; apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev reclass git")
+        sh("apt-get update && apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev reclass git")
         sh("sudo apt-get install -y salt-common salt-master salt-minion salt-ssh salt-cloud salt-doc")
         sh("svn export --force https://github.com/chnyda/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
         //configure git
         sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
-        sh("git config --global user.name  || git config --global user.name 'CI'")
+        sh("git config --global user.name || git config --global user.name 'CI'")
         //
         sh("cd /srv/salt/reclass; test ! -e .gitmodules || git submodule update --init --recursive")
         sh("cd /srv/salt/reclass; git commit -am 'Fake branch update' || true")
@@ -114,7 +114,7 @@ node("python&&docker") {
 
     def nodes
     dir ('nodes') {
-      nodes = sh script: "find -type f -name cfg*.yml", returnStdout: true
+      nodes = sh script: "find ./ -type f -name 'cfg*.yml'", returnStdout: true
     }
 
     stage("test") {
