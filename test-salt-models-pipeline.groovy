@@ -43,12 +43,13 @@ def setupandtest(master) {
   def common = new com.mirantis.mk.Common()
   def workspace = common.getWorkspace()
 
+// 
   img.inside("-u root:root -v ${workspace}:/srv/salt/reclass") {
     wrap([$class: 'AnsiColorBuildWrapper']) {
         sh("apt-get update; apt-get install  software-properties-common   python-software-properties -y")
         sh("add-apt-repository ppa:saltstack/salt -y")
-        sh("apt-get update; apt-get install -y curl subversion git python-pip sudo")
-        sh("sudo apt-get install -y salt-master salt-minion salt-ssh salt-cloud salt-doc")
+        sh("apt-get update; apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev reclass git")
+        sh("sudo apt-get install -y salt-common salt-master salt-minion salt-ssh salt-cloud salt-doc")
         sh("svn export --force https://github.com/chnyda/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
         //configure git
         sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
@@ -56,12 +57,13 @@ def setupandtest(master) {
         //
         sh("cd /srv/salt/reclass; test ! -e .gitmodules || git submodule update --init --recursive")
         sh("cd /srv/salt/reclass; git commit -am 'Fake branch update' || true")
+        sh("ls -lRa /srv/salt/reclass")
 
         // setup iniot and verify salt master and minions
         withEnv(["SUDO=sudo","DEBUG=1", "MASTER_HOSTNAME=${master}"]){
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; system_config'")
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_bootstrap'")
-            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_init > /tmp/${master}.init'")
+            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_init'")
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; verify_salt_master'")
         }
 
