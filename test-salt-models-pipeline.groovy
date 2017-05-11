@@ -31,10 +31,7 @@ def merged = false
 
 def testMinion(minion, saltOpts)
 {
-  sh("""bash -c 'source /srv/salt/scripts/salt-master-init.sh;
-        export SUDO=sudo;
-        export DEBUG=1;
-        export MASTER_HOSTNAME=${master}; reclass-salt -p ${minion} >  /tmp/${minion}.pillar_verify'""")
+  sh("reclass-salt -p ${minion} >  /tmp/${minion}.pillar_verify")
 }
 
 def setupandtest(master) {
@@ -43,24 +40,18 @@ def setupandtest(master) {
   def common = new com.mirantis.mk.Common()
   def workspace = common.getWorkspace()
 
-// 
   img.inside("-u root:root -v ${workspace}:/srv/salt/reclass") {
     wrap([$class: 'AnsiColorBuildWrapper']) {
-        sh("apt-get update && apt-get install software-properties-common python-software-properties -y")
-        sh("add-apt-repository ppa:saltstack/salt -y")
         sh("apt-get update && apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev reclass git")
-        sh("sudo apt-get install -y salt-common salt-master salt-minion salt-ssh salt-cloud salt-doc")
-        sh("svn export --force https://github.com/chnyda/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
-        //configure git
+        sh("svn export --force https://github.com/salt-formulas/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
         sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
         sh("git config --global user.name || git config --global user.name 'CI'")
-        //
         sh("cd /srv/salt/reclass; test ! -e .gitmodules || git submodule update --init --recursive")
         sh("cd /srv/salt/reclass; git commit -am 'Fake branch update' || true")
         sh("ls -lRa /srv/salt/reclass")
 
         // setup iniot and verify salt master and minions
-        withEnv(["SUDO=sudo","DEBUG=1", "MASTER_HOSTNAME=${master}"]){
+        withEnv(["SUDO=sudo", "FORMULAS_SOURCE=pkg", "DEBUG=1", "MASTER_HOSTNAME=${master}"]){
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; system_config'")
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_bootstrap'")
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_init'")
@@ -68,7 +59,10 @@ def setupandtest(master) {
         }
 
         testSteps = [:]
-        nodes = sh script:"ls /srv/salt/reclass/nodes/_generated"
+        def nodes = sh script:"find /srv/salt/reclass/nodes/_generated -name '*.yml' | grep -v 'cfg*.yml", returnStdout: true
+        if (DEFAULT_GIT_URL.contains("mk-ci")) {
+          nodes = sh script: "find /srv/salt/reclass/nodes -name '*.yml' | grep -v 'cfg*.yml", returnStdout: true
+        }
         for (minion in nodes.tokenize()) {
           def basename = sh script: "basename ${minion} .yml", returnStdout: true
           testSteps = { testMinion(basename.trim())}
