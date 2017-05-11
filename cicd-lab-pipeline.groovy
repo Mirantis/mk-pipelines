@@ -81,7 +81,7 @@ timestamps {
                 openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
                 openstack.getKeystoneToken(openstackCloud, openstackEnv)
                 wrap([$class: 'BuildUser']) {
-                    if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins")) {
+                    if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !HEAT_STACK_REUSE.toBoolean()) {
                         def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", openstackEnv)
                         if(existingStacks.size() >= _MAX_PERMITTED_STACKS){
                             HEAT_STACK_DELETE = "false"

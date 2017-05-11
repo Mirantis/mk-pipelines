@@ -47,7 +47,7 @@ orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 
-_MAX_PERMITTED_STACKS = 20
+_MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/overwrite.yml"
 
 timestamps {
@@ -94,7 +94,7 @@ timestamps {
                     // Verify possibility of create stack for given user and stack type
                     //
                     wrap([$class: 'BuildUser']) {
-                        if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins")) {
+                        if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !HEAT_STACK_REUSE.toBoolean()) {
                             def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", openstackEnv)
                             if(existingStacks.size() >= _MAX_PERMITTED_STACKS){
                                 HEAT_STACK_DELETE = "false"
