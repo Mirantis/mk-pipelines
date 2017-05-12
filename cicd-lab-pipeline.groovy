@@ -175,68 +175,42 @@ timestamps {
                 // Aptly
                 timeout(10) {
                     println "Waiting for Aptly to come up.."
-                    salt.cmdRun(saltMaster, 'I@aptly:server', 'while true; do curl -svf http://172.16.10.254:8084/api/version >/dev/null && break; done')
+                    retry(2) {
+                        // XXX: retry to workaround magical VALUE_TRIMMED
+                        // response from salt master + to give slow cloud some
+                        // more time to settle down
+                        salt.cmdRun(saltMaster, 'I@aptly:server', 'while true; do curl -sf http://172.16.10.254:8084/api/version >/dev/null && break; done')
+                    }
                 }
                 salt.enforceState(saltMaster, 'I@aptly:server', 'aptly', true)
 
                 // OpenLDAP
                 timeout(10) {
                     println "Waiting for OpenLDAP to come up.."
-                    salt.cmdRun(saltMaster, 'I@openldap:client', 'while true; do curl -svf ldap://172.16.10.254 >/dev/null && break; done')
+                    salt.cmdRun(saltMaster, 'I@openldap:client', 'while true; do curl -sf ldap://172.16.10.254 >/dev/null && break; done')
                 }
                 salt.enforceState(saltMaster, 'I@openldap:client', 'openldap', true)
 
                 // Gerrit
                 timeout(10) {
                     println "Waiting for Gerrit to come up.."
-                    salt.cmdRun(saltMaster, 'I@gerrit:client', 'while true; do curl -svf 172.16.10.254:8080 >/dev/null && break; done')
+                    salt.cmdRun(saltMaster, 'I@gerrit:client', 'while true; do curl -sf 172.16.10.254:8080 >/dev/null && break; done')
                 }
-                retry(3) {
-                    // Needs to run twice to pass __virtual__ method of gerrit module
-                    // after installation of dependencies
-                    try {
-                        salt.enforceState(saltMaster, 'I@gerrit:client', 'gerrit', true)
-                    } catch (Exception e) {
-                        common.infoMsg("Restarting Salt minion")
-                        salt.cmdRun(saltMaster, 'I@gerrit:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &", false)
-                        sleep(5)
-                        throw e
-                    }
-                }
+                salt.enforceState(saltMaster, 'I@gerrit:client', 'gerrit', true)
 
                 // Jenkins
                 timeout(10) {
                     println "Waiting for Jenkins to come up.."
-                    salt.cmdRun(saltMaster, 'I@jenkins:client', 'while true; do curl -svf 172.16.10.254:8081 >/dev/null && break; done')
+                    salt.cmdRun(saltMaster, 'I@jenkins:client', 'while true; do curl -sf 172.16.10.254:8081 >/dev/null && break; done')
                 }
-                retry(2) {
-                    // Same for jenkins
-                    try {
-                        salt.enforceState(saltMaster, 'I@jenkins:client', 'jenkins', true)
-                    } catch (Exception e) {
-                        common.infoMsg("Restarting Salt minion")
-                        salt.cmdRun(saltMaster, 'I@jenkins:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
-                        sleep(5)
-                        throw e
-                    }
-                }
+                salt.enforceState(saltMaster, 'I@jenkins:client', 'jenkins', true)
 
                 // Rundeck
                 timeout(10) {
                     println "Waiting for Rundeck to come up.."
-                    salt.cmdRun(saltMaster, 'I@rundeck:client', 'while true; do curl -svf 172.16.10.254:4440 >/dev/null && break; done')
+                    salt.cmdRun(saltMaster, 'I@rundeck:client', 'while true; do curl -sf 172.16.10.254:4440 >/dev/null && break; done')
                 }
-                retry(2) {
-                    // Same for Rundeck
-                    try {
-                        salt.enforceState(saltMaster, 'I@rundeck:client', 'rundeck.client', true)
-                    } catch (Exception e) {
-                        common.infoMsg("Restarting Salt minion")
-                        salt.cmdRun(saltMaster, 'I@rundeck:client', "exec 0>&-; exec 1>&-; exec 2>&-; nohup /bin/sh -c 'salt-call --local service.restart salt-minion' &")
-                        sleep(5)
-                        throw e
-                    }
-                }
+                salt.enforceState(saltMaster, 'I@rundeck:client', 'rundeck.client', true)
             }
 
             stage("Finalize") {
