@@ -90,7 +90,7 @@ def _getRunningTriggeredTestsBuildNumbers(jobName, gerritChangeNumber, excludePa
   def triggeredBuilds= gerrit.getGerritTriggeredBuilds(jenkinsUtils.getJobRunningBuilds(jobName), gerritChangeNumber, excludePatchsetNumber)
   def buildNums =[]
   for(int i=0;i<triggeredBuilds.size();i++){
-      buildNums.put(triggeredBuilds[i].number)
+      buildNums.add(triggeredBuilds[i].number)
   }
   return buildNums
 }
