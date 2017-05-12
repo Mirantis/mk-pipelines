@@ -203,7 +203,11 @@ timestamps {
                     println "Waiting for Jenkins to come up.."
                     salt.cmdRun(saltMaster, 'I@jenkins:client', 'while true; do curl -sf 172.16.10.254:8081 >/dev/null && break; done')
                 }
-                salt.enforceState(saltMaster, 'I@jenkins:client', 'jenkins', true)
+                retry(2) {
+                    // XXX: needs retry as first run installs python-jenkins
+                    // thus make jenkins modules available for second run
+                    salt.enforceState(saltMaster, 'I@jenkins:client', 'jenkins', true)
+                }
 
                 // Rundeck
                 timeout(10) {
