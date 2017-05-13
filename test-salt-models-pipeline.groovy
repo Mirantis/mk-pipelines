@@ -29,49 +29,55 @@ try {
 def checkouted = false
 def merged = false
 
-def testMinion(minion, saltOpts)
+def testMinion(minion)
 {
-  sh("reclass-salt -p ${minion} >  /tmp/${minion}.pillar_verify")
+  return sh(script: "reclass-salt -p ${minion}", returnStatus:true)
 }
 
+
+
 def setupandtest(master) {
-  def img = docker.image("ubuntu:trusty")
+  def img = docker.image("ubuntu:latest")
   def saltOpts = "--retcode-passthrough --force-color"
   def common = new com.mirantis.mk.Common()
   def workspace = common.getWorkspace()
 
-  img.inside("-u root:root -v ${workspace}:/srv/salt/reclass") {
+// -v ${workspace}:/srv/salt/reclass 
+  img.inside("-u root:root --hostname=${master}") {
     wrap([$class: 'AnsiColorBuildWrapper']) {
+
+        sh("mkdir -p /srv/salt/ || true")
+        sh("cp -r ${workspace} /srv/salt/reclass")
         sh("apt-get update && apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev reclass git")
         sh("svn export --force https://github.com/salt-formulas/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
         sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
         sh("git config --global user.name || git config --global user.name 'CI'")
-        sh("cd /srv/salt/reclass; test ! -e .gitmodules || git submodule update --init --recursive")
-        sh("cd /srv/salt/reclass; git commit -am 'Fake branch update' || true")
         sh("ls -lRa /srv/salt/reclass")
 
         // setup iniot and verify salt master and minions
-        withEnv(["SUDO=sudo", "FORMULAS_SOURCE=pkg", "DEBUG=1", "MASTER_HOSTNAME=${master}"]){
-            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; system_config'")
-            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_bootstrap'")
-            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; saltmaster_init'")
-            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; verify_salt_master'")
+        withEnv(["FORMULAS_SOURCE=pkg", "DEBUG=1", "MASTER_HOSTNAME=${master}", "MINION_ID=${master}", "HOSTNAME=cfg01","DOMAIN=mk-ci.local"]){
+            sh("bash -c 'echo $MASTER_HOSTNAME'")
+            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && system_config'")
+            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_bootstrap'")
+            sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_init'")
         }
 
-        testSteps = [:]
-        def nodes = sh script:"find /srv/salt/reclass/nodes/_generated -name '*.yml' | grep -v 'cfg*.yml", returnStdout: true
-        if (DEFAULT_GIT_URL.contains("mk-ci")) {
-          nodes = sh script: "find /srv/salt/reclass/nodes -name '*.yml' | grep -v 'cfg*.yml", returnStdout: true
-        }
-        for (minion in nodes.tokenize()) {
-          def basename = sh script: "basename ${minion} .yml", returnStdout: true
-          testSteps = { testMinion(basename.trim())}
-        }
-        parallel testSteps
+          def nodes
+          if (DEFAULT_GIT_URL.contains("mk-ci")) {
+            nodes = sh script: "find /srv/salt/reclass/nodes -name '*.yml' | grep -v 'cfg*.yml'", returnStdout: true
+          } else {
+            nodes = sh script:"find /srv/salt/reclass/nodes/_generated -name '*.yml' | grep -v 'cfg*.yml'", returnStdout: true
+          }
+          for (minion in nodes.tokenize()) {
+            def basename = sh script: "basename ${minion} .yml", returnStdout: true
+            testMinion(basename.trim())
+          }
+          
     }
 
   }
 
+  return 0
 }
 
 node("python&&docker") {
@@ -111,13 +117,15 @@ node("python&&docker") {
       nodes = sh script: "find ./ -type f -name 'cfg*.yml'", returnStdout: true
     }
 
-    stage("test") {
+    stage("test-nodes") {
+      def buildSteps = [:]
       for (masterNode in nodes.tokenize()) {
-        basename = sh script: "basename ${masterNode} .yml", returnStdout: true
-        setupandtest(basename.trim())
+        def basename = sh script: "basename ${masterNode} .yml", returnStdout: true
+        buildSteps[basename.trim()] = { setupandtest(basename.trim()) }
       }
-
+      parallel buildSteps
     }
+
   } catch (Throwable e) {
      // If there was an error or exception thrown, the build failed
      currentBuild.result = "FAILURE"
