@@ -123,7 +123,8 @@ node("python&&docker") {
         def basename = sh script: "basename ${masterNode} .yml", returnStdout: true
         buildSteps[basename.trim()] = { setupandtest(basename.trim()) }
       }
-      parallel buildSteps
+      //parallel buildSteps
+      common.serial(buildSteps)
     }
 
   } catch (Throwable e) {
