@@ -70,8 +70,8 @@ node("python&&docker") {
           def partition = partitions[i]
           buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
           for(int k=0; k < partition.size;k++){
-              def basename = sh script: "basename ${partition[k]} .yml", returnStdout: true
-              buildSteps.get("partition-${i}").put(basename, { setupAndTestNode(basename.trim()) })
+              def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
+              buildSteps.get("partition-${i}").put(basename, { setupAndTestNode(basename })
           }
         }
         common.serial(buildSteps)
