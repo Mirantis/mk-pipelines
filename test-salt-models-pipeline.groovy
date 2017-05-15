@@ -68,10 +68,10 @@ node("python&&docker") {
         def partitions = common.partitionList(nodes.tokenize(), 3)
         for (int i=0; i< partitions.size();i++) {
           def partition = partitions[i]
-          buildSteps.put("partition-${i}", new ArrayList<org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
+          buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
           for(int k=0; k < partition.size;k++){
               def basename = sh script: "basename ${partition[k]} .yml", returnStdout: true
-              buildSteps.get("partition-${i}").add({ setupAndTestNode(basename.trim()) })
+              buildSteps.get("partition-${i}").put(basename, { setupAndTestNode(basename.trim()) })
           }
         }
         common.serial(buildSteps)
