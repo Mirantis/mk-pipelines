@@ -31,7 +31,7 @@ def merged = false
 
 def testMinion(minion)
 {
-  return sh(script: "reclass-salt -p ${minion}", returnStatus:true)
+  sh("service salt-master restart && service salt-minion restart && sleep 5 && bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && verify_salt_minion ${minion}'")
 }
 
 
@@ -48,19 +48,22 @@ def setupandtest(master) {
 
         sh("mkdir -p /srv/salt/ || true")
         sh("cp -r ${workspace} /srv/salt/reclass")
-        sh("apt-get update && apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev reclass git")
+        sh("apt-get update && apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev git")
         sh("svn export --force https://github.com/salt-formulas/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
         sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
         sh("git config --global user.name || git config --global user.name 'CI'")
+        sh("pip install git+https://github.com/epcim/reclass.git@pr/fix/fix_raise_UndefinedVariableError")
         sh("ls -lRa /srv/salt/reclass")
 
         // setup iniot and verify salt master and minions
-        withEnv(["FORMULAS_SOURCE=pkg", "DEBUG=1", "MASTER_HOSTNAME=${master}", "MINION_ID=${master}", "HOSTNAME=cfg01","DOMAIN=mk-ci.local"]){
+        withEnv(["FORMULAS_SOURCE=pkg", "DEBUG=1", "MASTER_HOSTNAME=${master}", "MINION_ID=${master}", "HOSTNAME=cfg01", "DOMAIN=mk-ci.local"]){
             sh("bash -c 'echo $MASTER_HOSTNAME'")
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && system_config'")
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_bootstrap'")
             sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_init'")
         }
+
+        sh("ls -lRa /srv/salt/reclass/classes/service/")
 
           def nodes
           if (DEFAULT_GIT_URL.contains("mk-ci")) {
@@ -70,7 +73,9 @@ def setupandtest(master) {
           }
           for (minion in nodes.tokenize()) {
             def basename = sh script: "basename ${minion} .yml", returnStdout: true
-            testMinion(basename.trim())
+            if (!basename.trim().contains(master)) {
+              testMinion(basename.trim())
+            }
           }
           
     }
