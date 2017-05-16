@@ -63,7 +63,7 @@ node("python&&docker") {
     stage("test-nodes") {
       def nodes = sh script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true
       def buildSteps = [:]
-      def partitions = common.partitionList(nodes.tokenize(), 3)
+      def partitions = common.partitionList(nodes.tokenize(), PARALLEL_NODE_GROUP_SIZE.toInteger())
       for (int i=0; i< partitions.size();i++) {
         def partition = partitions[i]
         buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
