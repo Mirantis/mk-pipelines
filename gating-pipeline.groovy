@@ -25,6 +25,10 @@ node("python") {
           if (JOBS_NAMESPACE in plural_namespaces){
             jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
           }
+          // salt-formulas tests have -latest on end of the name
+          if(JOBS_NAMESPACE.equals("salt-formulas")){
+            gerritProject=gerritProject+"-latest"
+          }
           def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
           if (_jobExists(testJob)) {
             common.infoMsg("Test job ${testJob} found, running")
