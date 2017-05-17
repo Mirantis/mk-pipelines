@@ -61,18 +61,34 @@ node("python&&docker") {
     }
 
     stage("test-nodes") {
-      def nodes = sh script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true
+      def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
       def buildSteps = [:]
-      def partitions = common.partitionList(nodes.tokenize(), PARALLEL_NODE_GROUP_SIZE.toInteger())
-      for (int i=0; i< partitions.size();i++) {
-        def partition = partitions[i]
-        buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
-        for(int k=0; k < partition.size;k++){
-            def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-            buildSteps.get("partition-${i}").put(basename, { setupAndTestNode(basename) })
-        }
+      if(nodes.size() > 1){
+          if(nodes.size() <= 3){
+            common.infoMsg("Found <=3  cfg nodes, running parallel test")
+             for(int i=0; i < nodes.size();i++){
+               def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
+               buildSteps.put("node-${basename}", { setupAndTestNode(basename) })
+             }
+             parallel buildSteps
+          }else{
+            common.infoMsg("Found more than 3 cfg nodes, running parallel group test with 3 nodes")
+            def partitions = common.partitionList(nodes, 3)
+            for (int i=0; i < partitions.size();i++) {
+              def partition = partitions[i]
+              buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
+              for(int k=0; k < partition.size;k++){
+                  def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
+                  buildSteps.get("partition-${i}").put(basename, { setupAndTestNode(basename) })
+              }
+            }
+            common.serial(buildSteps)
+          }
+      }else{
+          common.infoMsg("Found one cfg node, running single test")
+          def basename = sh(script: "basename ${nodes[0]} .yml", returnStdout: true).trim()
+          setupAndTestNode(basename)
       }
-      common.serial(buildSteps)
     }
 
   } catch (Throwable e) {
