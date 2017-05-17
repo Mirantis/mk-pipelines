@@ -58,15 +58,9 @@ node("docker") {
              }
         }
         stage('Generate config file for devops portal') {
-            def builder = new groovy.json.JsonBuilder()
-            def config = builder.services {
-                elasticsearch {
-                    endpoint 'http://elasticsearch:9200'
-                }
-            }
             writeFile (
                 file: "${workspace}/test_config.json",
-                text: config.toString()
+                text: '${JSON_CONFIG}'
             )
        }
        stage('Start container') {
@@ -95,7 +89,7 @@ node("docker") {
         common.sendNotification(currentBuild.result, "" ,["slack"])
         stage('Cleanup') {
             if (containerId != null) {
-                dockerCleanupCommands = ['stop', 'rm']
+                dockerCleanupCommands = ['stop', 'rm -f']
                 for (int i = 0; i < dockerCleanupCommands.size(); i++) {
                     sh("docker-compose -f ${COMPOSE_PATH} -p ${uniqId} ${dockerCleanupCommands[i]} || true")
                 }
