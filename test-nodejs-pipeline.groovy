@@ -1,6 +1,7 @@
 /**
 * JS testing pipeline
 * CREDENTIALS_ID - gerrit credentials id
+* COMPOSE_PATH - path to compose file in repository
 * NODE_IMAGE - NodeJS with NPM Docker image name
 * COMMANDS - a list of command(s) to run
 **/
@@ -21,7 +22,6 @@ def executeCmd(containerId, cmd) {
     }
 }
 
-
 def gerritRef
 try {
     gerritRef = GERRIT_REFSPEC
@@ -41,6 +41,7 @@ def checkouted = false
 
 node("docker") {
     def containerId
+    def uniqId
     try {
         stage('Checkout source code') {
             if (gerritRef) {
@@ -56,12 +57,28 @@ node("docker") {
                  throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
              }
         }
-        stage('Start container') {
+        stage('Generate config file for devops portal') {
+            def builder = new groovy.json.JsonBuilder()
+            def config = builder.services {
+                elasticsearch {
+                    endpoint 'http://elasticsearch:9200'
+                }
+            }
+            writeFile (
+                file: "${workspace}/test_config.json",
+                text: config.toString()
+            )
+       }
+       stage('Start container') {
             def workspace = common.getWorkspace()
-            containerId = sh(
-                script: "docker run -d ${NODE_IMAGE}",
-                returnStdout: true,
-            ).trim()
+            def timeStamp = new Date().format("HHmmss", TimeZone.getTimeZone('UTC'))
+            if (gerritRef) {
+                uniqId = gerritRef.tokenize('/').takeRight(2).join('') + timeStamp
+            } else {
+                uniqId = defaultGitRef.tokenize('/').takeRight(2).join('') + timeStamp
+            }
+            sh("docker-compose -f ${COMPOSE_PATH} -p ${uniqId} up -d")
+            containerId = "${uniqId}_devopsportal_1"
             common.successMsg("Container with id ${containerId} started.")
             sh("docker cp ${workspace}/. ${containerId}:/opt/workspace/")
         }
@@ -78,8 +95,12 @@ node("docker") {
         common.sendNotification(currentBuild.result, "" ,["slack"])
         stage('Cleanup') {
             if (containerId != null) {
-                sh("docker stop -t 0 ${containerId}")
-                sh("docker rm ${containerId}")
+                dockerCleanupCommands = ['stop', 'rm']
+                for (int i = 0; i < dockerCleanupCommands.size(); i++) {
+                    sh("docker-compose -f ${COMPOSE_PATH} -p ${uniqId} ${dockerCleanupCommands[i]} || true")
+                }
+                sh("docker network rm ${uniqId}_default || true")
+                sh("rm -f ${workspace}/test_config.json || true")
                 common.infoMsg("Container with id ${containerId} was removed.")
             }
         }
