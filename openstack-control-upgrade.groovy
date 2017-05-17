@@ -137,6 +137,7 @@ timestamps {
                 }
                 salt.enforceState(saltMaster, 'upg*', ['keystone.client', 'glance', 'keystone.server'])
                 salt.enforceState(saltMaster, 'upg*', 'nova')
+                salt.enforceState(saltMaster, 'upg*', 'nova')
                 salt.enforceState(saltMaster, 'upg*', ['cinder', 'neutron', 'heat'])
 
                 salt.cmdRun(saltMaster, 'upg01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
@@ -153,6 +154,20 @@ timestamps {
         if (STAGE_REAL_UPGRADE.toBoolean() == true) {
             stage('Real upgrade') {
                 // # actual upgrade
+
+                _pillar = salt.getGrain(saltMaster, 'I@salt:master', 'domain')
+                domain = _pillar['return'][0].values()[0].values()[0]
+                print(_pillar)
+                print(domain)
+
+                _pillar = salt.getGrain(saltMaster, 'I@salt:control', 'id')
+                kvm01 = _pillar['return'][0].values()[0].values()[0]
+                kvm03 = _pillar['return'][0].values()[2].values()[0]
+                kvm02 = _pillar['return'][0].values()[1].values()[0]
+                print(_pillar)
+                print(kvm01)
+                print(kvm02)
+                print(kvm03)
 
                 _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:ctl01:provider')
                 def ctl01NodeProvider = _pillar['return'][0].values()[0]
@@ -297,6 +312,11 @@ timestamps {
 
         if (STAGE_ROLLBACK_UPGRADE.toBoolean() == true) {
             stage('Rollback upgrade') {
+
+                _pillar = salt.getGrain(saltMaster, 'I@salt:master', 'domain')
+                domain = _pillar['return'][0].values()[0].values()[0]
+                print(_pillar)
+                print(domain)
 
                 salt.runSaltProcessStep(saltMaster, "${prx01NodeProvider}", 'virt.destroy', ["prx01.${domain}"], null, true)
                 salt.runSaltProcessStep(saltMaster, "${prx02NodeProvider}", 'virt.destroy', ["prx02.${domain}"], null, true)
