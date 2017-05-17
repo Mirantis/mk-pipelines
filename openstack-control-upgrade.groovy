@@ -64,9 +64,9 @@ timestamps {
 
                 
                 try {
-                    ssalt.cmdRun(saltMaster, 'I@salt:master', "salt-key -d upg01.${domain} -y")
+                    salt.cmdRun(saltMaster, 'I@salt:master', "salt-key -d upg01.${domain} -y")
                 } catch (Exception e) {
-                    common.warningMsg('does not match any accepted, unaccepted or rejected keys. The key did not exist yet or was already removed. We should continue to run')
+                    common.warningMsg("upg01.${domain} does not match any accepted, unaccepted or rejected keys. The key did not exist yet or was already removed. We should continue to run")
                 }
 
 
