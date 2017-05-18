@@ -123,17 +123,16 @@ timestamps {
                             salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'file.remove', ["/root/mysql/flags/${databasesList[i]}-installed"], null, true)
                         }
                     }
+                    salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
                 }else{
                     common.errorMsg("No _upgrade databases were returned")
                 }
 
-                salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
-
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'keystone.server')
                 } catch (Exception e) {
-                    common.warningMsg('Enforcing keystone.server state again')
-                    salt.enforceState(saltMaster, 'ctl*', 'keystone.server')
+                    common.warningMsg('Reloading Apache2 and enforcing keystone.server state again')
+                    salt.runSaltProcessStep(saltMaster, 'upg*', 'service.restart', ['apache2'], null, true)
                 }
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'keystone.client')
@@ -294,7 +293,8 @@ timestamps {
                     try {
                         salt.enforceState(saltMaster, 'ctl*', ['memcached', 'keystone.server'])
                     } catch (Exception e) {
-                        common.warningMsg('Enforcing keystone.server state again')
+                        common.warningMsg('Reloading Apache2 and enforcing keystone.server state again')
+                        salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['apache2'], null, true)
                         salt.enforceState(saltMaster, 'ctl*', 'keystone.server')
                     }
                     // salt 'ctl01*' state.sls keystone.client
@@ -353,11 +353,11 @@ timestamps {
                                 salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'file.remove', ["/root/mysql/flags/${databasesList[i]}-installed"], null, true)
                             }
                         }
+                        salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
                     }else{
-                        common.errorMsg("No none _upgrade databases were returned")
+                        common.errorMsg("No none _upgrade databases were returned. You have to restore production databases before running the real control upgrade again. This is because database schema for some services already happened. To do that delete the production databases and run salt 'I@mysql:client' state.sls mysql.client on the salt-master node")
                     }
-
-                    salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
+                    common.errorMsg("Stage Real control upgrade failed")
                 }
                     
                 // salt 'cmp*' cmd.run 'service nova-compute restart'
@@ -423,11 +423,10 @@ timestamps {
                             salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'file.remove', ["/root/mysql/flags/${databasesList[i]}-installed"], null, true)
                         }
                     }
+                    salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
                 }else{
                     common.errorMsg("No none _upgrade databases were returned")
                 }
-
-                salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
 
                 salt.runSaltProcessStep(saltMaster, "${prx01NodeProvider}", 'virt.start', ["prx01.${domain}"], null, true)
                 salt.runSaltProcessStep(saltMaster, "${prx02NodeProvider}", 'virt.start', ["prx02.${domain}"], null, true)
