@@ -135,11 +135,28 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'upg*', 'service.reload', ['apache2'], null, true)
                     common.warningMsg('reload of apache2. We should continue to run')
                 }
-                salt.enforceState(saltMaster, 'upg*', ['keystone.client', 'glance', 'keystone.server'])
-                salt.enforceState(saltMaster, 'upg*', 'nova')
-                salt.enforceState(saltMaster, 'upg*', 'nova')
-                salt.enforceState(saltMaster, 'upg*', ['cinder', 'neutron', 'heat'])
-
+                salt.enforceState(saltMaster, 'upg*', 'keystone.client')
+                try {
+                    salt.enforceState(saltMaster, 'upg*', 'glance')
+                } catch (Exception e) {
+                    common.warningMsg('running glance state again')
+                    salt.enforceState(saltMaster, 'upg*', 'glance')
+                }
+                salt.enforceState(saltMaster, 'upg*', 'keystone.server')
+                try {
+                    salt.enforceState(saltMaster, 'upg*', 'nova')
+                } catch (Exception e) {
+                    common.warningMsg('running nova state again')
+                    salt.enforceState(saltMaster, 'upg*', 'nova')
+                }
+                salt.enforceState(saltMaster, 'upg*', 'cinder')
+                try {
+                    salt.enforceState(saltMaster, 'upg*', 'neutron')
+                } catch (Exception e) {
+                    common.warningMsg('running neutron state again')
+                    salt.enforceState(saltMaster, 'upg*', 'neutron')
+                }
+                salt.enforceState(saltMaster, 'upg*', 'heat')
                 salt.cmdRun(saltMaster, 'upg01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
             }
         }
@@ -269,17 +286,30 @@ timestamps {
                 // salt 'ctl01*' state.sls keystone.client
                 salt.enforceState(saltMaster, 'I@keystone:client and ctl*', 'keystone.client')
                 // salt 'ctl*' state.sls glance
-                salt.enforceState(saltMaster, 'ctl*', 'glance')
-                // salt 'ctl*' state.sls glusterfs.client
+                try {
+                    salt.enforceState(saltMaster, 'ctl*', 'glance')
+                } catch (Exception e) {
+                    common.warningMsg('running glance state again')
+                    salt.enforceState(saltMaster, 'ctl*', 'glance')
+                }                // salt 'ctl*' state.sls glusterfs.client
                 salt.enforceState(saltMaster, 'ctl*', 'glusterfs.client')
                 // salt 'ctl*' state.sls keystone.server
                 salt.enforceState(saltMaster, 'ctl*', 'keystone.server')
                 // salt 'ctl*' state.sls nova
-                salt.enforceState(saltMaster, 'ctl*', 'nova')
+                try {
+                    salt.enforceState(saltMaster, 'ctl*', 'nova')
+                } catch (Exception e) {
+                    common.warningMsg('running nova state again')
+                    salt.enforceState(saltMaster, 'ctl*', 'nova')
+                }
                 // salt 'ctl*' state.sls cinder
                 salt.enforceState(saltMaster, 'ctl*', 'cinder')
-                // salt 'ctl*' state.sls neutron
-                salt.enforceState(saltMaster, 'ctl*', 'neutron')
+                try {
+                    salt.enforceState(saltMaster, 'ctl*', 'neutron')
+                } catch (Exception e) {
+                    common.warningMsg('running neutron state again')
+                    salt.enforceState(saltMaster, 'ctl*', 'neutron')
+                }
                 // salt 'ctl*' state.sls heat
                 salt.enforceState(saltMaster, 'ctl*', 'heat')
 
