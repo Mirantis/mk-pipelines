@@ -149,14 +149,24 @@ timestamps {
                     common.warningMsg('running nova state again')
                     salt.enforceState(saltMaster, 'upg*', 'nova')
                 }
-                salt.enforceState(saltMaster, 'upg*', 'cinder')
+                try {
+                    salt.enforceState(saltMaster, 'upg*', 'cinder')
+                } catch (Exception e) {
+                    common.warningMsg('running cinder state again')
+                    salt.enforceState(saltMaster, 'upg*', 'cinder')
+                }                
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'neutron')
                 } catch (Exception e) {
                     common.warningMsg('running neutron state again')
                     salt.enforceState(saltMaster, 'upg*', 'neutron')
                 }
-                salt.enforceState(saltMaster, 'upg*', 'heat')
+                try {
+                    salt.enforceState(saltMaster, 'upg*', 'heat')
+                } catch (Exception e) {
+                    common.warningMsg('running heat state again')
+                    salt.enforceState(saltMaster, 'upg*', 'heat')
+                }
                 salt.cmdRun(saltMaster, 'upg01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
             }
         }
@@ -303,7 +313,12 @@ timestamps {
                     salt.enforceState(saltMaster, 'ctl*', 'nova')
                 }
                 // salt 'ctl*' state.sls cinder
-                salt.enforceState(saltMaster, 'ctl*', 'cinder')
+                try {
+                    salt.enforceState(saltMaster, 'ctl*', 'cinder')
+                } catch (Exception e) {
+                    common.warningMsg('running cinder state again')
+                    salt.enforceState(saltMaster, 'ctl*', 'cinder')
+                }                
                 try {
                     salt.enforceState(saltMaster, 'ctl*', 'neutron')
                 } catch (Exception e) {
@@ -311,8 +326,12 @@ timestamps {
                     salt.enforceState(saltMaster, 'ctl*', 'neutron')
                 }
                 // salt 'ctl*' state.sls heat
-                salt.enforceState(saltMaster, 'ctl*', 'heat')
-
+                try {
+                    salt.enforceState(saltMaster, 'ctl*', 'heat')
+                } catch (Exception e) {
+                    common.warningMsg('running heat state again')
+                    salt.enforceState(saltMaster, 'ctl*', 'heat')
+                }
                 // salt 'cmp*' cmd.run 'service nova-compute restart'
                 salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
 
