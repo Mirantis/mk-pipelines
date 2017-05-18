@@ -163,6 +163,14 @@ timestamps {
 
                     orchestrate.installKubernetesControl(saltMaster)
                 }
+
+
+                if (common.checkContains('INSTALL', 'contrail')) {
+                    state('Install Contrail for Kubernetes') {
+                        orchestrate.installContrailNetwork(saltMaster)
+                        orchestrate.installContrailCompute(saltMaster)
+                    }
+                }
             }
 
             // install openstack
