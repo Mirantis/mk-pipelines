@@ -132,10 +132,15 @@ timestamps {
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'keystone.server')
                 } catch (Exception e) {
-                    salt.runSaltProcessStep(saltMaster, 'upg*', 'service.reload', ['apache2'], null, true)
-                    common.warningMsg('reload of apache2. We should continue to run')
+                    common.warningMsg('Enforcing keystone.server state again')
+                    salt.enforceState(saltMaster, 'ctl*', 'keystone.server')
                 }
-                salt.enforceState(saltMaster, 'upg*', 'keystone.client')
+                try {
+                    salt.enforceState(saltMaster, 'upg*', 'keystone.client')
+                } catch (Exception e) {
+                    common.warningMsg('running keystone.client state again')
+                    salt.enforceState(saltMaster, 'upg*', 'keystone.client')
+                }
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'glance')
                 } catch (Exception e) {
@@ -176,7 +181,6 @@ timestamps {
                 input message: "Do you want to continue with upgrade?"
             }
         }
-
 
         if (STAGE_REAL_UPGRADE.toBoolean() == true) {
             stage('Real upgrade') {
@@ -255,7 +259,6 @@ timestamps {
 
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/101.mysql')
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/200.backup.rsync')
-                
 
                 try {
                     salt.cmdRun(saltMaster, 'I@salt:master', "salt-key -d ctl01.${domain},ctl02.${domain},ctl03.${domain},prx01.${domain},prx02.${domain} -y")
@@ -288,50 +291,75 @@ timestamps {
                 // salt "ctl*" state.sls memcached
                 // salt "ctl*" state.sls keystone.server
                 try {
-                    salt.enforceState(saltMaster, 'ctl*', ['memcached', 'keystone.server'])
+                    try {
+                        salt.enforceState(saltMaster, 'ctl*', ['memcached', 'keystone.server'])
+                    } catch (Exception e) {
+                        common.warningMsg('Enforcing keystone.server state again')
+                        salt.enforceState(saltMaster, 'ctl*', 'keystone.server')
+                    }
+                    // salt 'ctl01*' state.sls keystone.client
+                    try {
+                        salt.enforceState(saltMaster, 'I@keystone:client and ctl*', 'keystone.client')
+                    } catch (Exception e) {
+                        common.warningMsg('running keystone.client state again')
+                        salt.enforceState(saltMaster, 'I@keystone:client and ctl*', 'keystone.client')
+                    } 
+                    try {
+                        salt.enforceState(saltMaster, 'ctl*', 'glance')
+                    } catch (Exception e) {
+                        common.warningMsg('running glance state again')
+                        salt.enforceState(saltMaster, 'ctl*', 'glance')
+                    }                // salt 'ctl*' state.sls glusterfs.client
+                    salt.enforceState(saltMaster, 'ctl*', 'glusterfs.client')
+                    // salt 'ctl*' state.sls keystone.server
+                    salt.enforceState(saltMaster, 'ctl*', 'keystone.server')
+                    // salt 'ctl*' state.sls nova
+                    try {
+                        salt.enforceState(saltMaster, 'ctl*', 'nova')
+                    } catch (Exception e) {
+                        common.warningMsg('running nova state again')
+                        salt.enforceState(saltMaster, 'ctl*', 'nova')
+                    }
+                    // salt 'ctl*' state.sls cinder
+                    try {
+                        salt.enforceState(saltMaster, 'ctl*', 'cinder')
+                    } catch (Exception e) {
+                        common.warningMsg('running cinder state again')
+                        salt.enforceState(saltMaster, 'ctl*', 'cinder')
+                    }                
+                    try {
+                        salt.enforceState(saltMaster, 'ctl*', 'neutron')
+                    } catch (Exception e) {
+                        common.warningMsg('running neutron state again')
+                        salt.enforceState(saltMaster, 'ctl*', 'neutron')
+                    }
+                    // salt 'ctl*' state.sls heat
+                    try {
+                        salt.enforceState(saltMaster, 'ctl*', 'heat')
+                    } catch (Exception e) {
+                        common.warningMsg('running heat state again')
+                        salt.enforceState(saltMaster, 'ctl*', 'heat')
+                    }
+
                 } catch (Exception e) {
-                    salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.reload', ['apache2'], null, true)
-                    common.warningMsg('reload of apache2. We should continue to run')
+                    common.warningMsg('Some states that require syncdb failed. Restoring production databases')
+                    databases = salt.cmdRun(saltMaster, 'I@mysql:client','salt-call mysql.db_list | grep -v \'upgrade\' | grep -v \'schema\' | awk \'/-/ {print \$2}\'')
+                    if(databases && databases != ""){
+                        databasesList = databases['return'][0].values()[0].trim().tokenize("\n")
+                        for( i = 0; i < databasesList.size(); i++){ 
+                            if(!databasesList[i].toLowerCase().contains('upgrade') && !databasesList[i].toLowerCase().contains('command execution')){
+                                salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'mysql.db_remove', ["${databasesList[i]}"], null, true)
+                                common.warningMsg("removing database ${databasesList[i]}")
+                                salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'file.remove', ["/root/mysql/flags/${databasesList[i]}-installed"], null, true)
+                            }
+                        }
+                    }else{
+                        common.errorMsg("No none _upgrade databases were returned")
+                    }
+
+                    salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
                 }
-                // salt 'ctl01*' state.sls keystone.client
-                salt.enforceState(saltMaster, 'I@keystone:client and ctl*', 'keystone.client')
-                // salt 'ctl*' state.sls glance
-                try {
-                    salt.enforceState(saltMaster, 'ctl*', 'glance')
-                } catch (Exception e) {
-                    common.warningMsg('running glance state again')
-                    salt.enforceState(saltMaster, 'ctl*', 'glance')
-                }                // salt 'ctl*' state.sls glusterfs.client
-                salt.enforceState(saltMaster, 'ctl*', 'glusterfs.client')
-                // salt 'ctl*' state.sls keystone.server
-                salt.enforceState(saltMaster, 'ctl*', 'keystone.server')
-                // salt 'ctl*' state.sls nova
-                try {
-                    salt.enforceState(saltMaster, 'ctl*', 'nova')
-                } catch (Exception e) {
-                    common.warningMsg('running nova state again')
-                    salt.enforceState(saltMaster, 'ctl*', 'nova')
-                }
-                // salt 'ctl*' state.sls cinder
-                try {
-                    salt.enforceState(saltMaster, 'ctl*', 'cinder')
-                } catch (Exception e) {
-                    common.warningMsg('running cinder state again')
-                    salt.enforceState(saltMaster, 'ctl*', 'cinder')
-                }                
-                try {
-                    salt.enforceState(saltMaster, 'ctl*', 'neutron')
-                } catch (Exception e) {
-                    common.warningMsg('running neutron state again')
-                    salt.enforceState(saltMaster, 'ctl*', 'neutron')
-                }
-                // salt 'ctl*' state.sls heat
-                try {
-                    salt.enforceState(saltMaster, 'ctl*', 'heat')
-                } catch (Exception e) {
-                    common.warningMsg('running heat state again')
-                    salt.enforceState(saltMaster, 'ctl*', 'heat')
-                }
+                    
                 // salt 'cmp*' cmd.run 'service nova-compute restart'
                 salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
 
