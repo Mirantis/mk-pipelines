@@ -395,6 +395,30 @@ timestamps {
                 print(_pillar)
                 print(domain)
 
+                _pillar = salt.getGrain(saltMaster, 'I@salt:control', 'id')
+                kvm01 = _pillar['return'][0].values()[0].values()[0]
+                kvm03 = _pillar['return'][0].values()[2].values()[0]
+                kvm02 = _pillar['return'][0].values()[1].values()[0]
+                print(_pillar)
+                print(kvm01)
+                print(kvm02)
+                print(kvm03)
+
+                _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:ctl01:provider')
+                def ctl01NodeProvider = _pillar['return'][0].values()[0]
+
+                _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:ctl02:provider')
+                def ctl02NodeProvider = _pillar['return'][0].values()[0]
+
+                _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:ctl03:provider')
+                def ctl03NodeProvider = _pillar['return'][0].values()[0]
+
+                _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:prx01:provider')
+                def prx01NodeProvider = _pillar['return'][0].values()[0]
+
+                _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:prx02:provider')
+                def prx02NodeProvider = _pillar['return'][0].values()[0]
+
                 salt.runSaltProcessStep(saltMaster, "${prx01NodeProvider}", 'virt.destroy', ["prx01.${domain}"], null, true)
                 salt.runSaltProcessStep(saltMaster, "${prx02NodeProvider}", 'virt.destroy', ["prx02.${domain}"], null, true)
                 salt.runSaltProcessStep(saltMaster, "${ctl01NodeProvider}", 'virt.destroy', ["ctl01.${domain}"], null, true)
