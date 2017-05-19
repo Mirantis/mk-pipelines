@@ -72,7 +72,7 @@ node("python&&docker") {
              }
              parallel buildSteps
           }else{
-            common.infoMsg("Found more than 3 cfg nodes, running parallel group test with PARALLEL_NODE_GROUP_SIZE nodes")
+            common.infoMsg("Found more than 3 cfg nodes or debug enabled, running parallel group test with ${PARALLEL_NODE_GROUP_SIZE} nodes")
             def partitions = common.partitionList(nodes, PARALLEL_NODE_GROUP_SIZE.toInteger())
             for (int i=0; i < partitions.size();i++) {
               def partition = partitions[i]
