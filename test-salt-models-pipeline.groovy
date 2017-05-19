@@ -64,7 +64,7 @@ node("python&&docker") {
       def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
       def buildSteps = [:]
       if(nodes.size() > 1){
-          if(nodes.size() <= 3){
+          if(nodes.size() <= 3 && PARALLEL_NODE_GROUP_SIZE.toInteger() != 1) {
             common.infoMsg("Found <=3  cfg nodes, running parallel test")
              for(int i=0; i < nodes.size();i++){
                def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
@@ -72,8 +72,8 @@ node("python&&docker") {
              }
              parallel buildSteps
           }else{
-            common.infoMsg("Found more than 3 cfg nodes, running parallel group test with 3 nodes")
-            def partitions = common.partitionList(nodes, 3)
+            common.infoMsg("Found more than 3 cfg nodes, running parallel group test with PARALLEL_NODE_GROUP_SIZE nodes")
+            def partitions = common.partitionList(nodes, PARALLEL_NODE_GROUP_SIZE.toInteger())
             for (int i=0; i < partitions.size();i++) {
               def partition = partitions[i]
               buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
