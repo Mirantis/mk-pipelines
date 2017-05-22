@@ -4,6 +4,7 @@
  *  DEFAULT_GIT_REF
  *  DEFAULT_GIT_URL
  *  CREDENTIALS_ID
+ *  EXTRA_FORMULAS
  */
 
 def common = new com.mirantis.mk.Common()
@@ -30,6 +31,15 @@ def checkouted = false
 def merged = false
 node("python&&docker") {
   try{
+    stage("stop old tests"){
+      if (gerritRef) {
+        def runningTestBuildNums = _getRunningTriggeredTestsBuildNumbers(env["JOB_NAME"], GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER)
+        for(int i=0; i<runningTestBuildNums.size(); i++){
+          common.infoMsg("Old test with run number ${runningTestBuildNums[i]} found, stopping")
+          Jenkins.instance.getItemByFullName(env["JOB_NAME"]).getBuildByNumber(runningTestBuildNums[i]).finish(hudson.model.Result.ABORTED, new java.io.IOException("Aborting build"));
+        }
+      }
+    }
     stage("checkout") {
       if (gerritRef) {
         // job is triggered by Gerrit
@@ -118,7 +128,7 @@ def setupAndTestNode(masterName) {
       sh("ls -lRa /srv/salt/reclass")
 
       // setup iniot and verify salt master and minions
-      withEnv(["FORMULAS_SOURCE=pkg", "DEBUG=1", "MASTER_HOSTNAME=${masterName}", "MINION_ID=${masterName}", "HOSTNAME=cfg01", "DOMAIN=mk-ci.local"]){
+      withEnv(["FORMULAS_SOURCE=pkg", "EXTRA_FORMULAS=${EXTRA_FORMULAS}", "DEBUG=1", "MASTER_HOSTNAME=${masterName}", "MINION_ID=${masterName}", "HOSTNAME=cfg01", "DOMAIN=mk-ci.local"]){
           sh("bash -c 'echo $MASTER_HOSTNAME'")
           sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && system_config'")
           sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_bootstrap'")
@@ -145,4 +155,16 @@ def setupAndTestNode(masterName) {
 def testMinion(minionName)
 {
   sh("service salt-master restart && service salt-minion restart && sleep 5 && bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && verify_salt_minion ${minionName}'")
+}
+
+@NonCPS
+def _getRunningTriggeredTestsBuildNumbers(jobName, gerritChangeNumber, excludePatchsetNumber){
+  def gerrit = new com.mirantis.mk.Gerrit()
+  def jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
+  def triggeredBuilds= gerrit.getGerritTriggeredBuilds(jenkinsUtils.getJobRunningBuilds(jobName), gerritChangeNumber, excludePatchsetNumber)
+  def buildNums =[]
+  for(int i=0;i<triggeredBuilds.size();i++){
+      buildNums.add(triggeredBuilds[i].number)
+  }
+  return buildNums
 }

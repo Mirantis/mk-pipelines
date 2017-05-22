@@ -28,6 +28,15 @@ def checkouted = false
 
 node("docker"){
     try {
+        stage("stop old tests"){
+          if (gerritRef) {
+            def runningTestBuildNums = _getRunningTriggeredTestsBuildNumbers(env["JOB_NAME"], GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER)
+            for(int i=0; i<runningTestBuildNums.size(); i++){
+              common.infoMsg("Old test with run number ${runningTestBuildNums[i]} found, stopping")
+              Jenkins.instance.getItemByFullName(env["JOB_NAME"]).getBuildByNumber(runningTestBuildNums[i]).finish(hudson.model.Result.ABORTED, new java.io.IOException("Aborting build"));
+            }
+          }
+        }
         stage ('Checkout source code'){
           if (gerritRef) {
             // job is triggered by Gerrit
@@ -71,4 +80,15 @@ node("docker"){
         // send notification
         common.sendNotification(currentBuild.result, "" ,["slack"])
     }
+}
+@NonCPS
+def _getRunningTriggeredTestsBuildNumbers(jobName, gerritChangeNumber, excludePatchsetNumber){
+  def gerrit = new com.mirantis.mk.Gerrit()
+  def jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
+  def triggeredBuilds= gerrit.getGerritTriggeredBuilds(jenkinsUtils.getJobRunningBuilds(jobName), gerritChangeNumber, excludePatchsetNumber)
+  def buildNums =[]
+  for(int i=0;i<triggeredBuilds.size();i++){
+      buildNums.add(triggeredBuilds[i].number)
+  }
+  return buildNums
 }
