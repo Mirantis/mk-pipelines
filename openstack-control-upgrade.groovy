@@ -26,11 +26,15 @@ timestamps {
         if (STAGE_TEST_UPGRADE.toBoolean() == true) {
             stage('Test upgrade') {
 
-                //salt.enforceState(saltMaster, 'I@salt:master', 'reclass')
 
-                // salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
-                // salt '*' saltutil.sync_all
-                // salt.runSaltProcessStep(saltMaster, '*', 'saltutil.sync_all', [], null, true)
+                try {
+                    salt.enforceState(saltMaster, 'I@salt:master', 'reclass')
+                } catch (Exception e) {
+                    common.warningMsg(" Some parts of Reclass state failed. The most probable reasons were uncommited changes. We should continue to run")
+                }
+
+                salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
+                salt.runSaltProcessStep(saltMaster, '*', 'saltutil.sync_all', [], null, true)
                 
 
                 def _pillar = salt.getGrain(saltMaster, 'I@salt:master', 'domain')
@@ -46,12 +50,8 @@ timestamps {
 
                 _pillar = salt.getGrain(saltMaster, 'I@salt:control', 'id')
                 def kvm01 = _pillar['return'][0].values()[0].values()[0]
-                def kvm03 = _pillar['return'][0].values()[2].values()[0]
-                def kvm02 = _pillar['return'][0].values()[1].values()[0]
                 print(_pillar)
                 print(kvm01)
-                print(kvm02)
-                print(kvm03)
 
                 _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:upg01:provider')
                 def upgNodeProvider = _pillar['return'][0].values()[0]
@@ -131,7 +131,7 @@ timestamps {
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'keystone.server')
                 } catch (Exception e) {
-                    common.warningMsg('Reloading Apache2 and enforcing keystone.server state again')
+                    common.warningMsg('Restarting Apache2 and enforcing keystone.server state again')
                     salt.runSaltProcessStep(saltMaster, 'upg*', 'service.restart', ['apache2'], null, true)
                 }
                 try {
@@ -147,6 +147,13 @@ timestamps {
                     salt.enforceState(saltMaster, 'upg*', 'glance')
                 }
                 salt.enforceState(saltMaster, 'upg*', 'keystone.server')
+                try {
+                    salt.enforceState(saltMaster, 'upg*', 'nova')
+                } catch (Exception e) {
+                    common.warningMsg('running nova state again')
+                    salt.enforceState(saltMaster, 'upg*', 'nova')
+                }
+                // run nova state again as sometimes nova does not enforce itself for some reason
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'nova')
                 } catch (Exception e) {
@@ -192,12 +199,10 @@ timestamps {
 
                 _pillar = salt.getGrain(saltMaster, 'I@salt:control', 'id')
                 kvm01 = _pillar['return'][0].values()[0].values()[0]
-                kvm03 = _pillar['return'][0].values()[2].values()[0]
-                kvm02 = _pillar['return'][0].values()[1].values()[0]
                 print(_pillar)
                 print(kvm01)
-                print(kvm02)
-                print(kvm03)
+
+                def errorOccured = false
 
                 _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:ctl01:provider')
                 def ctl01NodeProvider = _pillar['return'][0].values()[0]
@@ -293,7 +298,7 @@ timestamps {
                     try {
                         salt.enforceState(saltMaster, 'ctl*', ['memcached', 'keystone.server'])
                     } catch (Exception e) {
-                        common.warningMsg('Reloading Apache2 and enforcing keystone.server state again')
+                        common.warningMsg('Restarting Apache2 and enforcing keystone.server state again')
                         salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['apache2'], null, true)
                         salt.enforceState(saltMaster, 'ctl*', 'keystone.server')
                     }
@@ -342,6 +347,7 @@ timestamps {
                     }
 
                 } catch (Exception e) {
+                    errorOccured = true
                     common.warningMsg('Some states that require syncdb failed. Restoring production databases')
                     databases = salt.cmdRun(saltMaster, 'I@mysql:client','salt-call mysql.db_list | grep -v \'upgrade\' | grep -v \'schema\' | awk \'/-/ {print \$2}\'')
                     if(databases && databases != ""){
@@ -359,22 +365,22 @@ timestamps {
                     }
                     common.errorMsg("Stage Real control upgrade failed")
                 }
-                    
-                // salt 'cmp*' cmd.run 'service nova-compute restart'
-                salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
+                if(!errorOccured){
+                    // salt 'cmp*' cmd.run 'service nova-compute restart'
+                    salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
 
-                // salt 'prx*' state.sls linux,openssh,salt.minion,ntp,rsyslog - TODO: proč? už to jednou projelo
-                // salt 'ctl*' state.sls keepalived
-                // salt 'prx*' state.sls keepalived
-                salt.enforceState(saltMaster, 'prx*', 'keepalived')
-                // salt 'prx*' state.sls horizon
-                salt.enforceState(saltMaster, 'prx*', 'horizon')
-                // salt 'prx*' state.sls nginx
-                salt.enforceState(saltMaster, 'prx*', 'nginx')
+                    // salt 'prx*' state.sls linux,openssh,salt.minion,ntp,rsyslog - TODO: proč? už to jednou projelo
+                    // salt 'ctl*' state.sls keepalived
+                    // salt 'prx*' state.sls keepalived
+                    salt.enforceState(saltMaster, 'prx*', 'keepalived')
+                    // salt 'prx*' state.sls horizon
+                    salt.enforceState(saltMaster, 'prx*', 'horizon')
+                    // salt 'prx*' state.sls nginx
+                    salt.enforceState(saltMaster, 'prx*', 'nginx')
 
-                salt.cmdRun(saltMaster, 'ctl01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
+                    salt.cmdRun(saltMaster, 'ctl01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
+                }
             }
-
         }
 
 
@@ -397,12 +403,8 @@ timestamps {
 
                 _pillar = salt.getGrain(saltMaster, 'I@salt:control', 'id')
                 kvm01 = _pillar['return'][0].values()[0].values()[0]
-                kvm03 = _pillar['return'][0].values()[2].values()[0]
-                kvm02 = _pillar['return'][0].values()[1].values()[0]
                 print(_pillar)
                 print(kvm01)
-                print(kvm02)
-                print(kvm03)
 
                 _pillar = salt.getPillar(saltMaster, "${kvm01}", 'salt:control:cluster:internal:node:ctl01:provider')
                 def ctl01NodeProvider = _pillar['return'][0].values()[0]
