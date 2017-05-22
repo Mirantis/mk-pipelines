@@ -3,6 +3,7 @@
  *  DEFAULT_GIT_REF
  *  DEFAULT_GIT_URL
  *  CREDENTIALS_ID
+ *  KITCHEN_TESTS_PARALLEL
  */
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
@@ -62,9 +63,27 @@ node("python&&docker") {
       if (fileExists(".kitchen.yml")) {
         common.infoMsg(".kitchen.yml found, running kitchen tests")
         ruby.ensureRubyEnv()
-        ruby.installKitchen()
+        def kitchenEnvs = []
+        if(fileExists(".travis.yml")){
+          common.infoMsg(".travis.yml found, running custom kitchen init")
+          def kitchenConfigYML = readYaml(file: ".travis.yml")
+          kitchenEnvs=kitchenConfigYML["env"]
+          def kitchenInit = kitchenConfigYML["install"]
+          for(int i=0;i<kitchenInit.size();i++){
+            sh(kitchenInit[i])
+          }
+        }else{
+          common.infoMsg(".travis.yml not found, running default kitchen init")
+          ruby.installKitchen()
+        }
         wrap([$class: 'AnsiColorBuildWrapper']) {
-          ruby.runKitchenTests()
+          if(!kitchenEnvs.isEmpty()){
+            for(int i=0;i<kitchenEnvs.size();i++){
+              ruby.runKitchenTests(kitchenEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
+            }
+          }else{
+            ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
+          }
         }
       } else {
         common.infoMsg(".kitchen.yml not found")
