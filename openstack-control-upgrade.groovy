@@ -131,7 +131,7 @@ timestamps {
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'keystone.server')
                 } catch (Exception e) {
-                    common.warningMsg('Restarting Apache2 and enforcing keystone.server state again')
+                    common.warningMsg('Restarting Apache2')
                     salt.runSaltProcessStep(saltMaster, 'upg*', 'service.restart', ['apache2'], null, true)
                 }
                 try {
@@ -179,12 +179,12 @@ timestamps {
                     salt.enforceState(saltMaster, 'upg*', 'heat')
                 }
                 salt.cmdRun(saltMaster, 'upg01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
-            }
-        }
 
-        if (STAGE_TEST_UPGRADE.toBoolean() == true && STAGE_REAL_UPGRADE.toBoolean() == true) {
-            stage('Ask for manual confirmation') {
-                input message: "Do you want to continue with upgrade?"
+                if (STAGE_TEST_UPGRADE.toBoolean() == true && STAGE_REAL_UPGRADE.toBoolean() == true) {
+                    stage('Ask for manual confirmation') {
+                        input message: "Do you want to continue with upgrade?"
+                    }
+                }
             }
         }
 
@@ -361,7 +361,7 @@ timestamps {
                         }
                         salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
                     }else{
-                        common.errorMsg("No none _upgrade databases were returned. You have to restore production databases before running the real control upgrade again. This is because database schema for some services already happened. To do that delete the production databases and run salt 'I@mysql:client' state.sls mysql.client on the salt-master node")
+                        common.errorMsg("No none _upgrade databases were returned. You have to restore production databases before running the real control upgrade again. This is because database schema for some services already happened. To do that delete the production databases, remove none upgrade database files from /root/mysql/flags/ and run salt 'I@mysql:client' state.sls mysql.client on the salt-master node")
                     }
                     common.errorMsg("Stage Real control upgrade failed")
                 }
@@ -381,20 +381,20 @@ timestamps {
                     salt.cmdRun(saltMaster, 'ctl01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
                 }
             }
-        }
 
-
-        if (STAGE_REAL_UPGRADE.toBoolean() == true && STAGE_ROLLBACK_UPGRADE.toBoolean() == true) {
-            stage('Ask for manual confirmation') {
-                input message: "Please verify that control upgrade was successful. If it did not succeed, in the worst scenario, you can click YES to continue with control-upgrade-rollback. Do you want to continue with the rollback?"
-            }
-            stage('Ask for manual confirmation') {
-                input message: "Do you really want to continue with the rollback?"
+            if (STAGE_REAL_UPGRADE.toBoolean() == true && STAGE_ROLLBACK_UPGRADE.toBoolean() == true) {
+                stage('Ask for manual confirmation') {
+                    input message: "Please verify if the control upgrade was successful. If it did not succeed, in the worst scenario, you can click YES to continue with control-upgrade-rollback. Do you want to continue with the rollback?"
+                }
             }
         }
 
         if (STAGE_ROLLBACK_UPGRADE.toBoolean() == true) {
             stage('Rollback upgrade') {
+
+                stage('Ask for manual confirmation') {
+                    input message: "Do you really want to continue with the rollback?"
+                }
 
                 _pillar = salt.getGrain(saltMaster, 'I@salt:master', 'domain')
                 domain = _pillar['return'][0].values()[0].values()[0]
