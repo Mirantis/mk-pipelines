@@ -37,6 +37,9 @@
  *
  * optional parameters for overwriting soft params
  *   KUBERNETES_HYPERKUBE_IMAGE  Docker repository and tag for hyperkube image
+ *   CALICO_CNI_IMAGE            Docker repository and tag for calico CNI image
+ *   CALICO_NODE_IMAGE           Docker repository and tag for calico node image
+ *   CALICOCTL_IMAGE             Docker repository and tag for calicoctl image
  *
  */
 
@@ -159,6 +162,16 @@ timestamps {
                     // Overwrite Kubernetes vars if specified
                     if (env.getEnvironment().containsKey("KUBERNETES_HYPERKUBE_IMAGE")) {
                         salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_hyperkube_image: ${KUBERNETES_HYPERKUBE_IMAGE}")
+                    }
+                    // Overwrite Calico vars if specified
+                    if (env.getEnvironment().containsKey("CALICO_CNI_IMAGE")) {
+                      salt.runSaltProcessStep(saltmaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_calico_cni_image: ${CALICO_CNI_IMAGE}")
+                    }
+                    if (env.getEnvironment().containsKey("CALICO_NODE_IMAGE")) {
+                      salt.runSaltProcessStep(saltmaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_calico_node_image: ${CALICO_NODE_IMAGE}")
+                    }
+                    if (env.getEnvironment().containsKey("CALICOCTL_IMAGE")) {
+                      salt.runSaltProcessStep(saltmaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_calicoctl_image: ${CALICOCTL_IMAGE}")
                     }
 
                     orchestrate.installKubernetesControl(saltMaster)
