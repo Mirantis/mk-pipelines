@@ -73,6 +73,7 @@ node("python&&docker") {
           if(kitchenInit && !kitchenInit.isEmpty()){
             for(int i=0;i<kitchenInit.size();i++){
               if(kitchenInit[i].trim().startsWith("test -e Gemfile")){ //found Gemfile config
+                common.infoMsg("Custom Gemfile configuration found, using them")
                 ruby.installKitchen(kitchenInit[i].trim())
                 kitchenInstalled = true
               }
@@ -86,8 +87,10 @@ node("python&&docker") {
           ruby.installKitchen()
         }
         wrap([$class: 'AnsiColorBuildWrapper']) {
+          common.infoMsg("Running kitchen testing, parallel mode: " + KITCHEN_TESTS_PARALLEL.toBoolean())
           if(!kitchenEnvs.isEmpty()){
             for(int i=0;i<kitchenEnvs.size();i++){
+              common.infoMsg("Found multiple environment, kitchen running with env: " + kitchenEnvs[i])
               ruby.runKitchenTests(kitchenEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
             }
           }else{
