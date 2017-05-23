@@ -69,10 +69,17 @@ node("python&&docker") {
           def kitchenConfigYML = readYaml(file: ".travis.yml")
           kitchenEnvs=kitchenConfigYML["env"]
           def kitchenInit = kitchenConfigYML["install"]
-          for(int i=0;i<kitchenInit.size();i++){
-            if(!kitchenInit[i].contains("pip install")){ //we dont want to execute pip install
-              sh(kitchenInit[i])
+          def kitchenInstalled = false
+          if(kitchenInit && !kitchenInit.isEmpty()){
+            for(int i=0;i<kitchenInit.size();i++){
+              if(kitchenInit[i].trim().startsWith("test -e Gemfile")){ //found Gemfile config
+                ruby.installKitchen(kitchenInit[i].trim())
+                kitchenInstalled = true
+              }
             }
+          }
+          if(!kitchenInstalled){
+            ruby.installKitchen()
           }
         }else{
           common.infoMsg(".travis.yml not found, running default kitchen init")
