@@ -70,7 +70,9 @@ node("python&&docker") {
           kitchenEnvs=kitchenConfigYML["env"]
           def kitchenInit = kitchenConfigYML["install"]
           for(int i=0;i<kitchenInit.size();i++){
-            sh(kitchenInit[i])
+            if(!kitchenInit[i].contains("pip install")){ //we dont want to execute pip install
+              sh(kitchenInit[i])
+            }
           }
         }else{
           common.infoMsg(".travis.yml not found, running default kitchen init")
