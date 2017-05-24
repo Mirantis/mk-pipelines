@@ -41,6 +41,8 @@
  *   CALICO_CNI_IMAGE            Docker repository and tag for calico CNI image
  *   CALICO_NODE_IMAGE           Docker repository and tag for calico node image
  *   CALICOCTL_IMAGE             Docker repository and tag for calicoctl image
+ *   NETCHECKER_AGENT_IMAGE      Docker repository and tag for netchecker agent image
+ *   NETCHECKER_SERVER_IMAGE      Docker repository and tag for netchecker server image
  *
  */
 
@@ -174,6 +176,15 @@ timestamps {
                     if (env.getEnvironment().containsKey("CALICOCTL_IMAGE")) {
                       salt.runSaltProcessStep(saltmaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_calicoctl_image: ${CALICOCTL_IMAGE}")
                     }
+
+                    // Overwrite netchecker vars if specified
+                    if (env.getEnvironment().containsKey("NETCHECKER_AGENT_IMAGE")) {
+                      salt.runSaltProcessStep(saltmaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_netchecker_agent_image: ${NETCHECKER_AGENT_IMAGE}")
+                    }
+                    if (env.getEnvironment().containsKey("NETCHECKER_SERVER_IMAGE")) {
+                      salt.runSaltProcessStep(saltmaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_netchecker_server_image: ${NETCHECKER_SERVER_IMAGE}")
+                    }
+
 
                     orchestrate.installKubernetesControl(saltMaster)
                 }
