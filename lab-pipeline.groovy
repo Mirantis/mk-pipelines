@@ -2,23 +2,24 @@
  *
  * Launch heat stack with basic k8s
  * Flow parameters:
- *   STACK_TYPE                 Orchestration engine: heat, ''
- *   INSTALL                    What should be installed (k8s, openstack, ...)
- *   TEST                       What should be tested (k8s, openstack, ...)
+ *   STACK_NAME                  Heat stack name
+ *   STACK_TYPE                  Orchestration engine: heat, ''
+ *   STACK_INSTALL               What should be installed (k8s, openstack, ...)
+ *   STACK_TEST                  What should be tested (k8s, openstack, ...)
+ *
+ *   STACK_TEMPLATE_URL          URL to git repo with stack templates
+ *   STACK_TEMPLATE_BRANCH       Stack templates repo branch
+ *   STACK_TEMPLATE_CREDENTIALS  Credentials to the stack templates repo
+ *   STACK_TEMPLATE              Heat stack HOT template
+ *   STACK_DELETE                Delete stack when finished (bool)
+ *   STACK_REUSE                 Reuse stack (don't create one)
+ *   STACK_CLEANUP_JOB           Name of job for deleting Heat stack
  *
  * Expected parameters:
- *
  * required for STACK_TYPE=heat
- *   HEAT_TEMPLATE_URL          URL to git repo with Heat templates
- *   HEAT_TEMPLATE_CREDENTIALS  Credentials to the Heat templates repo
- *   HEAT_TEMPLATE_BRANCH       Heat templates repo branch
- *   HEAT_STACK_TEMPLATE        Heat stack HOT template
  *   HEAT_STACK_ENVIRONMENT     Heat stack environmental parameters
  *   HEAT_STACK_ZONE            Heat stack availability zone
  *   HEAT_STACK_PUBLIC_NET      Heat stack floating IP pool
- *   HEAT_STACK_DELETE          Delete Heat stack when finished (bool)
- *   HEAT_STACK_CLEANUP_JOB     Name of job for deleting Heat stack
- *   HEAT_STACK_REUSE           Reuse Heat stack (don't create one)
  *   OPENSTACK_API_URL          OpenStack API address
  *   OPENSTACK_API_CREDENTIALS  Credentials to the OpenStack API
  *   OPENSTACK_API_PROJECT      OpenStack project to connect to
@@ -67,27 +68,27 @@ timestamps {
                     def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
                     def openstackEnv = "${env.WORKSPACE}/venv"
 
-                    if (HEAT_STACK_REUSE.toBoolean() == true && HEAT_STACK_NAME == '') {
+                    if (STACK_REUSE.toBoolean() == true && STACK_NAME == '') {
                         error("If you want to reuse existing stack you need to provide it's name")
                     }
 
-                    if (HEAT_STACK_REUSE.toBoolean() == false) {
+                    if (STACK_REUSE.toBoolean() == false) {
                         // Don't allow to set custom heat stack name
                         wrap([$class: 'BuildUser']) {
                             if (env.BUILD_USER_ID) {
-                                HEAT_STACK_NAME = "${env.BUILD_USER_ID}-${JOB_NAME}-${BUILD_NUMBER}"
+                                STACK_NAME = "${env.BUILD_USER_ID}-${JOB_NAME}-${BUILD_NUMBER}"
                             } else {
-                                HEAT_STACK_NAME = "jenkins-${JOB_NAME}-${BUILD_NUMBER}"
+                                STACK_NAME = "jenkins-${JOB_NAME}-${BUILD_NUMBER}"
                             }
-                            currentBuild.description = HEAT_STACK_NAME
+                            currentBuild.description = STACK_NAME
                         }
                     }
 
                     // set description
-                    currentBuild.description = "${HEAT_STACK_NAME}"
+                    currentBuild.description = "${STACK_NAME}"
 
                     // get templates
-                    git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
+                    git.checkoutGitRepository('template', STACK_TEMPLATE_URL, STACK_TEMPLATE_BRANCH, STACK_TEMPLATE_CREDENTIALS)
 
                     // create openstack env
                     openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
@@ -97,29 +98,29 @@ timestamps {
                     // Verify possibility of create stack for given user and stack type
                     //
                     wrap([$class: 'BuildUser']) {
-                        if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !HEAT_STACK_REUSE.toBoolean()) {
+                        if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !STACK_REUSE.toBoolean()) {
                             def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", openstackEnv)
                             if(existingStacks.size() >= _MAX_PERMITTED_STACKS){
-                                HEAT_STACK_DELETE = "false"
+                                STACK_DELETE = "false"
                                 throw new Exception("You cannot create new stack, you already have ${_MAX_PERMITTED_STACKS} stacks of this type (${JOB_NAME}). \nStack names: ${existingStacks}")
                             }
                         }
                     }
                     // launch stack
-                    if (HEAT_STACK_REUSE.toBoolean() == false) {
+                    if (STACK_REUSE.toBoolean() == false) {
                         stage('Launch new Heat stack') {
                             // create stack
                             envParams = [
                                 'instance_zone': HEAT_STACK_ZONE,
                                 'public_net': HEAT_STACK_PUBLIC_NET
                             ]
-                            openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+                            openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
                         }
                     }
 
                     // get SALT_MASTER_URL
-                    saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
-                    currentBuild.description = "${HEAT_STACK_NAME}: ${saltMasterHost}"
+                    saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, STACK_NAME, 'salt_master_ip', openstackEnv)
+                    currentBuild.description = "${STACK_NAME}: ${saltMasterHost}"
 
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
                 }
@@ -138,11 +139,11 @@ timestamps {
             // Install
             //
 
-            if (common.checkContains('INSTALL', 'core')) {
+            if (common.checkContains('STACK_INSTALL', 'core')) {
                 stage('Install core infrastructure') {
                     orchestrate.installFoundationInfra(saltMaster)
 
-                    if (common.checkContains('INSTALL', 'kvm')) {
+                    if (common.checkContains('STACK_INSTALL', 'kvm')) {
                         orchestrate.installInfraKvm(saltMaster)
                         orchestrate.installFoundationInfra(saltMaster)
                     }
@@ -152,7 +153,7 @@ timestamps {
             }
 
             // install k8s
-            if (common.checkContains('INSTALL', 'k8s')) {
+            if (common.checkContains('STACK_INSTALL', 'k8s')) {
                 stage('Install Kubernetes infra') {
                     orchestrate.installKubernetesInfra(saltMaster)
                 }
@@ -178,7 +179,7 @@ timestamps {
                 }
 
 
-                if (common.checkContains('INSTALL', 'contrail')) {
+                if (common.checkContains('STACK_INSTALL', 'contrail')) {
                     state('Install Contrail for Kubernetes') {
                         orchestrate.installContrailNetwork(saltMaster)
                         orchestrate.installContrailCompute(saltMaster)
@@ -187,7 +188,7 @@ timestamps {
             }
 
             // install openstack
-            if (common.checkContains('INSTALL', 'openstack')) {
+            if (common.checkContains('STACK_INSTALL', 'openstack')) {
                 // install Infra and control, tests, ...
 
                 stage('Install OpenStack infra') {
@@ -200,9 +201,9 @@ timestamps {
 
                 stage('Install OpenStack network') {
 
-                    if (common.checkContains('INSTALL', 'contrail')) {
+                    if (common.checkContains('STACK_INSTALL', 'contrail')) {
                         orchestrate.installContrailNetwork(saltMaster)
-                    } else if (common.checkContains('INSTALL', 'ovs')) {
+                    } else if (common.checkContains('STACK_INSTALL', 'ovs')) {
                         orchestrate.installOpenstackNetwork(saltMaster)
                     }
 
@@ -213,7 +214,7 @@ timestamps {
                 stage('Install OpenStack compute') {
                     orchestrate.installOpenstackCompute(saltMaster)
 
-                    if (common.checkContains('INSTALL', 'contrail')) {
+                    if (common.checkContains('STACK_INSTALL', 'contrail')) {
                         orchestrate.installContrailCompute(saltMaster)
                     }
                 }
@@ -221,7 +222,7 @@ timestamps {
             }
 
 
-            if (common.checkContains('INSTALL', 'stacklight')) {
+            if (common.checkContains('STACK_INSTALL', 'stacklight')) {
                 stage('Install StackLight') {
                     orchestrate.installStacklightControl(saltMaster)
                     orchestrate.installStacklightClient(saltMaster)
@@ -233,7 +234,7 @@ timestamps {
             //
             def artifacts_dir = '_artifacts/'
 
-            if (common.checkContains('TEST', 'k8s')) {
+            if (common.checkContains('STACK_TEST', 'k8s')) {
                 stage('Run k8s bootstrap tests') {
                     def image = 'tomkukral/k8s-scripts'
                     def output_file = image.replaceAll('/', '-') + '.output'
@@ -271,7 +272,7 @@ timestamps {
                 }
             }
 
-            if (common.checkContains('TEST', 'openstack')) {
+            if (common.checkContains('STACK_TEST', 'openstack')) {
                 stage('Run OpenStack tests') {
                     test.runTempestTests(saltMaster, TEMPEST_IMAGE_LINK)
                 }
@@ -282,7 +283,7 @@ timestamps {
             }
 
             stage('Finalize') {
-                if (INSTALL != '') {
+                if (STACK_INSTALL != '') {
                     try {
                         salt.runSaltProcessStep(saltMaster, '*', 'state.apply', [], null, true)
                     } catch (Exception e) {
@@ -303,12 +304,12 @@ timestamps {
 
             if (STACK_TYPE == 'heat') {
                 // send notification
-                common.sendNotification(currentBuild.result, HEAT_STACK_NAME, ["slack"])
+                common.sendNotification(currentBuild.result, STACK_NAME, ["slack"])
 
-                if (HEAT_STACK_DELETE.toBoolean() == true) {
+                if (STACK_DELETE.toBoolean() == true) {
                     common.errorMsg('Heat job cleanup triggered')
                     stage('Trigger cleanup job') {
-                        build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: HEAT_STACK_NAME]]
+                        build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: STACK_NAME]]
                     }
                 } else {
                     if (currentBuild.result == 'FAILURE') {
