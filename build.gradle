@@ -3,6 +3,10 @@ apply plugin: 'codenarc'
 
 def jcenterRepo = System.getenv('ARTIFACTORY_URL') ?: 'https://artifactory.mcp.mirantis.net/jcenter'
 
+dependencies{
+  compile 'org.codehaus.groovy:groovy-all:2.3.6'
+}
+
 sourceSets {
   main {
     groovy {
@@ -10,8 +14,6 @@ sourceSets {
     }
   }
 }
-
-compileGroovy.enabled = false
 
 repositories {
   maven {
