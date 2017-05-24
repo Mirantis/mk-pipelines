@@ -108,7 +108,7 @@ timestamps {
                                 'instance_zone': HEAT_STACK_ZONE,
                                 'public_net': HEAT_STACK_PUBLIC_NET
                             ]
-                            openstack.createHeatStack(openstackCloud, STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+                            openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
                         }
                     }
 
@@ -299,7 +299,7 @@ timestamps {
                 if (STACK_DELETE.toBoolean() == true) {
                     common.errorMsg('Heat job cleanup triggered')
                     stage('Trigger cleanup job') {
-                        build job: STACK_CLEANUP_JOB, parameters: [[$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME]]
+                        build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME]]
                     }
                 } else {
                     if (currentBuild.result == 'FAILURE') {
