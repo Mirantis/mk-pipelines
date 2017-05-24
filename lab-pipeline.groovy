@@ -320,7 +320,7 @@ timestamps {
                 if (STACK_DELETE.toBoolean() == true) {
                     common.errorMsg('Heat job cleanup triggered')
                     stage('Trigger cleanup job') {
-                        build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: STACK_NAME]]
+                        build job: STACK_CLEANUP_JOB, parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: STACK_NAME]]
                     }
                 } else {
                     if (currentBuild.result == 'FAILURE') {
