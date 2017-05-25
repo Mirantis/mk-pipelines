@@ -101,21 +101,30 @@ node("python&&docker") {
 }
 
 def setupAndTestNode(masterName) {
-  def img = docker.image("ubuntu:latest")
   def saltOpts = "--retcode-passthrough --force-color"
   def common = new com.mirantis.mk.Common()
   def workspace = common.getWorkspace()
+  def imageFound = true
+  def img
+  try {
+    img = docker.image("tcpcloud/salt-models-testing")
+    img.pull()
+  } catch (Throwable e) {
+    img = docker.image("ubuntu:latest")
+    imageFound = false
+  }
 
   img.inside("-u root:root --hostname=${masterName}") {
     wrap([$class: 'AnsiColorBuildWrapper']) {
+      if (!imageFound) {
+        sh("apt-get update && apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev git")
+        sh("pip install git+https://github.com/epcim/reclass.git@pr/fix/fix_raise_UndefinedVariableError")
+      }
       sh("mkdir -p /srv/salt/ || true")
       sh("cp -r ${workspace} /srv/salt/reclass")
-      sh("apt-get update && apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev git")
       sh("svn export --force https://github.com/salt-formulas/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
       sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
       sh("git config --global user.name || git config --global user.name 'CI'")
-      sh("pip install git+https://github.com/epcim/reclass.git@pr/fix/fix_raise_UndefinedVariableError")
-      sh("ls -lRa /srv/salt/reclass")
 
       // setup iniot and verify salt master and minions
       withEnv(["FORMULAS_SOURCE=pkg", "DEBUG=1", "MASTER_HOSTNAME=${masterName}", "MINION_ID=${masterName}", "HOSTNAME=cfg01", "DOMAIN=mk-ci.local"]){
@@ -124,7 +133,6 @@ def setupAndTestNode(masterName) {
           sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_bootstrap'")
           sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_init'")
       }
-      sh("ls -lRa /srv/salt/reclass/classes/service/")
 
       def nodes
       if (DEFAULT_GIT_URL.contains("mk-ci")) {
