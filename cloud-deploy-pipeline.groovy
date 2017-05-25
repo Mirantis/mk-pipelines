@@ -19,6 +19,7 @@
  *
  *   AWS_STACK_REGION           CloudFormation AWS region
  *   AWS_API_CREDENTIALS        AWS Access key ID with  AWS secret access key
+ *   AWS_SSH_KEY                AWS key pair name (used for SSH access)
  *
  *   HEAT_STACK_ENVIRONMENT     Heat stack environmental parameters
  *   HEAT_STACK_ZONE            Heat stack availability zone
@@ -41,6 +42,7 @@
 common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
+aws = new com.mirantis.mk.Aws()
 orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
@@ -114,17 +116,58 @@ timestamps {
 
                     // get SALT_MASTER_URL
                     saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, STACK_NAME, 'salt_master_ip', openstackEnv)
-                    currentBuild.description = "${STACK_NAME}: ${saltMasterHost}"
+                    currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
 
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
-                }
+                } else if (STACK_TYPE == 'aws') {
 
-                if (STACK_TYPE == 'aws') {
-                    saltMasterHost = ''
-                    currentBuild.description = "${STACK_NAME}: ${saltMasterHost}"
+                    def venv_path = 'aws_venv'
+
+                    if (STACK_REUSE.toBoolean() == true && STACK_NAME == '') {
+                        error("If you want to reuse existing stack you need to provide it's name")
+                    }
+
+                    if (STACK_REUSE.toBoolean() == false) {
+                        // Don't allow to set custom stack name
+                        wrap([$class: 'BuildUser']) {
+                            if (env.BUILD_USER_ID) {
+                                STACK_NAME = "${env.BUILD_USER_ID}-${JOB_NAME}-${BUILD_NUMBER}"
+                            } else {
+                                STACK_NAME = "jenkins-${JOB_NAME}-${BUILD_NUMBER}"
+                            }
+                            currentBuild.description = STACK_NAME
+                        }
+                    }
+
+                    // set description
+                    currentBuild.description = "${STACK_NAME}"
+
+                    // prepare configuration
+                    def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
+
+                    if (STACK_REUSE.toBoolean() == false) {
+                        // get templates
+                        git.checkoutGitRepository('template', STACK_TEMPLATE_URL, STACK_TEMPLATE_BRANCH, STACK_TEMPLATE_CREDENTIALS)
+
+                        // setup environment
+                        aws.setupVirtualEnv(venv_path)
+
+                        // start stack
+                        def stack_params = ["ParameterKey=KeyName,ParameterValue=" + AWS_SSH_KEY]
+                        aws.createStack(venv_path, env_vars, STACK_TEMPLATE, STACK_NAME, stack_params)
+                    }
+
+                    // wait for stack to be ready
+                    aws.waitForStatus(venv_path, env_vars, STACK_NAME, 'CREATE_COMPLETE')
+
+                    // get outputs
+                    saltMasterHost = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'SaltMasterIP')
+                    currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
-                }
 
+                } else {
+                    throw new Exception("STACK_TYPE ${STACK_TYPE} is not supported")
+                }
             }
 
             //
