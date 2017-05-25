@@ -30,12 +30,20 @@ timestamps {
                 try {
                     salt.enforceState(saltMaster, 'I@salt:master', 'reclass')
                 } catch (Exception e) {
-                    common.warningMsg(" Some parts of Reclass state failed. The most probable reasons were uncommited changes. We should continue to run")
+                    common.warningMsg("Some parts of Reclass state failed. The most probable reasons were uncommited changes. We should continue to run")
                 }
 
-                salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
-                salt.runSaltProcessStep(saltMaster, '*', 'saltutil.sync_all', [], null, true)
+                try {
+                    salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
+                } catch (Exception e) {
+                    common.warningMsg("No response from some minions. We should continue to run")
+                }
                 
+                try {
+                    salt.runSaltProcessStep(saltMaster, '*', 'saltutil.sync_all', [], null, true)
+                } catch (Exception e) {
+                    common.warningMsg("No response from some minions. We should continue to run")
+                }
 
                 def _pillar = salt.getGrain(saltMaster, 'I@salt:master', 'domain')
                 def domain = _pillar['return'][0].values()[0].values()[0]
