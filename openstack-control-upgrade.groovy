@@ -110,7 +110,7 @@ timestamps {
                 salt.cmdRun(saltMaster, 'I@backupninja:client', "arp -d ${backupninja_backup_host}")
                 salt.runSaltProcessStep(saltMaster, 'I@backupninja:client', 'ssh.set_known_host', ["root", "${backupninja_backup_host}"], null, true)
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/101.mysql')
-                salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/200.backup.rsync')
+                salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/200.backup.rsync > /tmp/backupninjalog')
 
 
                 def databases = salt.cmdRun(saltMaster, 'I@mysql:client','salt-call mysql.db_list | grep upgrade | awk \'/-/ {print \$2}\'')
