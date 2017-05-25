@@ -135,12 +135,14 @@ timestamps {
                             } else {
                                 STACK_NAME = "jenkins-${JOB_NAME}-${BUILD_NUMBER}"
                             }
-                            currentBuild.description = STACK_NAME
                         }
+
+                        // no underscore in STACK_NAME
+                        STACK_NAME = STACK_NAME.replaceAll('_', '-')
                     }
 
                     // set description
-                    currentBuild.description = "${STACK_NAME}"
+                    currentBuild.description = STACK_NAME
 
                     // prepare configuration
                     def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
