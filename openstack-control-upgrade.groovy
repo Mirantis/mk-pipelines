@@ -262,7 +262,7 @@ timestamps {
 
 
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/101.mysql')
-                salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/200.backup.rsync')
+                salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/200.backup.rsync > /tmp/backupninjalog')
 
                 try {
                     salt.cmdRun(saltMaster, 'I@salt:master', "salt-key -d ctl01.${domain},ctl02.${domain},ctl03.${domain},prx01.${domain},prx02.${domain} -y")
