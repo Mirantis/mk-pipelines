@@ -11,6 +11,7 @@ def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
 def git = new com.mirantis.mk.Git()
+def saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
 def gerritRef
 try {
@@ -71,6 +72,7 @@ node("python&&docker") {
     }
 
     stage("test-nodes") {
+      def workspace = common.getWorkspace()
       def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
       def buildSteps = [:]
       if(nodes.size() > 1){
@@ -78,7 +80,7 @@ node("python&&docker") {
             common.infoMsg("Found <=3  cfg nodes, running parallel test")
              for(int i=0; i < nodes.size();i++){
                def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-               buildSteps.put("node-${basename}", { setupAndTestNode(basename) })
+               buildSteps.put("node-${basename}", { saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace) })
              }
              parallel buildSteps
           }else{
@@ -89,7 +91,7 @@ node("python&&docker") {
               buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
               for(int k=0; k < partition.size;k++){
                   def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-                  buildSteps.get("partition-${i}").put(basename, { setupAndTestNode(basename) })
+                  buildSteps.get("partition-${i}").put(basename, { saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace) })
               }
             }
             common.serial(buildSteps)
@@ -97,7 +99,7 @@ node("python&&docker") {
       }else{
           common.infoMsg("Found one cfg node, running single test")
           def basename = sh(script: "basename ${nodes[0]} .yml", returnStdout: true).trim()
-          setupAndTestNode(basename)
+          saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace)
       }
     }
 
@@ -108,61 +110,6 @@ node("python&&docker") {
   } finally {
      common.sendNotification(currentBuild.result,"",["slack"])
   }
-}
-
-def setupAndTestNode(masterName) {
-  def saltOpts = "--retcode-passthrough --force-color"
-  def common = new com.mirantis.mk.Common()
-  def workspace = common.getWorkspace()
-  def imageFound = true
-  def img
-  try {
-    img = docker.image("tcpcloud/salt-models-testing")
-    img.pull()
-  } catch (Throwable e) {
-    img = docker.image("ubuntu:latest")
-    imageFound = false
-  }
-
-  img.inside("-u root:root --hostname=${masterName}") {
-    wrap([$class: 'AnsiColorBuildWrapper']) {
-      if (!imageFound) {
-        sh("apt-get update && apt-get install -y curl subversion git python-pip sudo python-pip python-dev zlib1g-dev git")
-        sh("pip install git+https://github.com/epcim/reclass.git@pr/fix/fix_raise_UndefinedVariableError")
-      }
-      sh("mkdir -p /srv/salt/ || true")
-      sh("cp -r ${workspace} /srv/salt/reclass")
-      sh("svn export --force https://github.com/salt-formulas/salt-formulas/trunk/deploy/scripts /srv/salt/scripts")
-      sh("git config --global user.email || git config --global user.email 'ci@ci.local'")
-      sh("git config --global user.name || git config --global user.name 'CI'")
-
-      // setup iniot and verify salt master and minions
-      withEnv(["FORMULAS_SOURCE=pkg", "EXTRA_FORMULAS=${EXTRA_FORMULAS}", "DEBUG=1", "MASTER_HOSTNAME=${masterName}", "MINION_ID=${masterName}", "HOSTNAME=cfg01", "DOMAIN=mk-ci.local"]){
-          sh("bash -c 'echo $MASTER_HOSTNAME'")
-          sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && system_config'")
-          sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_bootstrap'")
-          sh("bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && saltmaster_init'")
-      }
-
-      def nodes
-      if (DEFAULT_GIT_URL.contains("mk-ci")) {
-        nodes = sh script: "find /srv/salt/reclass/nodes -name '*.yml' | grep -v 'cfg*.yml'", returnStdout: true
-      } else {
-        nodes = sh script:"find /srv/salt/reclass/nodes/_generated -name '*.yml' | grep -v 'cfg*.yml'", returnStdout: true
-      }
-      for (minion in nodes.tokenize()) {
-        def basename = sh script: "basename ${minion} .yml", returnStdout: true
-        if (!basename.trim().contains(masterName)) {
-          testMinion(basename.trim())
-        }
-      }
-    }
-  }
-}
-
-def testMinion(minionName)
-{
-  sh("service salt-master restart && service salt-minion restart && sleep 5 && bash -c 'source /srv/salt/scripts/salt-master-init.sh; cd /srv/salt/scripts && verify_salt_minion ${minionName}'")
 }
 
 @NonCPS
