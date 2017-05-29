@@ -59,7 +59,7 @@ try {
 } catch (MissingPropertyException e) {
   try {
     STACK_INSTALL = INSTALL
-  } catch (MissingPropertyException e) {
+  } catch (MissingPropertyException e2) {
     common.errorMsg("Property STACK_INSTALL or INSTALL not found!")
   }
 }
