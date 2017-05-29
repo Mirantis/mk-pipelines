@@ -53,6 +53,18 @@ orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 
+// try to get STACK_INSTALL or fallback to INSTALL if exists
+try {
+  def temporary = STACK_INSTALL
+} catch (MissingPropertyException e) {
+  try {
+    STACK_INSTALL = INSTALL
+  } catch (MissingPropertyException e) {
+    common.errorMsg("Property STACK_INSTALL or INSTALL not found!")
+  }
+}
+
+
 _MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/overwrite.yml"
 
