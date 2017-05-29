@@ -55,7 +55,7 @@ node {
 
     stage('Connect to OpenStack cloud') {
         openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT,
-        OPENSTACK_API_PROJECT_DOMAIN_ID, OPENSTACK_API_USER_DOMAIN_ID)
+        "", OPENSTACK_API_PROJECT_DOMAIN_ID, OPENSTACK_API_USER_DOMAIN_ID, OPENSTACK_API_VERSION)
         openstack.getKeystoneToken(openstackCloud, openstackEnv)
     }
 

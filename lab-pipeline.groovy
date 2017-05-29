@@ -23,6 +23,9 @@
  *   OPENSTACK_API_URL          OpenStack API address
  *   OPENSTACK_API_CREDENTIALS  Credentials to the OpenStack API
  *   OPENSTACK_API_PROJECT      OpenStack project to connect to
+ *   OPENSTACK_PROJECT_DOMAIN   Domain for OpenStack project
+ *   OPENSTACK_PROJECT_ID       ID for OpenStack project
+ *   OPENSTACK_USER_DOMAIN      Domain for OpenStack user
  *   OPENSTACK_API_CLIENT       Versions of OpenStack python clients
  *   OPENSTACK_API_VERSION      Version of the OpenStack API (2/3)
  *
@@ -94,7 +97,11 @@ timestamps {
 
                     // create openstack env
                     openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
-                    openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+                    openstackCloud = openstack.createOpenstackEnv(
+                        OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
+                        OPENSTACK_API_PROJECT,OPENSTACK_PROJECT_DOMAIN,
+                        OPENSTACK_PROJECT_ID, OPENSTACK_USER_DOMAIN,
+                        OPENSTACK_API_VERSION)
                     openstack.getKeystoneToken(openstackCloud, openstackEnv)
                     //
                     // Verify possibility of create stack for given user and stack type
