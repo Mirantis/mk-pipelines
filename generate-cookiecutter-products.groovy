@@ -59,7 +59,7 @@ timestamps {
             }
 
             stage('Generate product CI/CD') {
-                if (templateContext.default_context.cicd_enabled.toBoolean()) {
+                if (templateContext.default_context.cicd_enabled && templateContext.default_context.cicd_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/cicd"
                     templateOutputDir = "${env.WORKSPACE}/template/output/cicd"
                     sh "mkdir -p ${templateOutputDir}"
@@ -70,7 +70,7 @@ timestamps {
             }
 
             stage('Generate product OpenContrail') {
-                if (templateContext.default_context.opencontrail_enabled.toBoolean()) {
+                if (templateContext.default_context.opencontrail_enabled && templateContext.default_context.opencontrail_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/opencontrail"
                     templateOutputDir = "${env.WORKSPACE}/template/output/opencontrail"
                     sh "mkdir -p ${templateOutputDir}"
@@ -81,7 +81,7 @@ timestamps {
             }
 
             stage('Generate product Kubernetes') {
-                if (templateContext.default_context.kubernetes_enabled.toBoolean()) {
+                if (templateContext.default_context.kubernetes_enabled && templateContext.default_context.kubernetes_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/kubernetes"
                     templateOutputDir = "${env.WORKSPACE}/template/output/kubernetes"
                     sh "mkdir -p ${templateOutputDir}"
@@ -92,7 +92,7 @@ timestamps {
             }
 
             stage('Generate product OpenStack') {
-                if (templateContext.default_context.openstack_enabled.toBoolean()) {
+                if (templateContext.default_context.openstack_enabled && templateContext.default_context.openstack_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/openstack"
                     templateOutputDir = "${env.WORKSPACE}/template/output/openstack"
                     sh "mkdir -p ${templateOutputDir}"
@@ -103,7 +103,7 @@ timestamps {
             }
 
             stage('Generate product StackLight') {
-                if (templateContext.default_context.stacklight_enabled.toBoolean()) {
+                if (templateContext.default_context.stacklight_enabled && templateContext.default_context.stacklight_enabled.toBoolean()) {
                     templateDir = "${templateEnv}/cluster_product/stacklight"
                     templateOutputDir = "${env.WORKSPACE}/template/output/stacklight"
                     sh "mkdir -p ${templateOutputDir}"
