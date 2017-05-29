@@ -209,6 +209,21 @@ timestamps {
                     salt.enforceState(saltMaster, 'I@jenkins:client', 'jenkins', true)
                 }
 
+                // Postgres client - initialize OSS services databases
+                timeout(300){
+                    println "Waiting for postgresql database to come up.."
+                    salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'while true; do if docker service logs postgresql_db | grep "ready to accept"; then break; else sleep 5; fi; done')
+                }
+                salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'postgresql.client')
+
+                // Setup postgres database with integration between
+                // Pushkin notification service and Security Monkey security audit service
+                timeout(10) {
+                    println "Waiting for Pushkin to come up.."
+                    salt.cmdRun(saltMaster, 'I@docker:swarm:role:master', 'while true; do curl -sf 172.16.10.254:8887/apps >/dev/null && break; done')
+                }
+                salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'postgresql.client', true)
+
                 // Rundeck
                 timeout(10) {
                     println "Waiting for Rundeck to come up.."
