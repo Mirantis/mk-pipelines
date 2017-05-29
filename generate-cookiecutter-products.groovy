@@ -17,11 +17,13 @@
 common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
+saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
 timestamps {
-    node() {
+    node("python&&docker") {
         def templateEnv = "${env.WORKSPACE}/template"
         def modelEnv = "${env.WORKSPACE}/model"
+        def testEnv = "${env.WORKSPACE}/test"
 
         try {
             def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
@@ -48,68 +50,20 @@ timestamps {
                 }
             }
 
-            stage('Generate base infrastructure') {
-                templateDir = "${templateEnv}/cluster_product/infra"
-                templateOutputDir = "${env.WORKSPACE}/template/output/infra"
-                sh "mkdir -p ${templateOutputDir}"
-                sh "mkdir -p ${outputDestination}"
-                python.setupCookiecutterVirtualenv(cutterEnv)
-                python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-            }
-
-            stage('Generate product CI/CD') {
-                if (templateContext.default_context.cicd_enabled && templateContext.default_context.cicd_enabled.toBoolean()) {
-                    templateDir = "${templateEnv}/cluster_product/cicd"
-                    templateOutputDir = "${env.WORKSPACE}/template/output/cicd"
-                    sh "mkdir -p ${templateOutputDir}"
-                    python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-                }
-            }
-
-            stage('Generate product OpenContrail') {
-                if (templateContext.default_context.opencontrail_enabled && templateContext.default_context.opencontrail_enabled.toBoolean()) {
-                    templateDir = "${templateEnv}/cluster_product/opencontrail"
-                    templateOutputDir = "${env.WORKSPACE}/template/output/opencontrail"
-                    sh "mkdir -p ${templateOutputDir}"
-                    python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-                }
-            }
-
-            stage('Generate product Kubernetes') {
-                if (templateContext.default_context.kubernetes_enabled && templateContext.default_context.kubernetes_enabled.toBoolean()) {
-                    templateDir = "${templateEnv}/cluster_product/kubernetes"
-                    templateOutputDir = "${env.WORKSPACE}/template/output/kubernetes"
-                    sh "mkdir -p ${templateOutputDir}"
-                    python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-                }
-            }
-
-            stage('Generate product OpenStack') {
-                if (templateContext.default_context.openstack_enabled && templateContext.default_context.openstack_enabled.toBoolean()) {
-                    templateDir = "${templateEnv}/cluster_product/openstack"
-                    templateOutputDir = "${env.WORKSPACE}/template/output/openstack"
-                    sh "mkdir -p ${templateOutputDir}"
-                    python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-                }
-            }
-
-            stage('Generate product StackLight') {
-                if (templateContext.default_context.stacklight_enabled && templateContext.default_context.stacklight_enabled.toBoolean()) {
-                    templateDir = "${templateEnv}/cluster_product/stacklight"
-                    templateOutputDir = "${env.WORKSPACE}/template/output/stacklight"
-                    sh "mkdir -p ${templateOutputDir}"
-                    python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+            def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
+            for (product in productList) {
+                def stagename = (product == "infra") ? "Generate base infrastructure" : "Generate product ${product}"
+                stage(stagename) {
+                    if (product == "infra" || (templateContext.default_context["${product}_enabled"]
+                        && templateContext.default_context["${product}_enabled"].toBoolean())) {
+                        templateDir = "${templateEnv}/cluster_product/${product}"
+                        templateOutputDir = "${env.WORKSPACE}/template/output/${product}"
+                        sh "mkdir -p ${templateOutputDir}"
+                        sh "mkdir -p ${outputDestination}"
+                        python.setupCookiecutterVirtualenv(cutterEnv)
+                        python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
+                        sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+                    }
                 }
             }
 
@@ -128,6 +82,15 @@ parameters:
 """
                 sh "mkdir -p ${modelEnv}/nodes/"
                 writeFile(file: nodeFile, text: nodeString)
+            }
+
+            stage("Test") {
+                if (RECLASS_MODEL_URL == "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
+                    sh("cp -r ${modelEnv} ${testEnv}")
+                    def defaultReclassModel = "ssh://jenkins-mk@gerrit.mcp.mirantis.net:29418/salt-models/reclass-system"
+                    git.checkoutGitRepository("${testEnv}/classes/system", defaultReclassModel, RECLASS_MODEL_BRANCH, RECLASS_MODEL_CREDENTIALS)
+                    saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", "", testEnv)
+                }
             }
 
             stage ('Save changes to Reclass model') {
