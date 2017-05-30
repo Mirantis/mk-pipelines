@@ -1,9 +1,10 @@
 common = new com.mirantis.mk.Common()
+gerrit = new com.mirantis.mk.Gerrit()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
-def generateSaltMaster(modelEnv) {
+def generateSaltMaster(modelEnv, clusterDomain, clusterName) {
     def nodeFile = "${modelEnv}/nodes/cfg01.${clusterDomain}.yml"
     def nodeString = """classes:
 - cluster.${clusterName}.infra.config
@@ -20,53 +21,69 @@ parameters:
     writeFile(file: nodeFile, text: nodeString)
 }
 
-def generate(contextFile) {
-    def templateEnv = "${env.WORKSPACE}/template"
-    def baseName = sh(script: "basename ${contextFile} .yml", returnStdout: true)
-    def modelEnv = "${env.WORKSPACE}/model-${baseName}"
-    def cookiecutterTemplateContext = readFile(file: "${env.WORKSPACE}/contexts/contextFile")
-    def templateContext = readYaml text: cookiecutterTemplateContext
+def generateModel(contextFile, cutterEnv) {
+    def templateEnv = "${env.WORKSPACE}"
+    def modelEnv = "${env.WORKSPACE}/model"
+    def basename = sh(script: "basename ${contextFile} .yml", returnStdout: true).trim()
+    def generatedModel = "${modelEnv}/${basename}"
+    def testEnv = "${env.WORKSPACE}/test"
+    def content = readFile(file: "${templateEnv}/contexts/${contextFile}")
+    def templateContext = readYaml text: content
     def clusterDomain = templateContext.default_context.cluster_domain
     def clusterName = templateContext.default_context.cluster_name
-    def cutterEnv = "${env.WORKSPACE}/cutter"
-    def jinjaEnv = "${env.WORKSPACE}/jinja"
-    def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
+    def outputDestination = "${generatedModel}/classes/cluster/${clusterName}"
     def targetBranch = "feature/${clusterName}"
-    def templateBaseDir = "${env.WORKSPACE}/template"
-    def templateDir = "${templateEnv}/template/dir"
+    def templateBaseDir = "${env.WORKSPACE}"
+    def templateDir = "${templateEnv}/dir"
     def templateOutputDir = templateBaseDir
-    sh("rm -rf ${templateBaseDir} || true")
+    sh "rm -rf ${generatedModel} || true"
 
-    def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
-    for (product in productList) {
-        def stagename = (product == "infra") ? "Generate base infrastructure" : "Generate product ${product}"
-        println stagename
-        if (product == "infra" || (templateContext.default_context["${product}_enabled"]
-            && templateContext.default_context["${product}_enabled"].toBoolean())) {
-            templateDir = "${templateEnv}/cluster_product/${product}"
-            templateOutputDir = "${env.WORKSPACE}/template/output/${product}"
-            sh "mkdir -p ${templateOutputDir}"
-            sh "mkdir -p ${outputDestination}"
-            python.setupCookiecutterVirtualenv(cutterEnv)
-            python.buildCookiecutterTemplate(templateDir, cookiecutterTemplateContext, templateOutputDir, cutterEnv, templateBaseDir)
-            sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+    stage("Generate model from ${contextFile}") {
+        def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
+        for (product in productList) {
+            def stagename = (product == "infra") ? "Generate base infrastructure" : "Generate product ${product}"
+            if (product == "infra" || (templateContext.default_context["${product}_enabled"]
+                && templateContext.default_context["${product}_enabled"].toBoolean())) {
+                templateDir = "${templateEnv}/cluster_product/${product}"
+                templateOutputDir = "${env.WORKSPACE}/output/${product}"
+                sh "rm -rf ${templateOutputDir} || true"
+                sh "mkdir -p ${templateOutputDir}"
+                sh "mkdir -p ${outputDestination}"
+                python.buildCookiecutterTemplate(templateDir, content, templateOutputDir, cutterEnv, templateBaseDir)
+                sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+            }
         }
+        generateSaltMaster(generatedModel, clusterDomain, clusterName)
     }
-    generateSaltMaster(modelEnv)
 }
 
-def testModel(contextFile) {
-    def baseName = sh(script: "basename ${contextFile} .yml", returnStdout: true)
-    def modelEnv = "${env.WORKSPACE}/model-${baseName}"
-    git.checkoutGitRepository("${modelEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, RECLASS_MODEL_CREDENTIALS)
-    saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", "", modelEnv)
+def testModel(contextFile, testEnv) {
+    def templateEnv = "${env.WORKSPACE}"
+    def content = readFile(file: "${templateEnv}/contexts/${contextFile}.yml")
+    def templateContext = readYaml text: content
+    def clusterDomain = templateContext.default_context.cluster_domain
+    git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
+    saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", "", testEnv)
+}
+
+def gerritRef
+try {
+  gerritRef = GERRIT_REFSPEC
+} catch (MissingPropertyException e) {
+  gerritRef = null
 }
 
 timestamps {
     node("python&&docker") {
-        def templateEnv = "${env.WORKSPACE}/template"
+        def templateEnv = "${env.WORKSPACE}"
+        def cutterEnv = "${env.WORKSPACE}/cutter"
+        def jinjaEnv = "${env.WORKSPACE}/jinja"
 
         try {
+            stage("Cleanup") {
+                sh("rm -rf * || true")
+            }
+
             stage ('Download Cookiecutter template') {
                 if (gerritRef) {
                     def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
@@ -79,29 +96,43 @@ timestamps {
                         common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
                     }
                 } else {
-                    gerrit.gerritPatchsetCheckout(COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, "HEAD", CREDENTIALS_ID)
+                    git.checkoutGitRepository(templateEnv, "ssh://jenkins-mk@gerrit.mcp.mirantis.net:29418/mk/cookiecutter-templates", COOKIECUTTER_TEMPLATE_BRANCH, CREDENTIALS_ID)
                 }
             }
 
+            stage("Setup") {
+                python.setupCookiecutterVirtualenv(cutterEnv)
+            }
+
             def contextFiles
-            dir("contexts") {
+            dir("${templateEnv}/contexts") {
                 contextFiles = findFiles(glob: "*.yml")
             }
 
-            for (contextFile in contextFiles) {
-                generate(contextFile)
+            def contextFileList = []
+            for (int i = 0; i < contextFiles.size(); i++) {
+                //generateModel(contextFiles[i], cutterEnv)
+                contextFileList << contextFiles[i]
+            }
+
+            stage("generate-model") {
+                def buildSteps = [:]
+                for (contextFile in contextFileList) {
+                    buildSteps[contextFile] = { generateModel(contextFile, cutterEnv) }
+                }
+                common.serial(buildSteps)
             }
 
             stage("test-nodes") {
-                def partitions = common.partitionList(contextFiles, 3)
+                def partitions = common.partitionList(contextFileList, 3)
                 def buildSteps = [:]
                 for (int i = 0; i < partitions.size(); i++) {
                     def partition = partitions[i]
                     buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
                     for(int k = 0; k < partition.size; k++){
                         def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-                        def modelEnv = "${env.WORKSPACE}/model-${baseName}"
-                        buildSteps.get("partition-${i}").put(basename, { saltModelTesting.setupAndTestNode(basename, "", modelEnv) })
+                        def testEnv = "${env.WORKSPACE}/model/${basename}"
+                        buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv) })
                     }
                 }
                 common.serial(buildSteps)
