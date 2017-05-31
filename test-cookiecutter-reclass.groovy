@@ -41,7 +41,6 @@ def generateModel(modelFile, cutterEnv) {
 
     def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
     for (product in productList) {
-        def stagename = (product == "infra") ? "Generate base infrastructure" : "Generate product ${product}"
         if (product == "infra" || (templateContext.default_context["${product}_enabled"]
             && templateContext.default_context["${product}_enabled"].toBoolean())) {
             templateDir = "${templateEnv}/cluster_product/${product}"
@@ -95,7 +94,7 @@ timestamps {
                         common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
                     }
                 } else {
-                    git.checkoutGitRepository(templateEnv, "ssh://jenkins-mk@gerrit.mcp.mirantis.net:29418/mk/cookiecutter-templates", COOKIECUTTER_TEMPLATE_BRANCH, CREDENTIALS_ID)
+                    git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, CREDENTIALS_ID)
                 }
             }
 
@@ -119,8 +118,6 @@ timestamps {
                 }
             }
 
-            sh("ls -lRa")
-
             stage("test-nodes") {
                 def partitions = common.partitionList(contextFileList, 3)
                 def buildSteps = [:]
@@ -141,7 +138,7 @@ timestamps {
              throw e
         } finally {
             stage ('Clean workspace directories') {
-                sh(returnStatus: true, script: "rm -rfv *")
+                sh(returnStatus: true, script: "rm -rfv * > /dev/null || true")
             }
             common.sendNotification(currentBuild.result,"",["slack"])
         }
