@@ -71,13 +71,6 @@ try {
   gerritRef = null
 }
 
-def testOption
-try {
-  testOption = TEST_OPTION
-} catch (MissingPropertyException e) {
-  testOption = "salt-model"
-}
-
 timestamps {
     node("python&&docker") {
         def templateEnv = "${env.WORKSPACE}"
@@ -125,7 +118,7 @@ timestamps {
                 }
             }
 
-            if (testOption == "salt-model") {
+            if (gerritRef) {
                 stage("test-nodes") {
                     def partitions = common.partitionList(contextFileList, PARALLEL_NODE_GROUP_SIZE.toInteger())
                     def buildSteps = [:]
