@@ -118,7 +118,7 @@ timestamps {
                 }
             }
 
-            if (gerritRef) {
+            if (!gerritRef) {
                 stage("test-nodes") {
                     def partitions = common.partitionList(contextFileList, PARALLEL_NODE_GROUP_SIZE.toInteger())
                     def buildSteps = [:]
