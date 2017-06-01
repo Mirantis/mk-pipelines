@@ -118,21 +118,19 @@ timestamps {
                 }
             }
 
-            if (!gerritRef) {
-                stage("test-nodes") {
-                    def partitions = common.partitionList(contextFileList, PARALLEL_NODE_GROUP_SIZE.toInteger())
-                    def buildSteps = [:]
-                    for (int i = 0; i < partitions.size(); i++) {
-                        def partition = partitions[i]
-                        buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
-                        for(int k = 0; k < partition.size; k++){
-                            def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-                            def testEnv = "${env.WORKSPACE}/model/${basename}"
-                            buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv) })
-                        }
+            stage("test-nodes") {
+                def partitions = common.partitionList(contextFileList, PARALLEL_NODE_GROUP_SIZE.toInteger())
+                def buildSteps = [:]
+                for (int i = 0; i < partitions.size(); i++) {
+                    def partition = partitions[i]
+                    buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
+                    for(int k = 0; k < partition.size; k++){
+                        def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
+                        def testEnv = "${env.WORKSPACE}/model/${basename}"
+                        buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv) })
                     }
-                    common.serial(buildSteps)
                 }
+                common.serial(buildSteps)
             }
 
         } catch (Throwable e) {
