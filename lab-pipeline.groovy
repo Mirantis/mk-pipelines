@@ -56,11 +56,7 @@ orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 
-
-
-
 _MAX_PERMITTED_STACKS = 2
-overwriteFile = "/srv/salt/reclass/classes/cluster/overwrite.yml"
 
 timestamps {
     node {
@@ -184,28 +180,27 @@ timestamps {
                 stage('Install Kubernetes control') {
 
                     // Overwrite Kubernetes vars if specified
-                    if (env.getEnvironment().containsKey("KUBERNETES_HYPERKUBE_IMAGE")) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_hyperkube_image: ${KUBERNETES_HYPERKUBE_IMAGE}")
+                    if (env.getEnvironment().containsKey('KUBERNETES_HYPERKUBE_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_hyperkube_image', KUBERNETES_HYPERKUBE_IMAGE)
                     }
                     // Overwrite Calico vars if specified
-                    if (env.getEnvironment().containsKey("CALICO_CNI_IMAGE")) {
-                      salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_calico_cni_image: ${CALICO_CNI_IMAGE}")
+                    if (env.getEnvironment().containsKey('CALICO_CNI_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_calico_cni_image', CALICO_CNI_IMAGE)
                     }
-                    if (env.getEnvironment().containsKey("CALICO_NODE_IMAGE")) {
-                      salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_calico_node_image: ${CALICO_NODE_IMAGE}")
+                    if (env.getEnvironment().containsKey('CALICO_NODE_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_calico_image', CALICO_NODE_IMAGE)
                     }
-                    if (env.getEnvironment().containsKey("CALICOCTL_IMAGE")) {
-                      salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_calicoctl_image: ${CALICOCTL_IMAGE}")
+                    if (env.getEnvironment().containsKey('CALICOCTL_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_calicoctl_image', CALICOCTL_IMAGE)
                     }
 
                     // Overwrite netchecker vars if specified
-                    if (env.getEnvironment().containsKey("NETCHECKER_AGENT_IMAGE")) {
-                      salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_netchecker_agent_image: ${NETCHECKER_AGENT_IMAGE}")
+                    if (env.getEnvironment().containsKey('NETCHECKER_AGENT_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_netchecker_agent_image', NETCHECKER_AGENT_IMAGE)
                     }
-                    if (env.getEnvironment().containsKey("NETCHECKER_SERVER_IMAGE")) {
-                      salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_netchecker_server_image: ${NETCHECKER_SERVER_IMAGE}")
+                    if (env.getEnvironment().containsKey('NETCHECKER_SERVER_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_netchecker_server_image', NETCHECKER_SERVER_IMAGE)
                     }
-
 
                     orchestrate.installKubernetesControl(saltMaster)
                 }
