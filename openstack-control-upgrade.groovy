@@ -120,11 +120,15 @@ timestamps {
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/101.mysql')
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/200.backup.rsync > /tmp/backupninjalog')
 
+                salt.enforceState(saltMaster, 'I@xtrabackup:server', 'xtrabackup')
+                salt.enforceState(saltMaster, 'I@xtrabackup:client', 'openssh.client')
+                salt.cmdRun(saltMaster, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
+                salt.cmdRun(saltMaster, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh'")
 
                 def databases = salt.cmdRun(saltMaster, 'I@mysql:client','salt-call mysql.db_list | grep upgrade | awk \'/-/ {print \$2}\'')
                 if(databases && databases != ""){
                     def databasesList = databases['return'][0].values()[0].trim().tokenize("\n")
-                    for( i = 0; i < databasesList.size(); i++){ 
+                    for( i = 0; i < databasesList.size(); i++){
                         if(databasesList[i].toLowerCase().contains('upgrade')){
                             salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'mysql.db_remove', ["${databasesList[i]}"], null, true)
                             common.warningMsg("removing database ${databasesList[i]}")
@@ -268,9 +272,7 @@ timestamps {
                 salt.runSaltProcessStep(saltMaster, "${ctl02NodeProvider}", 'virt.undefine', ["ctl02.${domain}"], null, true)
                 salt.runSaltProcessStep(saltMaster, "${ctl03NodeProvider}", 'virt.undefine', ["ctl03.${domain}"], null, true)
 
-
-                salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/101.mysql')
-                salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/200.backup.rsync > /tmp/backupninjalog')
+                salt.cmdRun(saltMaster, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh'")
 
                 try {
                     salt.cmdRun(saltMaster, 'I@salt:master', "salt-key -d ctl01.${domain},ctl02.${domain},ctl03.${domain},prx01.${domain},prx02.${domain} -y")
@@ -357,27 +359,62 @@ timestamps {
                 } catch (Exception e) {
                     errorOccured = true
                     common.warningMsg('Some states that require syncdb failed. Restoring production databases')
-                    databases = salt.cmdRun(saltMaster, 'I@mysql:client','salt-call mysql.db_list | grep -v \'upgrade\' | grep -v \'schema\' | awk \'/-/ {print \$2}\'')
-                    if(databases && databases != ""){
-                        databasesList = databases['return'][0].values()[0].trim().tokenize("\n")
-                        for( i = 0; i < databasesList.size(); i++){ 
-                            if(!databasesList[i].toLowerCase().contains('upgrade') && !databasesList[i].toLowerCase().contains('command execution')){
-                                salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'mysql.db_remove', ["${databasesList[i]}"], null, true)
-                                common.warningMsg("removing database ${databasesList[i]}")
-                                salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'file.remove', ["/root/mysql/flags/${databasesList[i]}-installed"], null, true)
-                            }
-                        }
-                        salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
-                    }else{
-                        common.errorMsg("No none _upgrade databases were returned. You have to restore production databases before running the real control upgrade again. This is because database schema for some services already happened. To do that delete the production databases, remove none upgrade database files from /root/mysql/flags/ and run salt 'I@mysql:client' state.sls mysql.client on the salt-master node")
+
+                    // database restore section
+                    try {
+                        salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'service.stop', ['mysql'], null, true)
+                    } catch (Exception er) {
+                        common.warningMsg('Mysql service already stopped')
                     }
+                    try {
+                        salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'service.stop', ['mysql'], null, true)
+                    } catch (Exception er) {
+                        common.warningMsg('Mysql service already stopped')
+                    }
+                    try {
+                        salt.cmdRun(saltMaster, 'I@galera:slave', "rm /var/lib/mysql/ib_logfile*")
+                    } catch (Exception er) {
+                        common.warningMsg('Files are not present')
+                    }
+                    try {
+                        salt.cmdRun(saltMaster, 'I@galera:master', "mkdir /root/mysql/mysql.bak")
+                    } catch (Exception er) {
+                        common.warningMsg('Directory already exists')
+                    }
+                    try {
+                        salt.cmdRun(saltMaster, 'I@galera:master', "rm -rf /root/mysql/mysql.bak/*")
+                    } catch (Exception er) {
+                        common.warningMsg('Directory already empty')
+                    }
+                    try {
+                        salt.cmdRun(saltMaster, 'I@galera:master', "mv /var/lib/mysql/* /root/mysql/mysql.bak")
+                    } catch (Exception er) {
+                        common.warningMsg('Files were already moved')
+                    }
+                    try {
+                        salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["/var/lib/mysql/.galera_bootstrap"], null, true)
+                    } catch (Exception er) {
+                        common.warningMsg('File is not present')
+                    }
+                    salt.cmdRun(saltMaster, 'I@galera:master', "sed -i '/gcomm/c\\wsrep_cluster_address=\"gcomm://\"' /etc/mysql/my.cnf")
+                    _pillar = salt.getPillar(saltMaster, "I@galera:master", 'xtrabackup:client:backup_dir')
+                    backup_dir = _pillar['return'][0].values()[0]
+                    if(backup_dir == null || backup_dir.isEmpty()) { backup_dir='/var/backups/mysql/xtrabackup' }
+                    print(backup_dir)
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
+                    salt.cmdRun(saltMaster, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'service.start', ['mysql'], null, true)
+                    sleep(5)
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'service.start', ['mysql'], null, true)
+                    //
+
                     common.errorMsg("Stage Real control upgrade failed")
                 }
                 if(!errorOccured){
                     // salt 'cmp*' cmd.run 'service nova-compute restart'
                     salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
 
-                    // salt 'prx*' state.sls linux,openssh,salt.minion,ntp,rsyslog - TODO: proč? už to jednou projelo
+                    // salt 'prx*' state.sls linux,openssh,salt.minion,ntp,rsyslog
                     // salt 'ctl*' state.sls keepalived
                     // salt 'prx*' state.sls keepalived
                     salt.enforceState(saltMaster, 'prx*', 'keepalived')
@@ -447,20 +484,43 @@ timestamps {
                     common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
                 }
 
-                databases = salt.cmdRun(saltMaster, 'I@mysql:client','salt-call mysql.db_list | grep -v \'upgrade\' | grep -v \'schema\' | awk \'/-/ {print \$2}\'')
-                if(databases && databases != ""){
-                    databasesList = databases['return'][0].values()[0].trim().tokenize("\n")
-                    for( i = 0; i < databasesList.size(); i++){ 
-                        if(!databasesList[i].toLowerCase().contains('upgrade') && !databasesList[i].toLowerCase().contains('command execution')){
-                            salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'mysql.db_remove', ["${databasesList[i]}"], null, true)
-                            common.warningMsg("removing database ${databasesList[i]}")
-                            salt.runSaltProcessStep(saltMaster, 'I@mysql:client', 'file.remove', ["/root/mysql/flags/${databasesList[i]}-installed"], null, true)
-                        }
-                    }
-                    salt.enforceState(saltMaster, 'I@mysql:client', 'mysql.client')
-                }else{
-                    common.errorMsg("No none _upgrade databases were returned")
+                // database restore section
+                try {
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'service.stop', ['mysql'], null, true)
+                } catch (Exception e) {
+                    common.warningMsg('Mysql service already stopped')
                 }
+                try {
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'service.stop', ['mysql'], null, true)
+                } catch (Exception e) {
+                    common.warningMsg('Mysql service already stopped')
+                }
+                try {
+                    salt.cmdRun(saltMaster, 'I@galera:slave', "rm /var/lib/mysql/ib_logfile*")
+                } catch (Exception e) {
+                    common.warningMsg('Files are not present')
+                }
+                try {
+                    salt.cmdRun(saltMaster, 'I@galera:master', "rm -rf /var/lib/mysql/*")
+                } catch (Exception e) {
+                    common.warningMsg('Directory already empty')
+                }
+                try {
+                    salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["/var/lib/mysql/.galera_bootstrap"], null, true)
+                } catch (Exception e) {
+                    common.warningMsg('File is not present')
+                }
+                salt.cmdRun(saltMaster, 'I@galera:master', "sed -i '/gcomm/c\\wsrep_cluster_address=\"gcomm://\"' /etc/mysql/my.cnf")
+                _pillar = salt.getPillar(saltMaster, "I@galera:master", 'xtrabackup:client:backup_dir')
+                backup_dir = _pillar['return'][0].values()[0]
+                if(backup_dir == null || backup_dir.isEmpty()) { backup_dir='/var/backups/mysql/xtrabackup' }
+                print(backup_dir)
+                salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
+                salt.cmdRun(saltMaster, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
+                salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'service.start', ['mysql'], null, true)
+                sleep(5)
+                salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'service.start', ['mysql'], null, true)
+                //
 
                 salt.runSaltProcessStep(saltMaster, "${prx01NodeProvider}", 'virt.start', ["prx01.${domain}"], null, true)
                 salt.runSaltProcessStep(saltMaster, "${prx02NodeProvider}", 'virt.start', ["prx02.${domain}"], null, true)
