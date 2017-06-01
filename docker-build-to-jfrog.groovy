@@ -17,7 +17,6 @@ node("docker") {
   def buildInfo = Artifactory.newBuildInfo()
 
   def projectNamespace = "mirantis/${PROJECT_NAMESPACE}"
-  def projectModule = "${GERRIT_PROJECT}"
 
   def dockerRepository = DOCKER_REGISTRY
   def docker_dev_repo = "docker-dev-local"
@@ -42,7 +41,7 @@ node("docker") {
       ).trim().take(12)
       imageTagsList << "${GERRIT_CHANGE_NUMBER}_${GERRIT_PATCHSET_NUMBER}"
       for (imageTag in imageTagsList) {
-        sh "docker tag ${containerId} ${dockerRepository}/${projectNamespace}/${projectModule}:${imageTag}"
+        sh "docker tag ${containerId} ${dockerRepository}/${projectNamespace}/${IMAGE_NAME}:${imageTag}"
       }
     }
     stage("publish image"){
@@ -50,7 +49,7 @@ node("docker") {
         for (imageTag in imageTagsList) {
           artifactory.uploadImageToArtifactory(artifactoryServer,
                                                dockerRepository,
-                                               "${projectNamespace}/${projectModule}",
+                                               "${projectNamespace}/${IMAGE_NAME}",
                                                imageTag,
                                                docker_dev_repo,
                                                buildInfo)
@@ -72,7 +71,7 @@ node("docker") {
           artifactory.promoteDockerArtifact(artifactoryServer.getUrl(),
                                             docker_dev_repo,
                                             docker_prod_repo,
-                                            "${projectNamespace}/${projectModule}",
+                                            "${projectNamespace}/${IMAGE_NAME}",
                                             buildProperties.get('com.mirantis.targetTag').join(','),
                                             'latest')
         } else {
