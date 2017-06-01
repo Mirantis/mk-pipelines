@@ -344,7 +344,7 @@ timestamps {
                 if (STACK_DELETE.toBoolean() == true) {
                     common.errorMsg('Heat job cleanup triggered')
                     stage('Trigger cleanup job') {
-                        build job: 'deploy-heat-cleanup', parameters: [[$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME]]
+                        build job: 'deploy-stack-cleanup', parameters: [[$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME]]
                     }
                 } else {
                     if (currentBuild.result == 'FAILURE') {
