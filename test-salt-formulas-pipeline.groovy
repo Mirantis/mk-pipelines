@@ -41,9 +41,16 @@ node("python&&docker") {
     stage("checkout") {
       if (gerritRef) {
         // job is triggered by Gerrit
-        checkouted = gerrit.gerritPatchsetCheckout ([
-          credentialsId : CREDENTIALS_ID
-        ])
+        // test if change aren't already merged
+        def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
+        def merged = gerritChange.status == "MERGED"
+        if(!merged){
+          checkouted = gerrit.gerritPatchsetCheckout ([
+            credentialsId : CREDENTIALS_ID
+          ])
+        } else{
+          common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
+        }
       } else if(defaultGitRef && defaultGitUrl) {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
       }

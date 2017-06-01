@@ -52,7 +52,7 @@ node("python&&docker") {
             credentialsId : CREDENTIALS_ID
           ])
         } else{
-          common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
+          common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
         }
       } else if(defaultGitRef && defaultGitUrl) {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
@@ -72,37 +72,38 @@ node("python&&docker") {
     }
 
     stage("test-nodes") {
-      def workspace = common.getWorkspace()
-      def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
-      def buildSteps = [:]
-      if(nodes.size() > 1){
-          if(nodes.size() <= 3 && PARALLEL_NODE_GROUP_SIZE.toInteger() != 1) {
-            common.infoMsg("Found <=3  cfg nodes, running parallel test")
-             for(int i=0; i < nodes.size();i++){
-               def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-               buildSteps.put("node-${basename}", { saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace) })
-             }
-             parallel buildSteps
-          }else{
-            common.infoMsg("Found more than 3 cfg nodes or debug enabled, running parallel group test with ${PARALLEL_NODE_GROUP_SIZE} nodes")
-            def partitions = common.partitionList(nodes, PARALLEL_NODE_GROUP_SIZE.toInteger())
-            for (int i=0; i < partitions.size();i++) {
-              def partition = partitions[i]
-              buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
-              for(int k=0; k < partition.size;k++){
-                  def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-                  buildSteps.get("partition-${i}").put(basename, { saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace) })
+      if(!merged){
+        def workspace = common.getWorkspace()
+        def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
+        def buildSteps = [:]
+        if(nodes.size() > 1){
+            if(nodes.size() <= 3 && PARALLEL_NODE_GROUP_SIZE.toInteger() != 1) {
+              common.infoMsg("Found <=3  cfg nodes, running parallel test")
+               for(int i=0; i < nodes.size();i++){
+                 def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
+                 buildSteps.put("node-${basename}", { saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace) })
+               }
+               parallel buildSteps
+            }else{
+              common.infoMsg("Found more than 3 cfg nodes or debug enabled, running parallel group test with ${PARALLEL_NODE_GROUP_SIZE} nodes")
+              def partitions = common.partitionList(nodes, PARALLEL_NODE_GROUP_SIZE.toInteger())
+              for (int i=0; i < partitions.size();i++) {
+                def partition = partitions[i]
+                buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
+                for(int k=0; k < partition.size;k++){
+                    def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
+                    buildSteps.get("partition-${i}").put(basename, { saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace) })
+                }
               }
+              common.serial(buildSteps)
             }
-            common.serial(buildSteps)
-          }
-      }else{
-          common.infoMsg("Found one cfg node, running single test")
-          def basename = sh(script: "basename ${nodes[0]} .yml", returnStdout: true).trim()
-          saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace)
+        }else{
+            common.infoMsg("Found one cfg node, running single test")
+            def basename = sh(script: "basename ${nodes[0]} .yml", returnStdout: true).trim()
+            saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace)
+        }
       }
     }
-
   } catch (Throwable e) {
      // If there was an error or exception thrown, the build failed
      currentBuild.result = "FAILURE"
