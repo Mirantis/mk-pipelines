@@ -39,7 +39,7 @@ try {
 }
 def checkouted = false
 
-node("docker") {
+node("vm") {
     def containerId
     def uniqId
     try {
