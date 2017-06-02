@@ -68,7 +68,6 @@ node {
         } else if (STACK_TYPE == 'aws') {
 
             aws.deleteStack(venv_path, env_vars, STACK_NAME)
-            aws.waitForStatus(venv_path, env_vars, STACK_NAME, 'DELETE_COMPLETE', ['DELETE_FAILED'])
 
         } else {
             throw new Exception('Stack type is not supported')
