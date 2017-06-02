@@ -156,7 +156,8 @@ timestamps {
 
                         // start stack
                         def stack_params = ["ParameterKey=KeyName,ParameterValue=" + AWS_SSH_KEY]
-                        aws.createStack(venv_path, env_vars, STACK_TEMPLATE, STACK_NAME, stack_params)
+                        def template_file = 'cfg/' + STACK_TEMPLATE + '.yml'
+                        aws.createStack(venv_path, env_vars, template_file, STACK_NAME, stack_params)
                     }
 
                     // wait for stack to be ready
