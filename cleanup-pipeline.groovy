@@ -67,7 +67,7 @@ node {
             openstack.deleteHeatStack(openstackCloud, STACK_NAME, venv_path)
         } else if (STACK_TYPE == 'aws') {
 
-            aws.deteteStack(venv_path, env_vars, STACK_NAME)
+            aws.deleteStack(venv_path, env_vars, STACK_NAME)
             aws.waitForStatus(venv_path, evn_vars, STACK_NAME, 'DELETE_COMPLETE', ['DELETE_FAILED'])
 
         } else {
