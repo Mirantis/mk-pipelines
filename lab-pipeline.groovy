@@ -17,17 +17,17 @@
  *
  * Expected parameters:
  * required for STACK_TYPE=heat
- *   HEAT_STACK_ENVIRONMENT     Heat stack environmental parameters
- *   HEAT_STACK_ZONE            Heat stack availability zone
- *   HEAT_STACK_PUBLIC_NET      Heat stack floating IP pool
- *   OPENSTACK_API_URL          OpenStack API address
- *   OPENSTACK_API_CREDENTIALS  Credentials to the OpenStack API
- *   OPENSTACK_API_PROJECT      OpenStack project to connect to
- *   OPENSTACK_PROJECT_DOMAIN   Domain for OpenStack project
- *   OPENSTACK_PROJECT_ID       ID for OpenStack project
- *   OPENSTACK_USER_DOMAIN      Domain for OpenStack user
- *   OPENSTACK_API_CLIENT       Versions of OpenStack python clients
- *   OPENSTACK_API_VERSION      Version of the OpenStack API (2/3)
+ *   HEAT_STACK_ENVIRONMENT       Heat stack environmental parameters
+ *   HEAT_STACK_ZONE              Heat stack availability zone
+ *   HEAT_STACK_PUBLIC_NET        Heat stack floating IP pool
+ *   OPENSTACK_API_URL            OpenStack API address
+ *   OPENSTACK_API_CREDENTIALS    Credentials to the OpenStack API
+ *   OPENSTACK_API_PROJECT        OpenStack project to connect to
+ *   OPENSTACK_API_PROJECT_DOMAIN Domain for OpenStack project
+ *   OPENSTACK_API_PROJECT_ID     ID for OpenStack project
+ *   OPENSTACK_API_USER_DOMAIN    Domain for OpenStack user
+ *   OPENSTACK_API_CLIENT         Versions of OpenStack python clients
+ *   OPENSTACK_API_VERSION        Version of the OpenStack API (2/3)
  *
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
  *
@@ -109,8 +109,8 @@ timestamps {
                     openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
                     openstackCloud = openstack.createOpenstackEnv(
                         OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
-                        OPENSTACK_API_PROJECT,OPENSTACK_PROJECT_DOMAIN,
-                        OPENSTACK_PROJECT_ID, OPENSTACK_USER_DOMAIN,
+                        OPENSTACK_API_PROJECT, OPENSTACK_API_PROJECT_DOMAIN,
+                        OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,
                         OPENSTACK_API_VERSION)
                     openstack.getKeystoneToken(openstackCloud, openstackEnv)
                     //
