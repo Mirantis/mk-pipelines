@@ -45,7 +45,7 @@ node {
 
         } else if (STACK_TYPE == 'aws') {
 
-            env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
+            env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_DEFAULT_REGION)
             aws.setupVirtualEnv(venv_path)
 
         } else {
