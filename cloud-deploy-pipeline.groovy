@@ -338,21 +338,24 @@ timestamps {
             // Clean
             //
 
-            if (STACK_TYPE == 'heat') {
+            if (STACK_NAME && STACK_NAME != '') {
                 // send notification
                 common.sendNotification(currentBuild.result, STACK_NAME, ["slack"])
+            }
 
-                if (STACK_DELETE.toBoolean() == true) {
-                    common.errorMsg('Heat job cleanup triggered')
-                    stage('Trigger cleanup job') {
-                        build job: 'deploy-stack-cleanup', parameters: [[$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME]]
-                    }
-                } else {
-                    if (currentBuild.result == 'FAILURE') {
-                        common.errorMsg("Deploy job FAILED and was not deleted. Please fix the problem and delete stack on you own.")
-                        if (SALT_MASTER_URL) {
-                            common.errorMsg("Salt master URL: ${SALT_MASTER_URL}")
-                        }
+            if (STACK_DELETE.toBoolean() == true) {
+                stage('Trigger cleanup job') {
+                    common.errorMsg('Stack cleanup job triggered')
+                    build(job: STACK_CLEANUP_JOB, parameters: [
+                        [$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME],
+                        [$class: 'StringParameterValue', name: 'STACK_TYPE', value: STACK_TYPE]
+                    ])
+                }
+            } else {
+                if (currentBuild.result == 'FAILURE') {
+                    common.errorMsg("Deploy job FAILED and was not deleted. Please fix the problem and delete stack on you own.")
+                    if (SALT_MASTER_URL) {
+                        common.errorMsg("Salt master URL: ${SALT_MASTER_URL}")
                     }
                 }
             }
