@@ -81,7 +81,7 @@ timestamps {
                 // salt 'kvm02*' state.sls salt.control
                 salt.enforceState(saltMaster, "${upgNodeProvider}", 'salt.control')
 
-                sleep(60)
+                sleep(70)
 
                 // salt '*' saltutil.refresh_pillar
                 salt.runSaltProcessStep(saltMaster, 'upg*', 'saltutil.refresh_pillar', [], null, true)
@@ -283,7 +283,7 @@ timestamps {
                 // salt 'kvm*' state.sls salt.control
                 salt.enforceState(saltMaster, 'I@salt:control', 'salt.control')
 
-                sleep(60)
+                sleep(70)
 
                 // salt '*' saltutil.refresh_pillar
                 salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
@@ -531,7 +531,7 @@ timestamps {
                 // salt 'cmp*' cmd.run 'service nova-compute restart'
                 salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
 
-                sleep(60)
+                sleep(70)
 
                 salt.cmdRun(saltMaster, 'ctl01*', '. /root/keystonerc; nova service-list; glance image-list; nova flavor-list; nova hypervisor-list; nova list; neutron net-list; cinder list; heat service-list')
             }

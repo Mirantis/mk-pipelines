@@ -53,6 +53,10 @@ node() {
             common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
         }
 
+        stage("Add new repos on sample") {
+            salt.enforceState(saltMaster, targetTestSubset, 'linux.system')
+        }
+
         stage("List package upgrades") {
             salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.list_upgrades', [], null, true)
         }
