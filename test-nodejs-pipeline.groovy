@@ -9,12 +9,12 @@
 gerrit = new com.mirantis.mk.Gerrit()
 common = new com.mirantis.mk.Common()
 
-def executeCmd(containerId, cmd) {
+def executeCmd(containerName, cmd) {
     stage(cmd) {
-        assert containerId != null
+        assert containerName != null
         common.infoMsg("Starting command: ${cmd}")
         def output = sh(
-            script: "docker exec ${containerId} ${cmd}",
+            script: "docker exec ${containerName} ${cmd}",
             returnStdout: true,
         )
         common.infoMsg(output)
@@ -40,7 +40,7 @@ try {
 def checkouted = false
 
 node("vm") {
-    def containerId
+    def containerName
     def uniqId
     try {
         stage('Checkout source code') {
@@ -60,7 +60,7 @@ node("vm") {
         stage('Generate config file for devops portal') {
             writeFile (
                 file: "${workspace}/test_config.json",
-                text: '${JSON_CONFIG}'
+                text: "${JSON_CONFIG}"
             )
        }
        stage('Start container') {
@@ -72,14 +72,14 @@ node("vm") {
                 uniqId = defaultGitRef.tokenize('/').takeRight(2).join('') + timeStamp
             }
             sh("docker-compose -f ${COMPOSE_PATH} -p ${uniqId} up -d")
-            containerId = "${uniqId}_devopsportal_1"
-            common.successMsg("Container with id ${containerId} started.")
-            sh("docker cp ${workspace}/. ${containerId}:/opt/workspace/")
+            containerName = "${uniqId}_devopsportal_1"
+            common.successMsg("Container with id ${containerName} started.")
+            sh("docker cp ${workspace}/. ${containerName}:/opt/workspace/")
         }
-        executeCmd(containerId, "npm install")
+        executeCmd(containerName, "npm install")
         def cmds = COMMANDS.tokenize('\n')
         for (int i = 0; i < cmds.size(); i++) {
-           executeCmd(containerId, cmds[i])
+           executeCmd(containerName, cmds[i])
         }
     } catch (err) {
         currentBuild.result = 'FAILURE'
@@ -88,14 +88,14 @@ node("vm") {
     } finally {
         common.sendNotification(currentBuild.result, "" ,["slack"])
         stage('Cleanup') {
-            if (containerId != null) {
+            if (containerName != null) {
                 dockerCleanupCommands = ['stop', 'rm -f']
                 for (int i = 0; i < dockerCleanupCommands.size(); i++) {
                     sh("docker-compose -f ${COMPOSE_PATH} -p ${uniqId} ${dockerCleanupCommands[i]} || true")
                 }
                 sh("docker network rm ${uniqId}_default || true")
                 sh("rm -f ${workspace}/test_config.json || true")
-                common.infoMsg("Container with id ${containerId} was removed.")
+                common.infoMsg("Container with id ${containerName} was removed.")
             }
         }
     }
