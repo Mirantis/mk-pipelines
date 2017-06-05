@@ -163,6 +163,9 @@ timestamps {
             }
 
             stage("Deploy Docker services") {
+                // We need /etc/aptly-publisher.yaml to be present before
+                // services are deployed
+                salt.enforceState(saltMaster, 'I@aptly:publisher', 'aptly.publisher', true)
                 retry(3) {
                     sleep(5)
                     salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
