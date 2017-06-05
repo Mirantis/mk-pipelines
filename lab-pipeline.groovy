@@ -117,7 +117,7 @@ timestamps {
                     // Verify possibility of create stack for given user and stack type
                     //
                     wrap([$class: 'BuildUser']) {
-                        if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !STACK_REUSE.toBoolean()) {
+                        if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !env.BUILD_USER_ID.equals("mceloud") && !STACK_REUSE.toBoolean()) {
                             def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", openstackEnv)
                             if(existingStacks.size() >= _MAX_PERMITTED_STACKS){
                                 STACK_DELETE = "false"
