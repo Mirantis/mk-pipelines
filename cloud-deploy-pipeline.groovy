@@ -155,7 +155,10 @@ timestamps {
                         aws.setupVirtualEnv(venv_path)
 
                         // start stack
-                        def stack_params = ["ParameterKey=KeyName,ParameterValue=" + AWS_SSH_KEY]
+                        def stack_params = [
+                            "ParameterKey=KeyName,ParameterValue=" + AWS_SSH_KEY,
+                            "ParameterKey=CmpNodeCount,ParameterValue=" + STACK_COMPUTE_COUNT
+                        ]
                         def template_file = 'cfn/' + STACK_TEMPLATE + '.yml'
                         aws.createStack(venv_path, env_vars, template_file, STACK_NAME, stack_params)
                     }
