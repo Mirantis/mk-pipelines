@@ -79,7 +79,9 @@ node("vm") {
         executeCmd(containerName, "npm install")
         def cmds = COMMANDS.tokenize('\n')
         for (int i = 0; i < cmds.size(); i++) {
-           executeCmd(containerName, cmds[i])
+           timeout(5) {
+               executeCmd(containerName, cmds[i])
+           }
         }
     } catch (err) {
         currentBuild.result = 'FAILURE'
