@@ -17,6 +17,8 @@
  *   STACK_TEST                 Run tests (bool)
  *   STACK_CLEANUP_JOB          Name of job for deleting stack
  *
+ *   STACK_COMPUTE_COUNT        Number of compute nodes to launch
+ *
  *   AWS_STACK_REGION           CloudFormation AWS region
  *   AWS_API_CREDENTIALS        AWS Access key ID with  AWS secret access key
  *   AWS_SSH_KEY                AWS key pair name (used for SSH access)
@@ -210,14 +212,20 @@ timestamps {
 
                 stage('Install Kubernetes control') {
 
-                    // Overwrite Kubernetes vars if specified
-                    if (env.getEnvironment().containsKey("KUBERNETES_HYPERKUBE_IMAGE")) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'file.append', overwriteFile, "    kubernetes_hyperkube_image: ${KUBERNETES_HYPERKUBE_IMAGE}")
-                    }
-
                     orchestrate.installKubernetesControl(saltMaster)
+
                 }
 
+                stage('Scale Kubernetes computes') {
+                    if (STACK_TYPE == 'AWS') {
+                        // get stack info
+                        def scaling_group = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ComputesScalingGroup')
+
+                        //update autoscaling group
+                        aws.updateAutoscalingGroup(venv_path, evn_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
+                    }
+
+                }
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
                     state('Install Contrail for Kubernetes') {
