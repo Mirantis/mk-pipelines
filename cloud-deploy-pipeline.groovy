@@ -52,6 +52,8 @@ test = new com.mirantis.mk.Test()
 _MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 
+venv_path = 'aws_venv'
+
 timestamps {
     node {
         try {
@@ -123,7 +125,6 @@ timestamps {
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
                 } else if (STACK_TYPE == 'aws') {
 
-                    def venv_path = 'aws_venv'
 
                     if (STACK_REUSE.toBoolean() == true && STACK_NAME == '') {
                         error("If you want to reuse existing stack you need to provide it's name")
