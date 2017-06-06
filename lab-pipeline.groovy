@@ -185,7 +185,7 @@ timestamps {
                         salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_hyperkube_image', KUBERNETES_HYPERKUBE_IMAGE)
                     }
                     if (env.getEnvironment().containsKey('MTU')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_mtu', MTU}
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_mtu', MTU)
                     }
                     // Overwrite Calico vars if specified
                     if (env.getEnvironment().containsKey('CALICO_CNI_IMAGE')) {
@@ -340,7 +340,7 @@ timestamps {
                 if (STACK_DELETE.toBoolean() == true) {
                     common.errorMsg('Heat job cleanup triggered')
                     stage('Trigger cleanup job') {
-                        build job: STACK_CLEANUP_JOB, parameters: [[$class: 'StringParameterValue', name: 'HEAT_STACK_NAME', value: STACK_NAME]]
+                        build job: STACK_CLEANUP_JOB, parameters: [[$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME]]
                     }
                 } else {
                     if (currentBuild.result == 'FAILURE') {
