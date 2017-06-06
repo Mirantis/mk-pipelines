@@ -217,13 +217,18 @@ timestamps {
                 }
 
                 stage('Scale Kubernetes computes') {
-                    if (STACK_TYPE == 'AWS') {
+                    if (STACK_TYPE == 'aws') {
                         // get stack info
                         def scaling_group = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ComputesScalingGroup')
 
                         //update autoscaling group
                         aws.updateAutoscalingGroup(venv_path, evn_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
+
+                        // wait for computes to boot up
+                        sleep(120)
                     }
+
+                    orchestrate.installKubernetesCompute(saltMaster)
 
                 }
 
