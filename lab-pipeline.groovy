@@ -44,8 +44,9 @@
  *   CALICO_CNI_IMAGE            Docker repository and tag for calico CNI image
  *   CALICO_NODE_IMAGE           Docker repository and tag for calico node image
  *   CALICOCTL_IMAGE             Docker repository and tag for calicoctl image
+ *   MTU                         MTU for Calico
  *   NETCHECKER_AGENT_IMAGE      Docker repository and tag for netchecker agent image
- *   NETCHECKER_SERVER_IMAGE      Docker repository and tag for netchecker server image
+ *   NETCHECKER_SERVER_IMAGE     Docker repository and tag for netchecker server image
  *
  */
 
@@ -182,6 +183,9 @@ timestamps {
                     // Overwrite Kubernetes vars if specified
                     if (env.getEnvironment().containsKey('KUBERNETES_HYPERKUBE_IMAGE')) {
                         salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_hyperkube_image', KUBERNETES_HYPERKUBE_IMAGE)
+                    }
+                    if (env.getEnvironment().containsKey('MTU')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_mtu', MTU}
                     }
                     // Overwrite Calico vars if specified
                     if (env.getEnvironment().containsKey('CALICO_CNI_IMAGE')) {
