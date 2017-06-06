@@ -52,7 +52,6 @@ test = new com.mirantis.mk.Test()
 _MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 
-venv_path = 'aws_venv'
 
 timestamps {
     node {
@@ -148,6 +147,7 @@ timestamps {
                     currentBuild.description = STACK_NAME
 
                     // prepare configuration
+                    def venv_path = 'aws_venv'
                     def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
 
                     if (STACK_REUSE.toBoolean() == false) {
@@ -219,6 +219,10 @@ timestamps {
 
                 stage('Scale Kubernetes computes') {
                     if (STACK_TYPE == 'aws') {
+                        // configure aws
+                        def venv_path = 'aws_venv'
+                        def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
+
                         // get stack info
                         def scaling_group = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ComputesScalingGroup')
 
