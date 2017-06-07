@@ -95,7 +95,7 @@ node("python&&docker") {
         }
         common.infoMsg("Running kitchen testing, parallel mode: " + KITCHEN_TESTS_PARALLEL.toBoolean())
         wrap([$class: 'AnsiColorBuildWrapper']) {
-          if(!kitchenEnvs.isEmpty()){
+          if(kitchenEnvs && !kitchenEnvs.isEmpty()){
             common.infoMsg("Found multiple environment, first running kitchen without custom env")
             ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
             for(int i=0;i<kitchenEnvs.size();i++){
