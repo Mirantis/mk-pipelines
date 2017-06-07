@@ -218,23 +218,24 @@ timestamps {
                 }
 
                 stage('Scale Kubernetes computes') {
-                    if (STACK_TYPE == 'aws') {
-                        // configure aws
-                        def venv_path = 'aws_venv'
-                        def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
+                    if (STACK_COMPUTE_COUNT > 0) {
+                        if (STACK_TYPE == 'aws') {
+                            // configure aws
+                            def venv_path = 'aws_venv'
+                            def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
 
-                        // get stack info
-                        def scaling_group = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ComputesScalingGroup')
+                            // get stack info
+                            def scaling_group = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ComputesScalingGroup')
 
-                        //update autoscaling group
-                        aws.updateAutoscalingGroup(venv_path, env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
+                            //update autoscaling group
+                            aws.updateAutoscalingGroup(venv_path, env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
 
-                        // wait for computes to boot up
-                        sleep(120)
+                            // wait for computes to boot up
+                            sleep(120)
+                        }
+
+                        orchestrate.installKubernetesCompute(saltMaster)
                     }
-
-                    orchestrate.installKubernetesCompute(saltMaster)
-
                 }
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
