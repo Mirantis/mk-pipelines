@@ -8,7 +8,6 @@ jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 
 node{
   stage("Kill long running jobs"){
-    def jobKilled = false
     for (int i=0; i < Jenkins.instance.items.size(); i++) {
       if(!jenkinsUtils.killStuckBuilds(3600 * Integer.parseInt(MAX_DURATION_IN_HOURS), Jenkins.instance.items[i])){
          common.errorMsg("Kill failed!")
