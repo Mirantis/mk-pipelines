@@ -72,13 +72,13 @@ timestamps {
                 def nodeString = """classes:
 - cluster.${clusterName}.infra.config
 parameters:
-    _param:
-        linux_system_codename: xenial
-        reclass_data_revision: master
-    linux:
-        system:
-            name: cfg01
-            domain: ${clusterDomain}
+  _param:
+    linux_system_codename: xenial
+    reclass_data_revision: master
+  linux:
+    system:
+      name: cfg01
+      domain: ${clusterDomain}
 """
                 sh "mkdir -p ${modelEnv}/nodes/"
                 writeFile(file: nodeFile, text: nodeString)
