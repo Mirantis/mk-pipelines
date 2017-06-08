@@ -85,7 +85,7 @@ parameters:
             }
 
             stage("Test") {
-                if (!env.BUILD_USER_ID.contains("jenkins") && RECLASS_MODEL_URL == "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
+                if (RECLASS_MODEL_URL == "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
                     sh("cp -r ${modelEnv} ${testEnv}")
                     def defaultReclassModel = "ssh://jenkins-mk@gerrit.mcp.mirantis.net:29418/salt-models/reclass-system"
                     git.checkoutGitRepository("${testEnv}/classes/system", defaultReclassModel, RECLASS_MODEL_BRANCH, RECLASS_MODEL_CREDENTIALS)
