@@ -177,15 +177,12 @@ timestamps {
                 } else {
                     throw new Exception("STACK_TYPE ${STACK_TYPE} is not supported")
                 }
-            }
 
-            //
-            // Connect to Salt master
-            //
 
-            def saltMaster
-            stage('Connect to Salt API') {
+                // Connect to Salt master
+                def saltMaster
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+
             }
 
             //
