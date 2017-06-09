@@ -52,6 +52,7 @@ test = new com.mirantis.mk.Test()
 _MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 
+def saltMaster
 
 timestamps {
     node {
@@ -178,11 +179,8 @@ timestamps {
                     throw new Exception("STACK_TYPE ${STACK_TYPE} is not supported")
                 }
 
-
                 // Connect to Salt master
-                def saltMaster
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-
             }
 
             //
