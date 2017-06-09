@@ -228,7 +228,7 @@ timestamps {
                             aws.updateAutoscalingGroup(venv_path, env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
 
                             // wait for computes to boot up
-                            sleep(120)
+                            aws.waitForAutoscalingInstances(venv_path, env_vars, scaling_group)
                         }
 
                         orchestrate.installKubernetesCompute(saltMaster)
