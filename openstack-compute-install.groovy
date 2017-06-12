@@ -41,7 +41,7 @@ node() {
         stage("Setup network for compute") {
             common.infoMsg("Now all network configuration will be enforced, which caused reboot of nodes: ${targetLiveAll}")
             try {
-                salt.cmdRun(saltMaster, targetAll, 'salt-call state.sls linux.system.user,openssh,linux.network;reboot')
+                salt.cmdRun(saltMaster, targetLiveAll, 'salt-call state.sls linux.system.user,openssh,linux.network;reboot')
             } catch(e) {
                 common.infoMsg("no respond from nodes due reboot")
             }
@@ -49,7 +49,7 @@ node() {
             timeout(800) {
                 retry(666) {
                     try {
-                        salt.runSaltCommand(saltMaster, 'local', targetAll, 'test.ping', null, null, kwargs)
+                        salt.runSaltCommand(saltMaster, 'local', targetLiveAll, 'test.ping', null, null, kwargs)
                     } catch(e) {
                         common.infoMsg("Still waiting for node to come up")
                         sleep(10)
@@ -60,9 +60,9 @@ node() {
 
         stage("Deploy Compute") {
             common.infoMsg("Lets run rest of the states to finish deployment")
-            salt.enforceState(saltMaster, targetAll, 'linux,openssh,ntp,salt', true)
+            salt.enforceState(saltMaster, targetLiveAll, 'linux,openssh,ntp,salt', true)
             retry(2) {
-                salt.runSaltCommand(saltMaster, 'local', targetAll, 'state.apply', null, null, kwargs)
+                salt.runSaltCommand(saltMaster, 'local', targetLiveAll, 'state.apply', null, null, kwargs)
             }
         }
 
