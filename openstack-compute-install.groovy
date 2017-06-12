@@ -49,7 +49,7 @@ node() {
             timeout(800) {
                 retry(666) {
                     try {
-                        salt.runSaltCommand(saltMaster, 'local', targetLiveAll, 'test.ping')
+                        salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], 'test.ping')
                     } catch(e) {
                         common.infoMsg("Still waiting for node to come up")
                         sleep(10)
@@ -62,7 +62,7 @@ node() {
             common.infoMsg("Lets run rest of the states to finish deployment")
             salt.enforceState(saltMaster, targetLiveAll, 'linux,openssh,ntp,salt', true)
             retry(2) {
-                salt.runSaltCommand(saltMaster, 'local', targetLiveAll, 'state.apply')
+                salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], 'state.apply')
             }
         }
 
