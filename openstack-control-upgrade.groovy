@@ -115,7 +115,11 @@ timestamps {
                 // salt -C 'I@backupninja:client' state.sls backupninja
                 salt.enforceState(saltMaster, 'I@backupninja:client', 'backupninja')
                 salt.runSaltProcessStep(saltMaster, 'I@backupninja:client', 'ssh.rm_known_host', ["root", "${backupninja_backup_host}"], null, true)
-                salt.cmdRun(saltMaster, 'I@backupninja:client', "arp -d ${backupninja_backup_host}")
+                try {
+                    salt.cmdRun(saltMaster, 'I@backupninja:client', "arp -d ${backupninja_backup_host}")
+                } catch (Exception e) {
+                    common.warningMsg('arp entry does not exist you. We should continue to run.')
+                }
                 salt.runSaltProcessStep(saltMaster, 'I@backupninja:client', 'ssh.set_known_host', ["root", "${backupninja_backup_host}"], null, true)
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/101.mysql')
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/200.backup.rsync > /tmp/backupninjalog')
