@@ -118,7 +118,7 @@ timestamps {
                 try {
                     salt.cmdRun(saltMaster, 'I@backupninja:client', "arp -d ${backupninja_backup_host}")
                 } catch (Exception e) {
-                    common.warningMsg('arp entry does not exist you. We should continue to run.')
+                    common.warningMsg('The ARP entry does not exist. We should continue to run.')
                 }
                 salt.runSaltProcessStep(saltMaster, 'I@backupninja:client', 'ssh.set_known_host', ["root", "${backupninja_backup_host}"], null, true)
                 salt.cmdRun(saltMaster, 'I@backupninja:client', 'backupninja -n --run /etc/backup.d/101.mysql')
@@ -146,6 +146,7 @@ timestamps {
 
                 try {
                     salt.enforceState(saltMaster, 'upg*', 'keystone.server')
+                    salt.runSaltProcessStep(saltMaster, 'upg*', 'service.restart', ['apache2'], null, true)
                 } catch (Exception e) {
                     common.warningMsg('Restarting Apache2')
                     salt.runSaltProcessStep(saltMaster, 'upg*', 'service.restart', ['apache2'], null, true)
@@ -311,6 +312,7 @@ timestamps {
                 try {
                     try {
                         salt.enforceState(saltMaster, 'ctl*', ['memcached', 'keystone.server'])
+                        salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['apache2'], null, true)
                     } catch (Exception e) {
                         common.warningMsg('Restarting Apache2 and enforcing keystone.server state again')
                         salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['apache2'], null, true)
