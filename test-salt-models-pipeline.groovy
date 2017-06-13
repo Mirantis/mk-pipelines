@@ -30,7 +30,7 @@ try {
 }
 def checkouted = false
 def merged = false
-node("python&&docker") {
+node("python") {
   try{
     stage("stop old tests"){
       if (gerritRef) {
