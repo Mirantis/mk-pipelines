@@ -55,8 +55,8 @@ overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 def saltMaster
 
 if (STACK_TYPE == 'aws') {
-    def venv_path = 'aws_venv'
-    def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
+    venv_path = 'aws_venv'
+    env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
 }
 
 timestamps {
