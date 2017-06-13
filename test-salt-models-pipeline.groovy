@@ -29,7 +29,6 @@ try {
     defaultGitUrl = null
 }
 def checkouted = false
-def merged = false
 node("python") {
   try{
     stage("stop old tests"){
@@ -46,18 +45,25 @@ node("python") {
         // job is triggered by Gerrit
         // test if change aren't already merged
         def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
-        merged = gerritChange.status == "MERGED"
-        if(!merged){
-          checkouted = gerrit.gerritPatchsetCheckout ([
-            credentialsId : CREDENTIALS_ID
-          ])
-        } else{
-          common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
+        // test WIP contains in commit message
+        if (gerritChange.commitMessage.contains("WIP")) {
+          common.successMsg("Commit message contains WIP, skipping tests") // do nothing
+        } else {
+          def merged = gerritChange.status == "MERGED"
+          if(!merged){
+            checkouted = gerrit.gerritPatchsetCheckout ([
+              credentialsId : CREDENTIALS_ID
+            ])
+          } else{
+            common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
+          }
         }
       } else if(defaultGitRef && defaultGitUrl) {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
+      } else {
+        throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
       }
-      if(checkouted){
+      if(checkouted) {
         if (fileExists('classes/system')) {
           ssh.prepareSshAgentKey(CREDENTIALS_ID)
           dir('classes/system') {
@@ -66,13 +72,11 @@ node("python") {
           }
           ssh.agentSh("git submodule init; git submodule sync; git submodule update --recursive")
         }
-      }else if(!merged){
-        throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
       }
     }
 
     stage("test-nodes") {
-      if(!merged){
+      if(checkouted) {
         def workspace = common.getWorkspace()
         def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
         def buildSteps = [:]
@@ -104,7 +108,7 @@ def _getRunningTriggeredTestsBuildNumbers(jobName, gerritChangeNumber, excludePa
   def jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
   def triggeredBuilds= gerrit.getGerritTriggeredBuilds(jenkinsUtils.getJobRunningBuilds(jobName), gerritChangeNumber, excludePatchsetNumber)
   def buildNums =[]
-  for(int i=0;i<triggeredBuilds.size();i++){
+  for (int i=0; i<triggeredBuilds.size(); i++) {
       buildNums.add(triggeredBuilds[i].number)
   }
   return buildNums

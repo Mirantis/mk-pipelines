@@ -25,7 +25,7 @@ try {
     defaultGitUrl = null
 }
 
-def checkouted = false;
+def checkouted = false
 
 node("python") {
   try{
@@ -41,73 +41,79 @@ node("python") {
     stage("checkout") {
       if (gerritRef) {
         // job is triggered by Gerrit
-        // test if change aren't already merged
         def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
-        def merged = gerritChange.status == "MERGED"
-        if(!merged){
-          checkouted = gerrit.gerritPatchsetCheckout ([
-            credentialsId : CREDENTIALS_ID
-          ])
-        } else{
-          common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
+        // test WIP contains in commit message
+        if(gerritChange.commitMessage.contains("WIP")){
+          common.successMsg("Commit message contains WIP, skipping tests") // do nothing
+        }else{
+          // test if change aren't already merged
+          def merged = gerritChange.status == "MERGED"
+          if(!merged){
+            checkouted = gerrit.gerritPatchsetCheckout ([
+              credentialsId : CREDENTIALS_ID
+            ])
+          } else{
+            common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
+          }
         }
       } else if(defaultGitRef && defaultGitUrl) {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
-      }
-      if(!checkouted){
+      } else {
         throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
       }
     }
     stage("test") {
       if(checkouted){
-        wrap([$class: 'AnsiColorBuildWrapper']) {
-          sh("make clean")
-          sh("[ $SALT_VERSION != 'latest' ] || export SALT_VERSION=''; make test")
+          wrap([$class: 'AnsiColorBuildWrapper']) {
+            sh("make clean")
+            sh("[ $SALT_VERSION != 'latest' ] || export SALT_VERSION=''; make test")
         }
       }
     }
     stage("kitchen") {
-      if (fileExists(".kitchen.yml")) {
-        common.infoMsg(".kitchen.yml found, running kitchen tests")
-        ruby.ensureRubyEnv()
-        def kitchenEnvs = []
-        if(fileExists(".travis.yml")){
-          common.infoMsg(".travis.yml found, running custom kitchen init")
-          def kitchenConfigYML = readYaml(file: ".travis.yml")
-          kitchenEnvs=kitchenConfigYML["env"]
-          def kitchenInit = kitchenConfigYML["install"]
-          def kitchenInstalled = false
-          if(kitchenInit && !kitchenInit.isEmpty()){
-            for(int i=0;i<kitchenInit.size();i++){
-              if(kitchenInit[i].trim().startsWith("test -e Gemfile")){ //found Gemfile config
-                common.infoMsg("Custom Gemfile configuration found, using them")
-                ruby.installKitchen(kitchenInit[i].trim())
-                kitchenInstalled = true
+      if(checkouted){
+        if (fileExists(".kitchen.yml")) {
+          common.infoMsg(".kitchen.yml found, running kitchen tests")
+          ruby.ensureRubyEnv()
+          def kitchenEnvs = []
+          if(fileExists(".travis.yml")){
+            common.infoMsg(".travis.yml found, running custom kitchen init")
+            def kitchenConfigYML = readYaml(file: ".travis.yml")
+            kitchenEnvs=kitchenConfigYML["env"]
+            def kitchenInit = kitchenConfigYML["install"]
+            def kitchenInstalled = false
+            if(kitchenInit && !kitchenInit.isEmpty()){
+              for(int i=0;i<kitchenInit.size();i++){
+                if(kitchenInit[i].trim().startsWith("test -e Gemfile")){ //found Gemfile config
+                  common.infoMsg("Custom Gemfile configuration found, using them")
+                  ruby.installKitchen(kitchenInit[i].trim())
+                  kitchenInstalled = true
+                }
               }
             }
-          }
-          if(!kitchenInstalled){
-            ruby.installKitchen()
-          }
-        }else{
-          common.infoMsg(".travis.yml not found, running default kitchen init")
-          ruby.installKitchen()
-        }
-        common.infoMsg("Running kitchen testing, parallel mode: " + KITCHEN_TESTS_PARALLEL.toBoolean())
-        wrap([$class: 'AnsiColorBuildWrapper']) {
-          if(kitchenEnvs && !kitchenEnvs.isEmpty()){
-            common.infoMsg("Found multiple environment, first running kitchen without custom env")
-            ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
-            for(int i=0;i<kitchenEnvs.size();i++){
-              common.infoMsg("Found multiple environment, kitchen running with env: " + kitchenEnvs[i])
-              ruby.runKitchenTests(kitchenEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
+            if(!kitchenInstalled){
+              ruby.installKitchen()
             }
           }else{
-            ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
+            common.infoMsg(".travis.yml not found, running default kitchen init")
+            ruby.installKitchen()
           }
+          common.infoMsg("Running kitchen testing, parallel mode: " + KITCHEN_TESTS_PARALLEL.toBoolean())
+          wrap([$class: 'AnsiColorBuildWrapper']) {
+            if(kitchenEnvs && !kitchenEnvs.isEmpty()){
+              common.infoMsg("Found multiple environment, first running kitchen without custom env")
+              ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
+              for(int i=0;i<kitchenEnvs.size();i++){
+                common.infoMsg("Found multiple environment, kitchen running with env: " + kitchenEnvs[i])
+                ruby.runKitchenTests(kitchenEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
+              }
+            }else{
+              ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
+            }
+          }
+        } else {
+          common.infoMsg(".kitchen.yml not found")
         }
-      } else {
-        common.infoMsg(".kitchen.yml not found")
       }
     }
   } catch (Throwable e) {
