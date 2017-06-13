@@ -54,6 +54,11 @@ overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 
 def saltMaster
 
+if (STACK_TYPE == 'aws') {
+    def venv_path = 'aws_venv'
+    def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
+}
+
 timestamps {
     node {
         try {
@@ -147,10 +152,6 @@ timestamps {
                     // set description
                     currentBuild.description = STACK_NAME
 
-                    // prepare configuration
-                    def venv_path = 'aws_venv'
-                    def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
-
                     if (STACK_REUSE.toBoolean() == false) {
                         // get templates
                         git.checkoutGitRepository('template', STACK_TEMPLATE_URL, STACK_TEMPLATE_BRANCH, STACK_TEMPLATE_CREDENTIALS)
@@ -203,6 +204,11 @@ timestamps {
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
                 stage('Install Kubernetes infra') {
+                    // configure kubernetes_control_address - save loadbalancer
+                    def kubernetes_control_address = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ControlLoadBalancer')
+                    print(kubernetes_control_address)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_control_address', kubernetes_control_address)
+
                     orchestrate.installKubernetesInfra(saltMaster)
                 }
 
@@ -215,9 +221,6 @@ timestamps {
                 stage('Scale Kubernetes computes') {
                     if (STACK_COMPUTE_COUNT > 0) {
                         if (STACK_TYPE == 'aws') {
-                            // configure aws
-                            def venv_path = 'aws_venv'
-                            def env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
 
                             // get stack info
                             def scaling_group = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ComputesScalingGroup')
