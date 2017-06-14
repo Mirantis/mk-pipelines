@@ -167,7 +167,7 @@ timestamps {
                 // services are deployed
                 // XXX: for some weird unknown reason, refresh_pillar is
                 // required to execute here
-                salt.runSaltProcessStep(master, 'I@aptly:publisher', 'saltutil.refresh_pillar', [], null, true)
+                salt.runSaltProcessStep(saltMaster, 'I@aptly:publisher', 'saltutil.refresh_pillar', [], null, true)
                 salt.enforceState(saltMaster, 'I@aptly:publisher', 'aptly.publisher', true)
                 retry(3) {
                     sleep(5)
