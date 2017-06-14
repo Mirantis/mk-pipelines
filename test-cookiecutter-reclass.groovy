@@ -61,7 +61,7 @@ def testModel(modelFile, testEnv) {
     def templateContext = readYaml text: content
     def clusterDomain = templateContext.default_context.cluster_domain
     git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
-    saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", "", testEnv)
+    saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", EXTRA_FORMULAS, testEnv)
 }
 
 def gerritRef
