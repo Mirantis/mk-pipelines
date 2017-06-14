@@ -207,7 +207,7 @@ timestamps {
                     // configure kubernetes_control_address - save loadbalancer
                     def kubernetes_control_address = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ControlLoadBalancer')
                     print(kubernetes_control_address)
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_control_address', kubernetes_control_address)
+                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
 
                     orchestrate.installKubernetesInfra(saltMaster)
                 }
