@@ -417,6 +417,24 @@ timestamps {
                     common.errorMsg("Stage Real control upgrade failed")
                 }
                 if(!errorOccured){
+
+                    ceph = null
+
+                    try {
+                        ceph = salt.cmdRun(saltMaster, 'ctl*', "salt-call grains.item roles | grep ceph.client")
+
+                    } catch (Exception er) {
+                        common.infoMsg("Ceph is not used")
+                    }
+
+                    if(ceph != null) {
+                        try {
+                            salt.enforceState(saltMaster, 'ctl*', 'ceph.client')
+                        } catch (Exception er) {
+                            common.warningMsg("Ceph client state on controllers failed. Please fix it manually")
+                        }
+                    }
+
                     // salt 'cmp*' cmd.run 'service nova-compute restart'
                     salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
 
