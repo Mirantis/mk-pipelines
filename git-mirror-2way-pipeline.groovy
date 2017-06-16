@@ -9,14 +9,30 @@ stage("Mirror") {
           pollBranches.add([name:branches[i]])
       }
       dir("target") {
-        checkout changelog: true, poll: true,
-          scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
-          extensions: [[$class: 'CleanCheckout']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: CREDENTIALS_ID, url: TARGET_URL]]]
+        try{
+            checkout changelog: true, poll: true,
+              scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
+              extensions: [[$class: 'CleanCheckout']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: CREDENTIALS_ID, url: TARGET_URL]]]
+          } catch(AbortException e){
+            if(e.message.trim().equals("Couldn't find any revision to build. Verify the repository and branch configuration for this job.")){
+                common.warningMsg("Warning: Cannot checkout target repo source repo is empty")
+            } else {
+                throw e
+            }
+          }
       }
       dir("source") {
-        checkout changelog: true, poll: true,
-          scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
-          extensions: [[$class: 'CleanCheckout']],  submoduleCfg: [], userRemoteConfigs: [[credentialsId: CREDENTIALS_ID, url: SOURCE_URL]]]
+        try{
+          checkout changelog: true, poll: true,
+            scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
+            extensions: [[$class: 'CleanCheckout']],  submoduleCfg: [], userRemoteConfigs: [[credentialsId: CREDENTIALS_ID, url: SOURCE_URL]]]
+          } catch(AbortException e){
+              if(e.message.trim().equals("Couldn't find any revision to build. Verify the repository and branch configuration for this job.")){
+                common.warningMsg("Warning: Cannot checkout source repo source repo is empty")
+              } else {
+                  throw e
+              }
+          }
         git.mirrorGit(SOURCE_URL, TARGET_URL, CREDENTIALS_ID, BRANCHES, true, true, false)
       }
     } catch (Throwable e) {
