@@ -46,7 +46,7 @@ node("python") {
         // test if change aren't already merged
         def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
         // test if gerrit change is already Verified
-        if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified")){
+        if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified", "+")){
           common.successMsg("Gerrit change ${GERRIT_CHANGE_NUMBER} patchset ${GERRIT_PATCHSET_NUMBER} already has Verified, skipping tests") // do nothing
         // test WIP contains in commit message
         }else if (gerritChange.commitMessage.contains("WIP")) {
