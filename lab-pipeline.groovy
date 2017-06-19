@@ -174,16 +174,6 @@ timestamps {
 
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
-
-                stage('Install Contrail for Kubernetes') {
-                    if (common.checkContains('STACK_INSTALL', 'contrail')) {
-                        stage('Install Contrail for Kubernetes') {
-                            orchestrate.installContrailNetwork(saltMaster)
-                            orchestrate.installContrailCompute(saltMaster)
-                        }
-                    }
-                }
-
                 stage('Install Kubernetes infra') {
                     orchestrate.installKubernetesInfra(saltMaster)
                 }
@@ -220,6 +210,12 @@ timestamps {
                 }
 
 
+                if (common.checkContains('STACK_INSTALL', 'contrail')) {
+                    state('Install Contrail for Kubernetes') {
+                        orchestrate.installContrailNetwork(saltMaster)
+                        orchestrate.installContrailCompute(saltMaster)
+                    }
+                }
             }
 
             // install openstack
