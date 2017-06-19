@@ -209,6 +209,10 @@ timestamps {
                     print(kubernetes_control_address)
                     salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
 
+                    // ensure certificates are generated properly
+                    salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(saltMaster, '*', ['salt.minion.cert'], true)
+
                     orchestrate.installKubernetesInfra(saltMaster)
                 }
 
