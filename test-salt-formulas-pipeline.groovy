@@ -44,12 +44,10 @@ node("python") {
         def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
         // test if gerrit change is already Verified
         if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified","+")){
-          common.successMsg("Gerrit change ${GERRIT_CHANGE_NUMBER} patchset ${GERRIT_PATCHSET_NUMBER} already has Verified, skipping tests")
-          currentBuild.result = 'ABORTED'
+          common.successMsg("Gerrit change ${GERRIT_CHANGE_NUMBER} patchset ${GERRIT_PATCHSET_NUMBER} already has Verified, skipping tests") // do nothing
         // test WIP contains in commit message
         }else if(gerritChange.commitMessage.contains("WIP")){
-          common.successMsg("Commit message contains WIP, skipping tests")
-          currentBuild.result = 'ABORTED'
+          common.successMsg("Commit message contains WIP, skipping tests") // do nothing
         }else{
           // test if change aren't already merged
           def merged = gerritChange.status == "MERGED"
@@ -59,7 +57,6 @@ node("python") {
             ])
           } else{
             common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
-            currentBuild.result = 'ABORTED'
           }
         }
       } else if(defaultGitRef && defaultGitUrl) {
