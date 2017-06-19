@@ -110,7 +110,7 @@ node() {
         }
 
         command = "cmd.run"
-        args = "apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade"
+        args = "'DEBIAN_FRONTEND=noninteractive'; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade"
 
         stage('Apply package upgrades on sample') {
             out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
@@ -132,37 +132,33 @@ node() {
                 out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
                 salt.printSaltCommandResult(out)
             }
-            stage("Run salt states on sample nodes and reboot them") {
+            stage("Run salt states on sample nodes") {
                 salt.enforceState(saltMaster, targetLiveSubset, ['nova', 'neutron'])
-                try {
-                    salt.runSaltProcessStep(saltMaster, targetLiveSubset, 'system.reboot', null, null, true, 5)
-                } catch (Exception er) {
-                    common.infoMsg("The following nodes did not return anything because they were rebooted: ${targetLiveSubset}")
-                }
+                //salt.enforceHighstate(saltMaster, targetLiveAll)
             }
         } else {
             stage("Run salt states on sample nodes") {
-                salt.enforceState(saltMaster, targetLiveSubset, ['nova'])
-                salt.enforceState(saltMaster, targetLiveSubset, 'linux.system.repo')
+                salt.enforceState(saltMaster, targetLiveSubset, ['nova', 'linux.system.repo'])
+                //salt.enforceHighstate(saltMaster, targetLiveAll)
             }
         }
 
-        stage('Confirm upgrade on all nodes') {
+        stage('Confirm upgrade on all targeted nodes') {
             timeout(time: 2, unit: 'HOURS') {
                input message: "Verify that the upgraded sample nodes are working correctly. If so, do you want to approve live upgrade on ${targetLiveAll} nodes?"
             }
         }
 
         if(opencontrail != null) { 
-            stage('Remove OC component from repos on sample nodes') {
+            stage('Remove OC component from repos on all targeted nodes') {
                 salt.cmdRun(saltMaster, targetLiveAll, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g'")
                 salt.runSaltProcessStep(saltMaster, targetLiveAll, 'pkg.refresh_db', [], null, true)
             }
         }
 
-        args = "apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade"
+        args = "'DEBIAN_FRONTEND=noninteractive'; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade"
 
-        stage('Apply package upgrades on all nodes') {
+        stage('Apply package upgrades on all targeted nodes') {
             out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
             salt.printSaltCommandResult(out)
         }
@@ -170,22 +166,18 @@ node() {
         if(openvswitch != null) {
             args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
 
-            stage('Start ovs on sample nodes') {
+            stage('Start ovs on all targeted nodes') {
                 out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
                 salt.printSaltCommandResult(out)
             }
-            stage("Run salt states on sample nodes and reboot them") {
+            stage("Run salt states on all targeted nodes") {
                 salt.enforceState(saltMaster, targetLiveAll, ['nova', 'neutron'])
-                try {
-                    salt.runSaltProcessStep(saltMaster, targetLiveAll, 'system.reboot', null, null, true, 5)
-                } catch (Exception er) {
-                    common.infoMsg("The following nodes did not return anything because they were rebooted: ${targetLiveAll}")
-                }
+                //salt.enforceHighstate(saltMaster, targetLiveAll)
             }
         } else {
-            stage("Run salt states on sample nodes") {
-                salt.enforceState(saltMaster, targetLiveAll, ['nova'])
-                salt.enforceState(saltMaster, targetLiveAll, 'linux.system.repo')
+            stage("Run salt states on all targeted nodes") {
+                salt.enforceState(saltMaster, targetLiveAll, ['nova', 'linux.system.repo'])
+                //salt.enforceHighstate(saltMaster, targetLiveAll)
             }
         }
 
@@ -195,5 +187,4 @@ node() {
         throw e
     }
 }
-
 

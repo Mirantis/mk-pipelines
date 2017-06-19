@@ -437,6 +437,9 @@ timestamps {
 
                     // salt 'cmp*' cmd.run 'service nova-compute restart'
                     salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['nova-conductor'], null, true)
+                    salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['nova-scheduler'], null, true)
+
 
                     // salt 'prx*' state.sls linux,openssh,salt.minion,ntp,rsyslog
                     // salt 'ctl*' state.sls keepalived
@@ -556,6 +559,9 @@ timestamps {
                 salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
 
                 sleep(70)
+
+                salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['nova-conductor'], null, true)
+                salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['nova-scheduler'], null, true)
 
                 salt.cmdRun(saltMaster, 'ctl01*', '. /root/keystonerc; nova service-list; glance image-list; nova flavor-list; nova hypervisor-list; nova list; neutron net-list; cinder list; heat service-list')
             }
