@@ -26,13 +26,11 @@ node('docker') {
 
         stage("build binary") {
             dir("libvirt-exporter-${version}") {
-                sh("sed -i 's/VERSION/${version}/g' debian/changelog")
-                sh("debuild -us -uc")
+                sh("""sed -i 's/VERSION/${version}/g' debian/changelog &&
+		    scripts/build.py --package --version=\"${version}\" --platform=linux --arch=amd64""")
             }
-
-            archiveArtifacts artifacts: "*.deb"
+            archiveArtifacts artifacts: "libvirt-exporter-${version}/build/*.deb"
         }
-
         if (UPLOAD_APTLY.toBoolean()) {
             lock("aptly-api") {
                 stage("upload") {
