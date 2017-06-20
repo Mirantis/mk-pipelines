@@ -55,12 +55,6 @@ node("vm") {
                  throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
              }
         }
-        stage('Generate config file for devops portal') {
-            writeFile (
-                file: "${workspace}/test_config.json",
-                text: "${JSON_CONFIG}"
-            )
-       }
        stage('Start container') {
             def workspace = common.getWorkspace()
             def timeStamp = new Date().format("HHmmss", TimeZone.getTimeZone('UTC'))
@@ -102,7 +96,6 @@ node("vm") {
                     sh("docker-compose -f ${COMPOSE_PATH} -p ${uniqId} ${dockerCleanupCommands[i]} || true")
                 }
                 sh("docker network rm ${uniqId}_default || true")
-                sh("rm -f ${workspace}/test_config.json || true")
                 common.infoMsg("Container with id ${containerName} was removed.")
             }
         }
