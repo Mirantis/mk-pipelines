@@ -13,11 +13,9 @@ def executeCmd(containerName, cmd) {
     stage(cmd) {
         assert containerName != null
         common.infoMsg("Starting command: ${cmd}")
-        def output = sh(
-            script: "docker exec ${containerName} ${cmd}",
-            returnStdout: true,
-        )
-        common.infoMsg(output)
+        wrap([$class: 'AnsiColorBuildWrapper']) {
+            sh("docker exec ${containerName} ${cmd}")
+        }
         common.successMsg("Successfully completed: ${cmd}")
     }
 }
