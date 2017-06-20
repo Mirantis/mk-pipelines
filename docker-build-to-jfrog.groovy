@@ -2,6 +2,7 @@
  * Docker image build pipeline with push to JFrog
  * IMAGE_NAME - Image name
  * IMAGE_TAGS - Tag list for image, separated by space
+ * CONTEXT_PATH - Path to build context directory
  * CREDENTIALS_ID - gerrit credentials id
  * DOCKERFILE_PATH - path to dockerfile in repository
  * DOCKER_REGISTRY - url to registry
@@ -21,6 +22,17 @@ node("docker") {
   def dockerRepository = DOCKER_REGISTRY
   def docker_dev_repo = "docker-dev-local"
   def docker_prod_repo = "docker-prod-local"
+  def dockerFileOption
+
+  def buildTag = "oss-ci-docker-${BUILD_NUMBER}-${GERRIT_CHANGE_NUMBER}-${GERRIT_PATCHSET_NUMBER}"
+
+  if (DOCKERFILE_PATH.trim() == ''){
+    dockerFileOption = ''
+  }
+  else {
+    dockerFileOption = "--file ${DOCKERFILE_PATH}"
+  }
+  def buildCmd = "docker build --tag ${buildTag} ${dockerFileOption} --rm ${CONTEXT_PATH}"
 
   def imageTagsList = IMAGE_TAGS.tokenize(" ")
   def workspace = common.getWorkspace()
@@ -35,13 +47,10 @@ node("docker") {
       ])
     }
     stage("build image"){
-      containerId = sh(
-        script: "docker build -f ${DOCKERFILE_PATH}/Dockerfile -q --rm . | awk -F':' '{print \$2}'",
-        returnStdout: true
-      ).trim().take(12)
+      sh "${buildCmd}"
       imageTagsList << "${GERRIT_CHANGE_NUMBER}_${GERRIT_PATCHSET_NUMBER}"
       for (imageTag in imageTagsList) {
-        sh "docker tag ${containerId} ${dockerRepository}/${projectNamespace}/${IMAGE_NAME}:${imageTag}"
+        sh "docker tag ${buildTag} ${dockerRepository}/${projectNamespace}/${IMAGE_NAME}:${imageTag}"
       }
     }
     stage("publish image"){
