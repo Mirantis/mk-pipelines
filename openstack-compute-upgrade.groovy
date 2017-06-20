@@ -110,7 +110,7 @@ node() {
         }
 
         command = "cmd.run"
-        args = "'DEBIAN_FRONTEND=noninteractive'; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade"
+        args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade;'
 
         stage('Apply package upgrades on sample') {
             out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
@@ -156,7 +156,7 @@ node() {
             }
         }
 
-        args = "'DEBIAN_FRONTEND=noninteractive'; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade"
+        args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade;'
 
         stage('Apply package upgrades on all targeted nodes') {
             out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
