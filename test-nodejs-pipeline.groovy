@@ -89,6 +89,14 @@ node("vm") {
         throw err
     } finally {
         common.sendNotification(currentBuild.result, "" ,["slack"])
+        stage('Attach artifacts') {
+            if (containerName != null) {
+                sh("docker cp ${containerName}:/opt/workspace/test_output ${workspace}/test_output")
+                archiveArtifacts(
+                    artifacts: "${workspace}/test_output/screenshots/*.png",
+                )
+            }
+        }
         stage('Cleanup') {
             if (containerName != null) {
                 dockerCleanupCommands = ['stop', 'rm -f']
