@@ -63,7 +63,7 @@ node("vm") {
             } else {
                 uniqId = defaultGitRef.tokenize('/').takeRight(2).join('') + timeStamp
             }
-            sh("docker-compose -f ${COMPOSE_PATH} -p ${uniqId} up -d")
+            sh("docker-compose --project-directory=${workspace} -f ${COMPOSE_PATH} -p ${uniqId} up -d")
             containerName = "${uniqId}_devopsportal_1"
             common.successMsg("Container with id ${containerName} started.")
         }
