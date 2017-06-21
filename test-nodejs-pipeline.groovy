@@ -9,12 +9,12 @@
 gerrit = new com.mirantis.mk.Gerrit()
 common = new com.mirantis.mk.Common()
 
-def executeCmd(containerName, cmd) {
+def executeCmd(user, containerName, cmd) {
     stage(cmd) {
         assert containerName != null
         common.infoMsg("Starting command: ${cmd}")
         wrap([$class: 'AnsiColorBuildWrapper']) {
-            sh("docker exec ${containerName} ${cmd}")
+            sh("docker exec --user=${user} ${containerName} ${cmd}")
         }
         common.successMsg("Successfully completed: ${cmd}")
     }
@@ -66,13 +66,18 @@ node("vm") {
             sh("docker-compose -f ${COMPOSE_PATH} -p ${uniqId} up -d")
             containerName = "${uniqId}_devopsportal_1"
             common.successMsg("Container with id ${containerName} started.")
-            sh("docker cp ${workspace}/. ${containerName}:/opt/workspace/")
         }
-        executeCmd(containerName, "npm install")
+
+        def jenkinsUID = common.getJenkinsUid()
+        def jenkinsGID = common.getJenkinsGid()
+        def jenkinsUser = "${jenkinsUID}:${jenkinsGID}"
+
+        executeCmd(jenkinsUser, containerName, "npm install")
+
         def cmds = COMMANDS.tokenize('\n')
         for (int i = 0; i < cmds.size(); i++) {
            timeout(5) {
-               executeCmd(containerName, cmds[i])
+               executeCmd(jenkinsUser, containerName, cmds[i])
            }
         }
     } catch (err) {
@@ -83,9 +88,8 @@ node("vm") {
         common.sendNotification(currentBuild.result, "" ,["slack"])
         stage('Attach artifacts') {
             if (containerName != null) {
-                sh("docker cp ${containerName}:/opt/workspace/test_output ${workspace}/test_output")
                 archiveArtifacts(
-                    artifacts: "${workspace}/test_output/screenshots/*.png",
+                    artifacts: "test_output/screenshots/*.png",
                 )
             }
         }
