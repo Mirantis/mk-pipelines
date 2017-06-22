@@ -340,7 +340,18 @@ timestamps {
                 if (STACK_DELETE.toBoolean() == true) {
                     common.errorMsg('Heat job cleanup triggered')
                     stage('Trigger cleanup job') {
-                        build job: STACK_CLEANUP_JOB, parameters: [[$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME]]
+                        build(job: STACK_CLEANUP_JOB, parameters: [
+                            [$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME],
+                            [$class: 'StringParameterValue', name: 'STACK_TYPE', value: STACK_TYPE],
+                            [$class: 'StringParameterValue', name: 'OPENSTACK_API_URL', value: OPENSTACK_API_URL],
+                            [$class: 'StringParameterValue', name: 'OPENSTACK_API_CREDENTIALS', value: OPENSTACK_API_CREDENTIALS],
+                            [$class: 'StringParameterValue', name: 'OPENSTACK_API_PROJECT', value: OPENSTACK_API_PROJECT],
+                            [$class: 'StringParameterValue', name: 'OPENSTACK_API_PROJECT_DOMAIN', value: OPENSTACK_API_PROJECT_DOMAIN],
+                            [$class: 'StringParameterValue', name: 'OPENSTACK_API_PROJECT_ID', value: OPENSTACK_API_PROJECT_ID],
+                            [$class: 'StringParameterValue', name: 'OPENSTACK_API_USER_DOMAIN', value: OPENSTACK_API_USER_DOMAIN],
+                            [$class: 'StringParameterValue', name: 'OPENSTACK_API_CLIENT', value: OPENSTACK_API_CLIENT],
+                            [$class: 'StringParameterValue', name: 'OPENSTACK_API_VERSION', value: OPENSTACK_API_VERSION]
+                        ])
                     }
                 } else {
                     if (currentBuild.result == 'FAILURE') {
