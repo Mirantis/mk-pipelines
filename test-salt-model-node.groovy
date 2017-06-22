@@ -12,6 +12,7 @@
 
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
+def git = new com.mirantis.mk.Git()
 def ssh = new com.mirantis.mk.Ssh()
 def saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
