@@ -5,13 +5,14 @@
  *  DEFAULT_GIT_URL
  *  CREDENTIALS_ID
  *  EXTRA_FORMULAS
+ *  SYSTEM_GIT_URL
+ *  SYSTEM_GIT_REF
  */
 
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
 def git = new com.mirantis.mk.Git()
-def saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
 def gerritRef
 try {
@@ -61,43 +62,38 @@ node("python") {
             common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
           }
         }
+        // defaultGitUrl is passed to the triggered job
+        defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
+        defaultGitRef = GERRIT_REFSPEC
       } else if(defaultGitRef && defaultGitUrl) {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
       } else {
         throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
       }
-      if(checkouted) {
-        if (fileExists('classes/system')) {
-          ssh.prepareSshAgentKey(CREDENTIALS_ID)
-          dir('classes/system') {
-            remoteUrl = git.getGitRemote()
-            ssh.ensureKnownHosts(remoteUrl)
-          }
-          ssh.agentSh("git submodule init; git submodule sync; git submodule update --recursive")
-        }
-      }
     }
 
     stage("test-nodes") {
       if(checkouted) {
-        def workspace = common.getWorkspace()
         def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
-        def buildSteps = [:]
-        def partitionSize = (nodes.size() <= PARALLEL_NODE_GROUP_SIZE.toInteger()) ? nodes.size() : PARALLEL_NODE_GROUP_SIZE.toInteger()
-        def partitions = common.partitionList(nodes, partitionSize)
-        for (int i =0; i < partitions.size();i++) {
-          def partition = partitions[i]
-          buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
-          for(int k=0; k < partition.size;k++){
-              def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-              buildSteps.get("partition-${i}").put(basename, { saltModelTesting.setupAndTestNode(basename, EXTRA_FORMULAS, workspace) })
-          }
+        def branches = [:]
+        for (int i = 0; i < nodes.size(); i++) {
+
+          def testTarget = sh(scipt: "basename ${nodes[i]}.yml", returnStdout: true).trim()
+          branches[${testTarget}] = {
+            build job: "test-salt-model-node", parameters: [
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
+              [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
+              [$class: 'StringParameterValue', name: 'EXTRA_FORMULAS', value: EXTRA_FORMULAS],
+              [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
+              [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
+              [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF]
+            ]}
+          parallel branches
         }
-        common.serial(buildSteps)
       }
     }
   } catch (Throwable e) {
-     // If there was an error or exception thrown, the build failed
      currentBuild.result = "FAILURE"
      throw e
   } finally {

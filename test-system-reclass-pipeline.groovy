@@ -25,6 +25,7 @@ try {
 }
 def checkouted = false
 def merged = false
+def systemRefspec = "HEAD"
 try {
   stage("Checkout") {
     node() {
@@ -37,6 +38,7 @@ try {
           checkouted = gerrit.gerritPatchsetCheckout ([
             credentialsId : gerritCredentials
           ])
+          systemRefspec = GERRIT_REFSPEC
         }
         // change defaultGit variables if job triggered from Gerrit
         defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
@@ -60,6 +62,8 @@ try {
               build job: "test-salt-model-${cluster}", parameters: [
                 [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
                 [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"]
+                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
+                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
               ]
             }
           }
