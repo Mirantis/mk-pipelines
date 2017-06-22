@@ -149,6 +149,10 @@ node() {
             }
         }
 
+        stage("Add new repos on all targeted nodes") {
+            salt.enforceState(saltMaster, targetLiveAll, 'linux.system.repo')
+        }
+
         if(opencontrail != null) { 
             stage('Remove OC component from repos on all targeted nodes') {
                 salt.cmdRun(saltMaster, targetLiveAll, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g'")
