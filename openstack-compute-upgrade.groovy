@@ -134,12 +134,18 @@ node() {
             }
             stage("Run salt states on sample nodes") {
                 salt.enforceState(saltMaster, targetLiveSubset, ['nova', 'neutron'])
-                //salt.enforceHighstate(saltMaster, targetLiveAll)
             }
         } else {
             stage("Run salt states on sample nodes") {
                 salt.enforceState(saltMaster, targetLiveSubset, ['nova', 'linux.system.repo'])
-                //salt.enforceHighstate(saltMaster, targetLiveAll)
+            }
+        }
+
+        stage("Run Highstate on sample nodes") {
+            try {
+                salt.enforceHighstate(saltMaster, targetLiveSubset)
+            } catch (Exception er) {
+                common.errorMsg("Highstate was executed on ${targetLiveSubset} but something failed. Please check it and fix it accordingly.")
             }
         }
 
@@ -176,12 +182,18 @@ node() {
             }
             stage("Run salt states on all targeted nodes") {
                 salt.enforceState(saltMaster, targetLiveAll, ['nova', 'neutron'])
-                //salt.enforceHighstate(saltMaster, targetLiveAll)
             }
         } else {
             stage("Run salt states on all targeted nodes") {
                 salt.enforceState(saltMaster, targetLiveAll, ['nova', 'linux.system.repo'])
-                //salt.enforceHighstate(saltMaster, targetLiveAll)
+            }
+        }
+
+        stage("Run Highstate on all targeted nodes") {
+            try {
+                salt.enforceHighstate(saltMaster, targetLiveAll)
+            } catch (Exception er) {
+                common.errorMsg("Highstate was executed ${targetLiveAll} but something failed. Please check it and fix it accordingly.")
             }
         }
 
