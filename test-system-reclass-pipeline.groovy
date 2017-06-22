@@ -61,7 +61,7 @@ try {
             branches["${cluster}"] = {
               build job: "test-salt-model-${cluster}", parameters: [
                 [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
-                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"]
+                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
                 [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
                 [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
               ]
