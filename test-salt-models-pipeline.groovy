@@ -78,8 +78,8 @@ node("python") {
         def branches = [:]
         for (int i = 0; i < nodes.size(); i++) {
 
-          def testTarget = sh(scipt: "basename ${nodes[i]}.yml", returnStdout: true).trim()
-          branches[${testTarget}] = {
+          def testTarget = sh(script: "basename ${nodes[i]}.yml", returnStdout: true).trim()
+          branches[testTarget] = {
             build job: "test-salt-model-node", parameters: [
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
