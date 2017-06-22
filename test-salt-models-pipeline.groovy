@@ -76,21 +76,31 @@ node("python") {
       if(checkouted) {
         def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
         def branches = [:]
+        def acc = 0
         for (int i = 0; i < nodes.size(); i++) {
-
           def testTarget = sh(script: "basename ${nodes[i]} .yml", returnStdout: true).trim()
-          branches[testTarget] = {
-            build job: "test-salt-model-node", parameters: [
-              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
-              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
-              [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
-              [$class: 'StringParameterValue', name: 'EXTRA_FORMULAS', value: EXTRA_FORMULAS],
-              [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
-              [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
-              [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF]
-            ]}
+
+          if (acc < PARALLEL_NODE_GROUP_SIZE.toInteger()) {
+            branches[testTarget] = {
+              build job: "test-salt-model-node", parameters: [
+                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
+                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
+                [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
+                [$class: 'StringParameterValue', name: 'EXTRA_FORMULAS', value: EXTRA_FORMULAS],
+                [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
+                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
+                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF]
+              ]}
+            acc++;
+          } else {
+            parallel branches
+            acc = 0
+            branches = [:]
+          }
         }
-        parallel branches
+        if (acc > 0) {
+          parallel branches
+        }
       }
     }
   } catch (Throwable e) {
