@@ -78,7 +78,7 @@ node("python") {
         def branches = [:]
         for (int i = 0; i < nodes.size(); i++) {
 
-          def testTarget = sh(script: "basename ${nodes[i]}.yml", returnStdout: true).trim()
+          def testTarget = sh(script: "basename ${nodes[i]} .yml", returnStdout: true).trim()
           branches[testTarget] = {
             build job: "test-salt-model-node", parameters: [
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
@@ -89,8 +89,8 @@ node("python") {
               [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
               [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF]
             ]}
-          parallel branches
         }
+        parallel branches
       }
     }
   } catch (Throwable e) {
