@@ -450,6 +450,18 @@ timestamps {
                     // salt 'prx*' state.sls nginx
                     salt.enforceState(saltMaster, 'prx*', 'nginx')
 
+                    try {
+                        salt.enforceHighstate(saltMaster, 'ctl*')
+                    } catch (Exception er) {
+                        common.errorMsg("Highstate was executed on controller nodes but something failed. Please check it and fix it accordingly.")
+                    }
+
+                    try {
+                        salt.enforceHighstate(saltMaster, 'prx*')
+                    } catch (Exception er) {
+                        common.errorMsg("Highstate was executed on proxy nodes but something failed. Please check it and fix it accordingly.")
+                    }
+
                     salt.cmdRun(saltMaster, 'ctl01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
                 }
             }
