@@ -21,6 +21,13 @@ try {
   gerritRef = null
 }
 
+def formulasSource
+try {
+  formulasSource = FORMULAS_SOURCE
+} catch (MissingPropertyException e) {
+  formulasSource = "pkg"
+}
+
 def defaultGitRef, defaultGitUrl
 try {
     defaultGitRef = DEFAULT_GIT_REF
@@ -87,6 +94,7 @@ node("python") {
                 [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
                 [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
                 [$class: 'StringParameterValue', name: 'EXTRA_FORMULAS', value: EXTRA_FORMULAS],
+                [$class: 'StringParameterValue', name: 'FORMULAS_SOURCE', value: formulasSource],
                 [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
                 [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
                 [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF]
