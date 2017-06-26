@@ -19,7 +19,7 @@ node("python") {
     stage("test") {
       if (gerritChange.status != "MERGED" && !SKIP_TEST.equals("true")){
         // test max CodeReview
-        if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"CodeReview", "+")){
+        if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Code-Review", "+")){
           doSubmit = true
           wrap([$class: 'AnsiColorBuildWrapper']) {
             def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
