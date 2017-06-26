@@ -105,6 +105,9 @@ node("python") {
             ]}
           acc++;
         }
+        if (acc != 0) {
+          parallel branches
+        }
       }
     }
   } catch (Throwable e) {
