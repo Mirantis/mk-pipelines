@@ -52,7 +52,7 @@ node("python") {
     stage("test node") {
       if (checkouted) {
         def workspace = common.getWorkspace()
-        saltModelTesting.setupAndTestNode(NODE_TARGET, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE)
+        saltModelTesting.setupAndTestNode(NODE_TARGET, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION)
       }
     }
   } catch (Throwable e) {
