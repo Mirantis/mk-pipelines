@@ -119,7 +119,7 @@ timestamps {
                                 'instance_zone': HEAT_STACK_ZONE,
                                 'public_net': HEAT_STACK_PUBLIC_NET
                             ]
-                            openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+                            openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv, false)
                         }
                     }
 
