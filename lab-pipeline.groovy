@@ -174,47 +174,82 @@ timestamps {
 
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
+
+                stage('Overwrite Kubernetes parameters') {
+
+                    // Overwrite Kubernetes vars if specified
+                    if (env.getEnvironment().containsKey('KUBERNETES_HYPERKUBE_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_hyperkube_image', KUBERNETES_HYPERKUBE_IMAGE])
+                    }
+                    if (env.getEnvironment().containsKey('MTU')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_mtu', MTU])
+                    }
+
+                    // Overwrite Calico vars if specified
+                    if (env.getEnvironment().containsKey('CALICO_CNI_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_calico_cni_image', CALICO_CNI_IMAGE])
+                    }
+                    if (env.getEnvironment().containsKey('CALICO_NODE_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_calico_image', CALICO_NODE_IMAGE])
+                    }
+                    if (env.getEnvironment().containsKey('CALICOCTL_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_calicoctl_image', CALICOCTL_IMAGE])
+                    }
+                    if (env.getEnvironment().containsKey('CALICO_POLICY_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_calico_policy_image', CALICO_POLICY_IMAGE])
+                    }
+
+                    // Overwrite Virtlet image if specified
+                    if (env.getEnvironment().containsKey('VIRTLET_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_virtlet_image', VIRTLET_IMAGE])
+                    }
+
+                    // Overwrite netchecker vars if specified
+                    if (env.getEnvironment().containsKey('NETCHECKER_AGENT_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_netchecker_agent_image', NETCHECKER_AGENT_IMAGE])
+                    }
+                    if (env.getEnvironment().containsKey('NETCHECKER_SERVER_IMAGE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_netchecker_server_image', NETCHECKER_SERVER_IMAGE])
+                    }
+
+                    // Overwrite docker version if specified
+                    if (env.getEnvironment().containsKey('DOCKER_ENGINE')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_docker_package', DOCKER_ENGINE])
+                    }
+
+                    // Overwrite addons vars if specified
+                    if (env.getEnvironment().containsKey('HELM_ENABLED')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_helm_enabled', HELM_ENABLED])
+                    }
+                    if (env.getEnvironment().containsKey('NETCHECKER_ENABLED')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_netchecker_enabled', NETCHECKER_ENABLED])
+                    }
+                    if (env.getEnvironment().containsKey('CALICO_POLICY_ENABLED')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_calico_policy_enabled', CALICO_POLICY_ENABLED])
+                    }
+                    if (env.getEnvironment().containsKey('VIRTLET_ENABLED')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_virtlet_enabled', VIRTLET_ENABLED])
+                    }
+                    if (env.getEnvironment().containsKey('KUBE_NET_MANAGER_ENABLED')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_kube_network_manager_enabled', KUBE_NET_MANAGER_ENABLED])
+                    }
+                 }
+
+                // If k8s install with contrail network manager then contrail need to be install first
+                if (common.checkContains('STACK_INSTALL', 'contrail')) {
+                    stage('Install Contrail for Kubernetes') {
+                        orchestrate.installContrailNetwork(saltMaster)
+                        orchestrate.installContrailCompute(saltMaster)
+                        orchestrate.installKubernetesContrailCompute(saltMaster)
+                    }
+                }
+
                 stage('Install Kubernetes infra') {
                     orchestrate.installKubernetesInfra(saltMaster)
                 }
 
                 stage('Install Kubernetes control') {
-
-                    // Overwrite Kubernetes vars if specified
-                    if (env.getEnvironment().containsKey('KUBERNETES_HYPERKUBE_IMAGE')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_hyperkube_image', KUBERNETES_HYPERKUBE_IMAGE)
-                    }
-                    if (env.getEnvironment().containsKey('MTU')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_mtu', MTU)
-                    }
-                    // Overwrite Calico vars if specified
-                    if (env.getEnvironment().containsKey('CALICO_CNI_IMAGE')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_calico_cni_image', CALICO_CNI_IMAGE)
-                    }
-                    if (env.getEnvironment().containsKey('CALICO_NODE_IMAGE')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_calico_image', CALICO_NODE_IMAGE)
-                    }
-                    if (env.getEnvironment().containsKey('CALICOCTL_IMAGE')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_calicoctl_image', CALICOCTL_IMAGE)
-                    }
-
-                    // Overwrite netchecker vars if specified
-                    if (env.getEnvironment().containsKey('NETCHECKER_AGENT_IMAGE')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_netchecker_agent_image', NETCHECKER_AGENT_IMAGE)
-                    }
-                    if (env.getEnvironment().containsKey('NETCHECKER_SERVER_IMAGE')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', 'kubernetes_netchecker_server_image', NETCHECKER_SERVER_IMAGE)
-                    }
-
                     orchestrate.installKubernetesControl(saltMaster)
-                }
-
-
-                if (common.checkContains('STACK_INSTALL', 'contrail')) {
-                    state('Install Contrail for Kubernetes') {
-                        orchestrate.installContrailNetwork(saltMaster)
-                        orchestrate.installContrailCompute(saltMaster)
-                    }
                 }
             }
 
