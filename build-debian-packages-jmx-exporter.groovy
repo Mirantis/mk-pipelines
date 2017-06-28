@@ -1,13 +1,15 @@
 def common = new com.mirantis.mk.Common()
 def git = new com.mirantis.mk.Git()
 def aptly = new com.mirantis.mk.Aptly()
+def dockerLib = new com.mirantis.mk.Docker()
 
 def timestamp = common.getDatetime()
 
 node('docker') {
-    try{
+    try {
+        def img = dockerLib.getImage("tcpcloud/debian-build-ubuntu-${DIST}")
 
-        stage("cleanup") {
+        img.inside ("-u root:root") {
             sh("rm -rf * || true")
         }
 
@@ -23,46 +25,40 @@ node('docker') {
             )
         }
 
-        try {
-            def img = docker.img("tcpcloud/debian-build-ubuntu-xenial")
+        img.inside ("-u root:root") {
+            stage("Build") {
+                sh("sed -i \"s/TIMESTAMP/${timestamp}/g\" \$(find -name pom.xml)")
+                sh("sudo apt-get update && sudo apt-get install -y openjdk-8-jdk maven")
+                sh("cd jmx-exporter-${timestamp} && mvn package")
+            }
+        }
 
-            img.inside {
-                stage("Build") {
-                    sh("sed -i \"s/TIMESTAMP/${timestamp}/g\" \$(find -name pom.xml)")
-                    sh("sudo apt-get update && sudo apt-get install -y openjdk-8-jdk maven")
-                    sh("cd jmx-exporter-${timestamp} && mvn package")
+        if (UPLOAD_APTLY.toBoolean()) {
+            stage("upload package") {
+                def buildSteps = [:]
+                def debFiles = sh script: "find -name *.deb", returnStdout: true
+                def debFilesArray = debFiles.trim().tokenize()
+                def workspace = common.getWorkspace()
+                for (int i = 0; i < debFilesArray.size(); i++) {
+                    def debFile = debFilesArray[i];
+                    buildSteps[debFiles[i]] = aptly.uploadPackageStep(
+                        "${workspace}/"+debFile,
+                        APTLY_URL,
+                        APTLY_REPO,
+                        true
+                    )
                 }
+                parallel buildSteps
             }
 
-            if (UPLOAD_APTLY.toBoolean()) {
-                stage("upload package") {
-                    def buildSteps = [:]
-                    def debFiles = sh script: "find -name *.deb", returnStdout: true
-                    def debFilesArray = debFiles.trim().tokenize()
-                    def workspace = common.getWorkspace()
-                    for (int i = 0; i < debFilesArray.size(); i++) {
-                        def debFile = debFilesArray[i];
-                        buildSteps[debFiles[i]] = aptly.uploadPackageStep(
-                            "${workspace}/"+debFile,
-                            APTLY_URL,
-                            APTLY_REPO,
-                            true
-                        )
-                    }
-                    parallel buildSteps
-                }
-
-                stage("publish") {
-                    aptly.snapshotRepo(APTLY_URL, APTLY_REPO, timestamp)
-                    aptly.publish(APTLY_URL)
-                }
+            stage("publish") {
+                aptly.snapshotRepo(APTLY_URL, APTLY_REPO, timestamp)
+                aptly.publish(APTLY_URL)
             }
+        }
 
-        } catch (Exception e) {
-            currentBuild.result = 'FAILURE'
-            println "Cleaning up docker images"
-            sh("docker images | grep -E '[-:\\ ]+${timestamp}[\\.\\ /\$]+' | awk '{print \$3}' | xargs docker rmi -f || true")
-            throw e
+        img.inside ("-u root:root") {
+            sh("rm -rf * || true")
         }
 
     } catch (Throwable e) {
@@ -71,9 +67,5 @@ node('docker') {
        throw e
     } finally {
        common.sendNotification(currentBuild.result,"",["slack"])
-
-       if (currentBuild.result != 'FAILURE') {
-          sh("rm -rf *")
-       }
     }
 }
