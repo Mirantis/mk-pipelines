@@ -32,7 +32,7 @@ node('docker') {
 
         img.inside ("-u root:root") {
             stage("Build") {
-                sh("sed -i \"s/TIMESTAMP/${timestamp}/g\" \$(find -name pom.xml)")
+                sh("sed -i \"s/TIMESTAMP/${timestamp}/g\" \$(find ./ -name pom.xml)")
                 sh("sudo apt-get update && sudo apt-get install -y openjdk-${javaversion}-jdk maven")
                 sh("cd jmx-exporter-${timestamp} && mvn package")
             }
@@ -41,7 +41,7 @@ node('docker') {
         if (UPLOAD_APTLY.toBoolean()) {
             stage("upload package") {
                 def buildSteps = [:]
-                def debFiles = sh script: "find -name *.deb", returnStdout: true
+                def debFiles = sh script: "find ./ -name *.deb", returnStdout: true
                 def debFilesArray = debFiles.trim().tokenize()
                 def workspace = common.getWorkspace()
                 for (int i = 0; i < debFilesArray.size(); i++) {
