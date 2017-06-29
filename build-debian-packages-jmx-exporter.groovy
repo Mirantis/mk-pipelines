@@ -4,10 +4,15 @@ def aptly = new com.mirantis.mk.Aptly()
 def dockerLib = new com.mirantis.mk.Docker()
 
 def timestamp = common.getDatetime()
+def javaversion = "8"
 
 node('docker') {
     try {
         def img = dockerLib.getImage("tcpcloud/debian-build-ubuntu-${DIST}")
+
+        if ("${DIST}" == "trusty") {
+        	javaversion = "7"
+        }
 
         img.inside ("-u root:root") {
             sh("rm -rf * || true")
@@ -28,7 +33,7 @@ node('docker') {
         img.inside ("-u root:root") {
             stage("Build") {
                 sh("sed -i \"s/TIMESTAMP/${timestamp}/g\" \$(find -name pom.xml)")
-                sh("sudo apt-get update && sudo apt-get install -y openjdk-8-jdk maven")
+                sh("sudo apt-get update && sudo apt-get install -y openjdk-${javaversion}-jdk maven")
                 sh("cd jmx-exporter-${timestamp} && mvn package")
             }
         }
