@@ -13,6 +13,7 @@
 
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
+def git = new com.mirantis.mk.Git()
 def dockerLib = new com.mirantis.mk.Docker()
 node("docker") {
   def workspace = common.getWorkspace()
@@ -21,9 +22,7 @@ node("docker") {
     def dockerApp
     docker.withRegistry(REGISTRY_URL, REGISTRY_CREDENTIALS_ID) {
       stage("checkout") {
-         checkout changelog: true, poll: false,
-           scm: [$class: 'GitSCM', branches: [[name:IMAGE_BRANCH]], doGenerateSubmoduleConfigurations: false,
-           extensions: [[$class: 'CleanCheckout']],  submoduleCfg: [], userRemoteConfigs: [[credentialsId: IMAGE_CREDENTIALS_ID, url: IMAGE_GIT_URL]]]
+         git.checkoutGitRepository('.', IMAGE_GIT_URL, IMAGE_BRANCH, IMAGE_CREDENTIALS_ID)
       }
       stage("build") {
         common.infoMsg("Building docker image ${IMAGE_NAME}")
