@@ -22,7 +22,7 @@ node("docker") {
     docker.withRegistry(REGISTRY_URL, REGISTRY_CREDENTIALS_ID) {
       stage("checkout") {
          checkout changelog: true, poll: false,
-           scm: [$class: 'GitSCM', branches: IMAGE_BRANCH, doGenerateSubmoduleConfigurations: false,
+           scm: [$class: 'GitSCM', branches: [[name:IMAGE_BRANCH]], doGenerateSubmoduleConfigurations: false,
            extensions: [[$class: 'CleanCheckout']],  submoduleCfg: [], userRemoteConfigs: [[credentialsId: IMAGE_CREDENTIALS_ID, url: IMAGE_GIT_URL]]]
       }
       stage("build") {
