@@ -22,7 +22,7 @@ node("docker") {
 
     def buildArgs = []
     try {
-      buildArgs = IMAGE_BUILD_PARAMS.split(' ')
+      buildArgs = IMAGE_BUILD_PARAMS.tokenize(' ')
     } catch (Throwable e) {
       buildArgs = []
     }
