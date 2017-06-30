@@ -19,6 +19,13 @@ node("docker") {
   def workspace = common.getWorkspace()
   def imageTagsList = IMAGE_TAGS.tokenize(" ")
   try{
+
+    def buildArgs = []
+    try {
+      buildArgs = IMAGE_BUILD_PARAMS.split(' ')
+    } catch (Throwable e) {
+      buildArgs = []
+    }
     def dockerApp
     docker.withRegistry(REGISTRY_URL, REGISTRY_CREDENTIALS_ID) {
       stage("checkout") {
@@ -26,7 +33,7 @@ node("docker") {
       }
       stage("build") {
         common.infoMsg("Building docker image ${IMAGE_NAME}")
-        dockerApp = dockerLib.buildDockerImage(IMAGE_NAME, "", "${workspace}/${DOCKERFILE_PATH}", imageTagsList[0])
+        dockerApp = dockerLib.buildDockerImage(IMAGE_NAME, "", "${workspace}/${DOCKERFILE_PATH}", imageTagsList[0], buildArgs)
         if(!dockerApp){
           throw new Exception("Docker build image failed")
         }
