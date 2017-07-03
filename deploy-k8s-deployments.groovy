@@ -18,7 +18,7 @@ node() {
         )
     }
     stage("Update components") {
-        common.info("Setting up components..")
+        common.infoMsg("Setting up components..")
         out = salt.cmdRun(
             master,
             targetExpression,
