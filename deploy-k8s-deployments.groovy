@@ -19,6 +19,20 @@ node() {
     }
     stage("Update components") {
         common.infoMsg("Setting up components..")
+        def extraCommand
+        try {
+            extraCommand = EXTRA_COMMAND
+        } catch (Throwable e) {
+            extraCommand = null
+        }
+
+        if (extraCommand) {
+            salt.cmdRun(
+                saltMaster,
+                targetExpression,
+                extraCommand
+            )
+        }
         out = salt.cmdRun(
             saltMaster,
             targetExpression,
