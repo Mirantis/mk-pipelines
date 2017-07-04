@@ -40,6 +40,7 @@
  *   TEMPEST_IMAGE_LINK         Tempest image link
  *
  * optional parameters for overwriting soft params
+ *   SALT_OVERRIDES              YAML with overrides for Salt deployment
  *   KUBERNETES_HYPERKUBE_IMAGE  Docker repository and tag for hyperkube image
  *   CALICO_CNI_IMAGE            Docker repository and tag for calico CNI image
  *   CALICO_NODE_IMAGE           Docker repository and tag for calico node image
@@ -155,6 +156,12 @@ timestamps {
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             }
 
+            // Set up override params
+            if (env.getEnvironment().containsKey('SALT_OVERRIDES')) {
+                stage('Set Salt overrides') {
+                    salt.setSaltOverrides(saltMaster,  SALT_OVERRIDES)
+                }
+            }
             //
             // Install
             //
@@ -175,6 +182,7 @@ timestamps {
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
 
+                // Deprecated stage. Use SALT_OVERRIDES instead.
                 stage('Overwrite Kubernetes parameters') {
 
                     // Overwrite Kubernetes vars if specified
