@@ -42,24 +42,29 @@ timestamps {
             } catch (Exception er) {
                 common.warningMsg('Zookeeper service already stopped')
             }
+            sleep(5)
             try {
-                salt.cmdRun(saltMaster, 'I@opencontrail:control', "mkdir /root/zookeeper/zookeeper.bak")
+                salt.cmdRun(saltMaster, 'I@opencontrail:control', "mkdir -p /root/zookeeper/zookeeper.bak")
             } catch (Exception er) {
                 common.warningMsg('Directory already exists')
             }
 
-            // add check if empty dir ?
             try {
                 salt.cmdRun(saltMaster, 'I@opencontrail:control', "mv /var/lib/zookeeper/version-2/* /root/zookeeper/zookeeper.bak")
             } catch (Exception er) {
                 common.warningMsg('Files were already moved')
+            }
+            try {
+                salt.cmdRun(saltMaster, 'I@opencontrail:control', "rm -rf /var/lib/zookeeper/version-2/*")
+            } catch (Exception er) {
+                common.warningMsg('Directory already empty')
             }
 
             _pillar = salt.getPillar(saltMaster, "I@opencontrail:control", 'zookeeper:backup:backup_dir')
             backup_dir = _pillar['return'][0].values()[0]
             if(backup_dir == null || backup_dir.isEmpty()) { backup_dir='/var/backups/zookeeper' }
             print(backup_dir)
-            salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
+            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
 
             // performs restore
             salt.cmdRun(saltMaster, 'I@opencontrail:control', "su root -c 'salt-call state.sls zookeeper'")
@@ -68,9 +73,13 @@ timestamps {
             salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.start', ['supervisor-config'], null, true)
             salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.start', ['supervisor-control'], null, true)
 
-            sleep(15)
+            sleep(50)
             salt.cmdRun(saltMaster, 'I@opencontrail:control', "ls /var/lib/zookeeper/version-2")
-            salt.cmdRun(saltMaster, 'I@opencontrail:control', "echo stat | nc localhost 2181 | grep leader")
+            try {
+                salt.cmdRun(saltMaster, 'I@opencontrail:control', "echo stat | nc localhost 2181")
+            } catch (Exception er) {
+                common.warningMsg('Check which node is zookeeper leader')
+            }
             salt.cmdRun(saltMaster, 'I@opencontrail:control', "contrail-status")
         }
     }

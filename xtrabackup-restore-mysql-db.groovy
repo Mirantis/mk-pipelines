@@ -43,19 +43,19 @@ timestamps {
                 common.warningMsg('Files are not present')
             }
             try {
-                salt.cmdRun(saltMaster, 'I@galera:master', "mkdir /root/mysql/mysql.bak")
+                salt.cmdRun(saltMaster, 'I@galera:master', "mkdir -p /root/mysql/mysql.bak")
             } catch (Exception er) {
                 common.warningMsg('Directory already exists')
-            }
-            try {
-                salt.cmdRun(saltMaster, 'I@galera:master', "rm -rf /root/mysql/mysql.bak/*")
-            } catch (Exception er) {
-                common.warningMsg('Directory already empty')
             }
             try {
                 salt.cmdRun(saltMaster, 'I@galera:master', "mv /var/lib/mysql/* /root/mysql/mysql.bak")
             } catch (Exception er) {
                 common.warningMsg('Files were already moved')
+            }
+            try {
+                salt.cmdRun(saltMaster, 'I@galera:master', "rm -rf /var/lib/mysql/*")
+            } catch (Exception er) {
+                common.warningMsg('Directory already empty')
             }
             try {
                 salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["/var/lib/mysql/.galera_bootstrap"], null, true)

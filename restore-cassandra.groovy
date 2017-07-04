@@ -33,27 +33,31 @@ timestamps {
                 common.warningMsg('Supervisor-database service already stopped')
             }
             try {
-                salt.cmdRun(saltMaster, 'I@opencontrail:control', "mkdir /root/cassandra/cassandra.bak")
+                salt.cmdRun(saltMaster, 'I@opencontrail:control', "mkdir -p /root/cassandra/cassandra.bak")
             } catch (Exception er) {
                 common.warningMsg('Directory already exists')
             }
 
-            // add check if empty dir ?
             try {
                 salt.cmdRun(saltMaster, 'I@opencontrail:control', "mv /var/lib/cassandra/* /root/cassandra/cassandra.bak")
             } catch (Exception er) {
                 common.warningMsg('Files were already moved')
+            }
+            try {
+                salt.cmdRun(saltMaster, 'I@opencontrail:control', "rm -rf /var/lib/cassandra/*")
+            } catch (Exception er) {
+                common.warningMsg('Directory already empty')
             }
 
             _pillar = salt.getPillar(saltMaster, "ntw01*", 'cassandra:backup:backup_dir')
             backup_dir = _pillar['return'][0].values()[0]
             if(backup_dir == null || backup_dir.isEmpty()) { backup_dir='/var/backups/cassandra' }
             print(backup_dir)
-            salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
+            salt.runSaltProcessStep(saltMaster, 'ntw01*', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
 
             salt.runSaltProcessStep(saltMaster, 'ntw01*', 'service.start', ['supervisor-database'], null, true)
 
-            sleep(10)
+            sleep(30)
 
             // performs restore
             salt.cmdRun(saltMaster, 'ntw01*', "su root -c 'salt-call state.sls cassandra'")
@@ -61,10 +65,10 @@ timestamps {
             salt.runSaltProcessStep(saltMaster, 'ntw02*', 'system.reboot', null, null, true, 5)
             salt.runSaltProcessStep(saltMaster, 'ntw03*', 'system.reboot', null, null, true, 5)
 
-            sleep(15)
+            sleep(60)
             salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.restart', ['supervisor-database'], null, true)
 
-            sleep(10)
+            sleep(50)
             salt.cmdRun(saltMaster, 'I@opencontrail:control', "nodetool status")
             salt.cmdRun(saltMaster, 'I@opencontrail:control', "contrail-status")
         }
