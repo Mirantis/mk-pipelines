@@ -99,7 +99,7 @@ node("vm") {
             }
         }
         stage('Run Function Tests') {
-            timeout(8) {
+            timeout(20) {
                 try {
                     executeCmd(jenkinsUser, projectName, "npm run test:functional")
                 } catch (err) {
