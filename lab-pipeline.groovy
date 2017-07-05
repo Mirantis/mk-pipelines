@@ -178,6 +178,11 @@ timestamps {
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
 
+                // install infra libs for k8s
+                stage('Install Kubernetes infra') {
+                    orchestrate.installKubernetesInfra(saltMaster)
+                }
+
                 // If k8s install with contrail network manager then contrail need to be install first
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
                     stage('Install Contrail for Kubernetes') {
@@ -185,10 +190,6 @@ timestamps {
                         orchestrate.installContrailCompute(saltMaster)
                         orchestrate.installKubernetesContrailCompute(saltMaster)
                     }
-                }
-
-                stage('Install Kubernetes infra') {
-                    orchestrate.installKubernetesInfra(saltMaster)
                 }
 
                 stage('Install Kubernetes control') {

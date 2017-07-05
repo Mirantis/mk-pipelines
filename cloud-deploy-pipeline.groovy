@@ -216,6 +216,7 @@ timestamps {
 
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
+
                 stage('Install Kubernetes infra') {
                     if (STACK_TYPE == 'aws') {
                         // configure kubernetes_control_address - save loadbalancer
@@ -223,12 +224,19 @@ timestamps {
                         print(kubernetes_control_address)
                         salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
                     }
-
                     // ensure certificates are generated properly
                     salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
                     salt.enforceState(saltMaster, '*', ['salt.minion.cert'], true)
 
                     orchestrate.installKubernetesInfra(saltMaster)
+                }
+
+                if (common.checkContains('STACK_INSTALL', 'contrail')) {
+                    stage('Install Contrail for Kubernetes') {
+                        orchestrate.installContrailNetwork(saltMaster)
+                        orchestrate.installContrailCompute(saltMaster)
+                        orchestrate.installKubernetesContrailCompute(saltMaster)
+                    }
                 }
 
                 stage('Install Kubernetes control') {
@@ -251,13 +259,6 @@ timestamps {
                         }
 
                         orchestrate.installKubernetesCompute(saltMaster)
-                    }
-                }
-
-                if (common.checkContains('STACK_INSTALL', 'contrail')) {
-                    stage('Install Contrail for Kubernetes') {
-                        orchestrate.installContrailNetwork(saltMaster)
-                        orchestrate.installContrailCompute(saltMaster)
                     }
                 }
             }
