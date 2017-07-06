@@ -173,6 +173,9 @@ timestamps {
                     sleep(5)
                     salt.enforceState(saltMaster, 'I@docker:swarm:role:master', 'docker.client')
                 }
+                // XXX: Workaround to have `/var/lib/jenkins` on all
+                // nodes where are jenkins_slave services are created.
+                salt.runSaltProcessStep(saltMaster, 'I@docker:swarm', 'cmd.run', ['mkdir -p /var/lib/jenkins'])
             }
 
             stage("Configure CI/CD services") {
