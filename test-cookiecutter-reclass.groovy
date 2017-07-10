@@ -39,6 +39,8 @@ def generateModel(modelFile, cutterEnv) {
     def templateOutputDir = templateBaseDir
     sh "rm -rf ${generatedModel} || true"
 
+    println "Generating model from context ${modelFile}"
+
     def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
     for (product in productList) {
         if (product == "infra" || (templateContext.default_context["${product}_enabled"]
