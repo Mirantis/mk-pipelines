@@ -52,16 +52,20 @@ test = new com.mirantis.mk.Test()
 _MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 
+// Define global variables
 def saltMaster
+def venv
 
-venv = "${env.WORKSPACE}/venv"
 if (STACK_TYPE == 'aws') {
-    env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
+    def aws_env_vars
 }
 
 timestamps {
     node {
         try {
+            // Set build-specific variables
+            venv = "${env.WORKSPACE}/venv"
+
             //
             // Prepare machines
             //
@@ -129,6 +133,8 @@ timestamps {
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
                 } else if (STACK_TYPE == 'aws') {
 
+                    // set aws_env_vars
+                    aws_env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
 
                     if (STACK_REUSE.toBoolean() == true && STACK_NAME == '') {
                         error("If you want to reuse existing stack you need to provide it's name")
@@ -164,14 +170,14 @@ timestamps {
                             "ParameterKey=CmpNodeCount,ParameterValue=" + STACK_COMPUTE_COUNT
                         ]
                         def template_file = 'cfn/' + STACK_TEMPLATE + '.yml'
-                        aws.createStack(venv, env_vars, template_file, STACK_NAME, stack_params)
+                        aws.createStack(venv, aws_env_vars, template_file, STACK_NAME, stack_params)
                     }
 
                     // wait for stack to be ready
-                    aws.waitForStatus(venv, env_vars, STACK_NAME, 'CREATE_COMPLETE')
+                    aws.waitForStatus(venv, aws_env_vars, STACK_NAME, 'CREATE_COMPLETE')
 
                     // get outputs
-                    saltMasterHost = aws.getOutputs(venv, env_vars, STACK_NAME, 'SaltMasterIP')
+                    saltMasterHost = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'SaltMasterIP')
                     currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
 
@@ -204,7 +210,7 @@ timestamps {
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
                 stage('Install Kubernetes infra') {
                     // configure kubernetes_control_address - save loadbalancer
-                    def kubernetes_control_address = aws.getOutputs(venv, env_vars, STACK_NAME, 'ControlLoadBalancer')
+                    def kubernetes_control_address = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ControlLoadBalancer')
                     print(kubernetes_control_address)
                     salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
 
@@ -226,13 +232,13 @@ timestamps {
                         if (STACK_TYPE == 'aws') {
 
                             // get stack info
-                            def scaling_group = aws.getOutputs(venv, env_vars, STACK_NAME, 'ComputesScalingGroup')
+                            def scaling_group = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ComputesScalingGroup')
 
                             //update autoscaling group
-                            aws.updateAutoscalingGroup(venv, env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
+                            aws.updateAutoscalingGroup(venv, aws_env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
 
                             // wait for computes to boot up
-                            aws.waitForAutoscalingInstances(venv, env_vars, scaling_group)
+                            aws.waitForAutoscalingInstances(venv, aws_env_vars, scaling_group)
                             sleep(60)
                         }
 
