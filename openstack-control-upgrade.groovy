@@ -449,6 +449,8 @@ timestamps {
                     salt.enforceState(saltMaster, 'prx*', 'horizon')
                     // salt 'prx*' state.sls nginx
                     salt.enforceState(saltMaster, 'prx*', 'nginx')
+                    // salt "prx*" state.sls memcached
+                    salt.enforceState(saltMaster, 'prx*', 'memcached')
 
                     try {
                         salt.enforceHighstate(saltMaster, 'ctl*')
