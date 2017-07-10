@@ -120,6 +120,11 @@ timestamps {
                 }
             }
 
+            dir("${env.WORKSPACE}") {
+                sh(returnStatus: true, script: "tar -zcvf model.tar.gz -C model .")
+                archiveArtifacts artifacts: "model.tar.gz"
+            }
+
             stage("test-nodes") {
                 def partitions = common.partitionList(contextFileList, PARALLEL_NODE_GROUP_SIZE.toInteger())
                 def buildSteps = [:]
@@ -135,13 +140,14 @@ timestamps {
                 common.serial(buildSteps)
             }
 
+            stage ('Clean workspace directories') {
+                sh(returnStatus: true, script: "rm -rfv * > /dev/null || true")
+            }
+
         } catch (Throwable e) {
              currentBuild.result = "FAILURE"
              throw e
         } finally {
-            stage ('Clean workspace directories') {
-                sh(returnStatus: true, script: "rm -rfv * > /dev/null || true")
-            }
             common.sendNotification(currentBuild.result,"",["slack"])
         }
     }
