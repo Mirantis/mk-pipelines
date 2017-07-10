@@ -54,8 +54,8 @@ overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 
 def saltMaster
 
+venv = "${env.WORKSPACE}/venv"
 if (STACK_TYPE == 'aws') {
-    venv_path = 'aws_venv'
     env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
 }
 
@@ -71,7 +71,6 @@ timestamps {
                     // value defaults
                     def openstackCloud
                     def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
-                    def openstackEnv = "${env.WORKSPACE}/venv"
 
                     if (STACK_REUSE.toBoolean() == true && STACK_NAME == '') {
                         error("If you want to reuse existing stack you need to provide it's name")
@@ -96,15 +95,15 @@ timestamps {
                     git.checkoutGitRepository('template', STACK_TEMPLATE_URL, STACK_TEMPLATE_BRANCH, STACK_TEMPLATE_CREDENTIALS)
 
                     // create openstack env
-                    openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
+                    openstack.setupOpenstackVirtualenv(venv, openstackVersion)
                     openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
-                    openstack.getKeystoneToken(openstackCloud, openstackEnv)
+                    openstack.getKeystoneToken(openstackCloud, venv)
                     //
                     // Verify possibility of create stack for given user and stack type
                     //
                     wrap([$class: 'BuildUser']) {
                         if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !STACK_REUSE.toBoolean()) {
-                            def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", openstackEnv)
+                            def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", venv)
                             if(existingStacks.size() >= _MAX_PERMITTED_STACKS){
                                 STACK_DELETE = "false"
                                 throw new Exception("You cannot create new stack, you already have ${_MAX_PERMITTED_STACKS} stacks of this type (${JOB_NAME}). \nStack names: ${existingStacks}")
@@ -119,12 +118,12 @@ timestamps {
                                 'instance_zone': HEAT_STACK_ZONE,
                                 'public_net': HEAT_STACK_PUBLIC_NET
                             ]
-                            openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv, false)
+                            openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, false)
                         }
                     }
 
                     // get SALT_MASTER_URL
-                    saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, STACK_NAME, 'salt_master_ip', openstackEnv)
+                    saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, STACK_NAME, 'salt_master_ip', venv)
                     currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
 
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
@@ -157,7 +156,7 @@ timestamps {
                         git.checkoutGitRepository('template', STACK_TEMPLATE_URL, STACK_TEMPLATE_BRANCH, STACK_TEMPLATE_CREDENTIALS)
 
                         // setup environment
-                        aws.setupVirtualEnv(venv_path)
+                        aws.setupVirtualEnv(venv)
 
                         // start stack
                         def stack_params = [
@@ -165,14 +164,14 @@ timestamps {
                             "ParameterKey=CmpNodeCount,ParameterValue=" + STACK_COMPUTE_COUNT
                         ]
                         def template_file = 'cfn/' + STACK_TEMPLATE + '.yml'
-                        aws.createStack(venv_path, env_vars, template_file, STACK_NAME, stack_params)
+                        aws.createStack(venv, env_vars, template_file, STACK_NAME, stack_params)
                     }
 
                     // wait for stack to be ready
-                    aws.waitForStatus(venv_path, env_vars, STACK_NAME, 'CREATE_COMPLETE')
+                    aws.waitForStatus(venv, env_vars, STACK_NAME, 'CREATE_COMPLETE')
 
                     // get outputs
-                    saltMasterHost = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'SaltMasterIP')
+                    saltMasterHost = aws.getOutputs(venv, env_vars, STACK_NAME, 'SaltMasterIP')
                     currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
 
@@ -205,7 +204,7 @@ timestamps {
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
                 stage('Install Kubernetes infra') {
                     // configure kubernetes_control_address - save loadbalancer
-                    def kubernetes_control_address = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ControlLoadBalancer')
+                    def kubernetes_control_address = aws.getOutputs(venv, env_vars, STACK_NAME, 'ControlLoadBalancer')
                     print(kubernetes_control_address)
                     salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
 
@@ -227,13 +226,13 @@ timestamps {
                         if (STACK_TYPE == 'aws') {
 
                             // get stack info
-                            def scaling_group = aws.getOutputs(venv_path, env_vars, STACK_NAME, 'ComputesScalingGroup')
+                            def scaling_group = aws.getOutputs(venv, env_vars, STACK_NAME, 'ComputesScalingGroup')
 
                             //update autoscaling group
-                            aws.updateAutoscalingGroup(venv_path, env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
+                            aws.updateAutoscalingGroup(venv, env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
 
                             // wait for computes to boot up
-                            aws.waitForAutoscalingInstances(venv_path, env_vars, scaling_group)
+                            aws.waitForAutoscalingInstances(venv, env_vars, scaling_group)
                             sleep(60)
                         }
 
