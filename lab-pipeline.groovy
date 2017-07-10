@@ -37,7 +37,10 @@
  *   K8S_API_SERVER             Kubernetes API address
  *   K8S_CONFORMANCE_IMAGE      Path to docker image with conformance e2e tests
  *
- *   TEMPEST_IMAGE_LINK         Tempest image link
+ *   TEMPEST_IMAGE              Tempest image link
+ *   TARGET_TEST_NODE           Node to run tests
+ *   DOCKER_INSTALL             Install docker on the target if tue
+ *   PATTERN                    If not false, run tests matched to pattern only
  *
  * optional parameters for overwriting soft params
  *   SALT_OVERRIDES              YAML with overrides for Salt deployment
@@ -354,12 +357,15 @@ timestamps {
             }
 
             if (common.checkContains('STACK_TEST', 'openstack')) {
+                if (common.checkContains('DOCKER_INSTALL', 'true')) {
+                    test.install_docker(saltMaster, TARGET)
+                }
                 stage('Run OpenStack tests') {
-                    test.runTempestTests(saltMaster, TEMPEST_IMAGE_LINK)
+                    test.runTempestTests(saltMaster, TEMPEST_IMAGE, TARGET, PATTERN)
                 }
 
                 stage('Copy Tempest results to config node') {
-                    test.copyTempestResults(saltMaster)
+                    test.copyTempestResults(saltMaster, TARGET)
                 }
             }
 
