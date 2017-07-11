@@ -37,6 +37,7 @@
  *
  *   K8S_API_SERVER             Kubernetes API address
  *   K8S_CONFORMANCE_IMAGE      Path to docker image with conformance e2e tests
+ *   SALT_OVERRIDES             YAML with overrides for Salt deployment
  *
  *   TEMPEST_IMAGE_LINK         Tempest image link
  *
@@ -187,6 +188,13 @@ timestamps {
 
                 // Connect to Salt master
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            }
+
+            // Set up override params
+            if (env.getEnvironment().containsKey('SALT_OVERRIDES')) {
+                stage('Set Salt overrides') {
+                    salt.setSaltOverrides(saltMaster,  SALT_OVERRIDES)
+                }
             }
 
             //
