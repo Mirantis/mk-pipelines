@@ -297,10 +297,17 @@ timestamps {
             }
 
 
+            if (common.checkContains('STACK_INSTALL', 'sl-legacy')) {
+                stage('Install StackLight v1') {
+                    orchestrate.installStacklightv1Control(saltMaster)
+                    orchestrate.installStacklightv1Client(saltMaster)
+                }
+            }
+
             if (common.checkContains('STACK_INSTALL', 'stacklight')) {
                 stage('Install StackLight') {
-                    orchestrate.installStacklightControl(saltMaster)
-                    orchestrate.installStacklightClient(saltMaster)
+                    orchestrate.installDockerSwarm(saltMaster)
+                    orchestrate.installStacklight(saltMaster)
                 }
             }
 
