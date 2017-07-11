@@ -209,10 +209,12 @@ timestamps {
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
                 stage('Install Kubernetes infra') {
-                    // configure kubernetes_control_address - save loadbalancer
-                    def kubernetes_control_address = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ControlLoadBalancer')
-                    print(kubernetes_control_address)
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
+                    if (STACK_TYPE == 'aws') {
+                        // configure kubernetes_control_address - save loadbalancer
+                        def kubernetes_control_address = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ControlLoadBalancer')
+                        print(kubernetes_control_address)
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
+                    }
 
                     // ensure certificates are generated properly
                     salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
@@ -224,13 +226,11 @@ timestamps {
                 stage('Install Kubernetes control') {
 
                     orchestrate.installKubernetesControl(saltMaster)
-
                 }
 
                 stage('Scale Kubernetes computes') {
                     if (STACK_COMPUTE_COUNT > 0) {
                         if (STACK_TYPE == 'aws') {
-
                             // get stack info
                             def scaling_group = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ComputesScalingGroup')
 
