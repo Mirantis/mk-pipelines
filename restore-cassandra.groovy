@@ -49,21 +49,21 @@ timestamps {
                 common.warningMsg('Directory already empty')
             }
 
-            _pillar = salt.getPillar(saltMaster, "ntw01*", 'cassandra:backup:backup_dir')
+            _pillar = salt.getPillar(saltMaster, "I@cassandra:backup:client", 'cassandra:backup:backup_dir')
             backup_dir = _pillar['return'][0].values()[0]
             if(backup_dir == null || backup_dir.isEmpty()) { backup_dir='/var/backups/cassandra' }
             print(backup_dir)
-            salt.runSaltProcessStep(saltMaster, 'ntw01*', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
+            salt.runSaltProcessStep(saltMaster, 'I@cassandra:backup:client', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
 
-            salt.runSaltProcessStep(saltMaster, 'ntw01*', 'service.start', ['supervisor-database'], null, true)
+            salt.runSaltProcessStep(saltMaster, 'I@cassandra:backup:client', 'service.start', ['supervisor-database'], null, true)
 
             sleep(30)
 
             // performs restore
-            salt.cmdRun(saltMaster, 'ntw01*', "su root -c 'salt-call state.sls cassandra'")
-            salt.runSaltProcessStep(saltMaster, 'ntw01*', 'system.reboot', null, null, true, 5)
-            salt.runSaltProcessStep(saltMaster, 'ntw02*', 'system.reboot', null, null, true, 5)
-            salt.runSaltProcessStep(saltMaster, 'ntw03*', 'system.reboot', null, null, true, 5)
+            salt.cmdRun(saltMaster, 'I@cassandra:backup:client', "su root -c 'salt-call state.sls cassandra'")
+            salt.runSaltProcessStep(saltMaster, 'I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
+            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control and not I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
+            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control and not I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
 
             sleep(60)
             salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.restart', ['supervisor-database'], null, true)
