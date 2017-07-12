@@ -79,6 +79,7 @@ node("python") {
           common.infoMsg(".kitchen.yml found, running kitchen tests")
           ruby.ensureRubyEnv()
           def kitchenEnvs = []
+          def filteredEnvs = []
           if(fileExists(".travis.yml")){
             common.infoMsg(".travis.yml found, running custom kitchen init")
             def kitchenConfigYML = readYaml(file: ".travis.yml")
@@ -104,11 +105,13 @@ node("python") {
           common.infoMsg("Running kitchen testing, parallel mode: " + KITCHEN_TESTS_PARALLEL.toBoolean())
           wrap([$class: 'AnsiColorBuildWrapper']) {
             if(kitchenEnvs && !kitchenEnvs.isEmpty()){
-              common.infoMsg("Found multiple environment, first running kitchen without custom env")
-              ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
               for(int i=0;i<kitchenEnvs.size();i++){
-                common.infoMsg("Found multiple environment, kitchen running with env: " + kitchenEnvs[i])
-                ruby.runKitchenTests(kitchenEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
+                filteredEnvs[i] = filterKitchenEnvs(kitchenEnvs[i])
+              }
+              filteredEnvs = filteredEnvs.unique()
+              for(int i=0;i<filteredEnvs.size();i++){
+                common.infoMsg("Found multiple environment, kitchen running with env: " + filteredEnvs[i])
+                ruby.runKitchenTests(filteredEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
               }
             }else{
               ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
