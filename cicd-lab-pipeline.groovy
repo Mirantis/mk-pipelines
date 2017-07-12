@@ -239,6 +239,13 @@ timestamps {
                     salt.cmdRun(saltMaster, 'I@rundeck:client', 'while true; do curl -sf 172.16.10.254:4440 >/dev/null && break; done')
                 }
                 salt.enforceState(saltMaster, 'I@rundeck:client', 'rundeck.client', true)
+
+                // Elasticsearch
+                timeout(10) {
+                    println 'Waiting for Elasticsearch to come up..'
+                    salt.cmdRun(saltMaster, 'I@elasticsearch:client', 'while true; do curl -sf 172.16.10.254:9200 >/dev/null && break; done')
+                }
+                salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
             }
 
             stage("Finalize") {
