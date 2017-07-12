@@ -106,9 +106,11 @@ node("python") {
           wrap([$class: 'AnsiColorBuildWrapper']) {
             if(kitchenEnvs && !kitchenEnvs.isEmpty()){
               for(int i=0;i<kitchenEnvs.size();i++){
-                filteredEnvs[i] = filterKitchenEnvs(kitchenEnvs[i])
+                filteredEnvs[i] = common.filterKitchenEnvs(kitchenEnvs[i])
               }
               filteredEnvs = filteredEnvs.unique()
+              /* common.infoMsg("Found multiple environment, first running kitchen without custom env")
+              ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean()) */
               for(int i=0;i<filteredEnvs.size();i++){
                 common.infoMsg("Found multiple environment, kitchen running with env: " + filteredEnvs[i])
                 ruby.runKitchenTests(filteredEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
