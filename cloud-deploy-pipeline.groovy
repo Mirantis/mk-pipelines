@@ -134,6 +134,9 @@ timestamps {
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
                 } else if (STACK_TYPE == 'aws') {
 
+                    // setup environment
+                    aws.setupVirtualEnv(venv)
+
                     // set aws_env_vars
                     aws_env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_STACK_REGION)
 
@@ -161,9 +164,6 @@ timestamps {
                     if (STACK_REUSE.toBoolean() == false) {
                         // get templates
                         git.checkoutGitRepository('template', STACK_TEMPLATE_URL, STACK_TEMPLATE_BRANCH, STACK_TEMPLATE_CREDENTIALS)
-
-                        // setup environment
-                        aws.setupVirtualEnv(venv)
 
                         // start stack
                         def stack_params = [
