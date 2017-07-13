@@ -37,32 +37,50 @@ node() {
             common.infoMsg("Selected nodes: ${targetLiveAll}")
         }
 
-        stage("Setup network for compute") {
-            common.infoMsg("Now all network configuration will be enforced, which caused reboot of nodes: ${targetLiveAll}")
-            try {
-                salt.cmdRun(saltMaster, targetLiveAll, 'salt-call state.sls linux.system.user,openssh,linux.network;reboot')
-            } catch(e) {
-                common.infoMsg("no respond from nodes due reboot")
-            }
-            common.infoMsg("Now pipeline is waiting until node reconnect to salt master")
-            timeout(800) {
-                retry(666) {
-                    try {
-                        salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], 'test.ping')
-                    } catch(e) {
-                        common.infoMsg("Still waiting for node to come up")
-                        sleep(10)
-                    }
-                }
-            }
+        stage("Setup repositories") {
+            salt.enforceState(saltMaster, targetLiveAll, 'linux.system.repo', true)
         }
 
-        stage("Deploy Compute") {
-            common.infoMsg("Lets run rest of the states to finish deployment")
-            salt.enforceState(saltMaster, targetLiveAll, 'linux,openssh,ntp,salt', true)
-            retry(2) {
-                salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], 'state.apply')
-            }
+        stage("Upgrade packages") {
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'pkg.upgrade', [], null, true)
+        }
+
+        stage("Setup networking") {
+            // Sync all of the modules from the salt master.
+            salt.syncAll(saltMaster, targetLiveAll)
+
+            // Apply state 'salt' to install python-psutil for network configuration without restarting salt-minion to avoid losing connection.
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'state.apply',  ['salt', 'exclude=[{\'id\': \'salt_minion_service\'}, {\'id\': \'salt_minion_service_restart\'}, {\'id\': \'salt_minion_sync_all\'}]'], null, true)
+
+            // Restart salt-minion to take effect.
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'service.restart', ['salt-minion'], null, true, 10)
+
+            // Configure networking excluding vhost0 interface.
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'state.apply',  ['linux.network', 'exclude=[{\'id\': \'linux_interface_vhost0\'}]'], null, true)
+
+            // Kill unnecessary processes ifup/ifdown which is stuck from previous state linux.network.
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'ps.pkill', ['ifup'], null, false)
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'ps.pkill', ['ifdown'], null, false)
+
+            // Restart networking to bring UP all interfaces.
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'service.restart', ['networking'], null, true, 300)
+        }
+
+        stage("Highstate compute") {
+            // Execute highstate without state opencontrail.client.
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'state.highstate', ['exclude=opencontrail.client'], null, true)
+
+            // Apply nova state to remove libvirt default bridge virbr0.
+            salt.enforceState(saltMaster, targetLiveAll, 'nova', true)
+
+            // Execute highstate.
+            salt.enforceHighstate(saltMaster, targetLiveAll, true)
+
+            // Restart supervisor-vrouter.
+            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'service.restart', ['supervisor-vrouter'], null, true, 300)
+
+            // Apply salt,collectd to update information about current network interfaces.
+            salt.enforceState(saltMaster, targetLiveAll, 'salt,collectd', true)
         }
 
     } catch (Throwable e) {
