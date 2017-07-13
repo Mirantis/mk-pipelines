@@ -16,7 +16,6 @@ def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 
 def saltMaster
-def targetAll = ['expression': TARGET_SERVERS, 'type': 'compound']
 def targetTestSubset
 def targetLiveSubset
 def targetLiveAll
@@ -34,7 +33,7 @@ node() {
         }
 
         stage('List target servers') {
-            minions = salt.getMinions(saltMaster, targetAll)
+            minions = salt.getMinions(saltMaster, TARGET_SERVERS)
 
             if (minions.isEmpty()) {
                 throw new Exception("No minion was targeted")
