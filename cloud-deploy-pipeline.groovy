@@ -234,7 +234,6 @@ timestamps {
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
                     stage('Install Contrail for Kubernetes') {
                         orchestrate.installContrailNetwork(saltMaster)
-                        orchestrate.installContrailCompute(saltMaster)
                         orchestrate.installKubernetesContrailCompute(saltMaster)
                     }
                 }
