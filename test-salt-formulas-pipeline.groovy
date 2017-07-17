@@ -87,7 +87,7 @@ node("python") {
             def kitchenInit = kitchenConfigYML["install"]
             def kitchenInstalled = false
             if(kitchenInit && !kitchenInit.isEmpty()){
-              for(int i=0;i<kitchenInit.size();i++){
+              for(int i=0; i<kitchenInit.size(); i++){
                 if(kitchenInit[i].trim().startsWith("test -e Gemfile")){ //found Gemfile config
                   common.infoMsg("Custom Gemfile configuration found, using them")
                   ruby.installKitchen(kitchenInit[i].trim())
@@ -106,8 +106,8 @@ node("python") {
           wrap([$class: 'AnsiColorBuildWrapper']) {
             filteredEnvs = ruby.filterKitchenEnvs(kitchenEnvs).unique()
             if(kitchenEnvs && !kitchenEnvs.isEmpty() && !filteredEnvs.isEmpty()){
-              for(int i=0;i<filteredEnvs.size();i++){
-                common.infoMsg("Found multiple environment, kitchen running with env: " + filteredEnvs[i])
+              for(int i=0; i<filteredEnvs.size(); i++){
+                common.infoMsg("Found " + filteredEnvs.size() + " environment, kitchen running with env: " + filteredEnvs[i])
                 ruby.runKitchenTests(filteredEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
               }
             }else{
