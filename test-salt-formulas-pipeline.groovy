@@ -83,7 +83,9 @@ node("python") {
           if(fileExists(".travis.yml")){
             common.infoMsg(".travis.yml found, running custom kitchen init")
             def kitchenConfigYML = readYaml(file: ".travis.yml")
-            kitchenEnvs=kitchenConfigYML["env"]
+            if(kitchenConfigYML.containsKey("env")){
+              kitchenEnvs=kitchenConfigYML["env"]
+            }
             def kitchenInit = kitchenConfigYML["install"]
             def kitchenInstalled = false
             if(kitchenInit && !kitchenInit.isEmpty()){
