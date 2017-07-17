@@ -58,23 +58,6 @@ node() {
             salt.enforceState(saltMaster, targetTestSubset, 'linux.system.repo')
         }
 
-
-        opencontrail = null
-
-        try {
-            opencontrail = salt.cmdRun(saltMaster, targetTestSubsetProbe, "salt-call grains.item roles | grep opencontrail.compute")
-            print(opencontrail)
-        } catch (Exception er) {
-            common.infoMsg("opencontrail is not used")
-        }
-
-        if(opencontrail != null) {
-            stage('Remove OC component from repos on test nodes') {
-                salt.cmdRun(saltMaster, targetTestSubset, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.refresh_db', [], null, true)
-            }
-        }
-
         stage("List package upgrades") {
             salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.list_upgrades', [], null, true)
         }
@@ -85,13 +68,6 @@ node() {
 
         stage("Add new repos on sample nodes") {
             salt.enforceState(saltMaster, targetLiveSubset, 'linux.system.repo')
-        }
-
-        if(opencontrail != null) {
-            stage('Remove OC component from repos on sample nodes') {
-                salt.cmdRun(saltMaster, targetLiveSubset, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(saltMaster, targetLiveSubset, 'pkg.refresh_db', [], null, true)
-            }
         }
 
         args = "apt-get -y -s -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade"
@@ -116,28 +92,14 @@ node() {
             salt.printSaltCommandResult(out)
         }
 
-        openvswitch = null
+        args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
 
-        try {
-            openvswitch = salt.cmdRun(saltMaster, targetLiveSubsetProbe, "salt-call grains.item roles | grep neutron.compute")
-        } catch (Exception er) {
-            common.infoMsg("openvswitch is not used")
+        stage('Start ovs on sample nodes') {
+            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
+            salt.printSaltCommandResult(out)
         }
-
-        if(openvswitch != null) {
-            args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
-
-            stage('Start ovs on sample nodes') {
-                out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
-                salt.printSaltCommandResult(out)
-            }
-            stage("Run salt states on sample nodes") {
-                salt.enforceState(saltMaster, targetLiveSubset, ['nova', 'neutron'])
-            }
-        } else {
-            stage("Run salt states on sample nodes") {
-                salt.enforceState(saltMaster, targetLiveSubset, ['nova', 'linux.system.repo'])
-            }
+        stage("Run Neutron state on sample nodes") {
+            salt.enforceState(saltMaster, targetLiveSubset, ['neutron'])
         }
 
         stage("Run Highstate on sample nodes") {
@@ -158,13 +120,6 @@ node() {
             salt.enforceState(saltMaster, targetLiveAll, 'linux.system.repo')
         }
 
-        if(opencontrail != null) { 
-            stage('Remove OC component from repos on all targeted nodes') {
-                salt.cmdRun(saltMaster, targetLiveAll, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(saltMaster, targetLiveAll, 'pkg.refresh_db', [], null, true)
-            }
-        }
-
         args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade;'
 
         stage('Apply package upgrades on all targeted nodes') {
@@ -172,20 +127,14 @@ node() {
             salt.printSaltCommandResult(out)
         }
 
-        if(openvswitch != null) {
-            args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
+        args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
 
-            stage('Start ovs on all targeted nodes') {
-                out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
-                salt.printSaltCommandResult(out)
-            }
-            stage("Run salt states on all targeted nodes") {
-                salt.enforceState(saltMaster, targetLiveAll, ['nova', 'neutron'])
-            }
-        } else {
-            stage("Run salt states on all targeted nodes") {
-                salt.enforceState(saltMaster, targetLiveAll, ['nova', 'linux.system.repo'])
-            }
+        stage('Start ovs on all targeted nodes') {
+            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
+            salt.printSaltCommandResult(out)
+        }
+        stage("Run Neutron state on all targeted nodes") {
+            salt.enforceState(saltMaster, targetLiveAll, ['neutron'])
         }
 
         stage("Run Highstate on all targeted nodes") {
