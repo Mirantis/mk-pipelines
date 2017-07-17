@@ -104,13 +104,8 @@ node("python") {
           }
           common.infoMsg("Running kitchen testing, parallel mode: " + KITCHEN_TESTS_PARALLEL.toBoolean())
           wrap([$class: 'AnsiColorBuildWrapper']) {
-            if(kitchenEnvs && !kitchenEnvs.isEmpty()){
-              for(int i=0;i<kitchenEnvs.size();i++){
-                filteredEnvs[i] = common.filterKitchenEnvs(kitchenEnvs[i])
-              }
-              filteredEnvs = filteredEnvs.unique()
-              /* common.infoMsg("Found multiple environment, first running kitchen without custom env")
-              ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean()) */
+            filteredEnvs = ruby.filterKitchenEnvs(kitchenEnvs).unique()
+            if(kitchenEnvs && !kitchenEnvs.isEmpty() && !filteredEnvs.isEmpty()){
               for(int i=0;i<filteredEnvs.size();i++){
                 common.infoMsg("Found multiple environment, kitchen running with env: " + filteredEnvs[i])
                 ruby.runKitchenTests(filteredEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
