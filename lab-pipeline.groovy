@@ -11,6 +11,8 @@
  *   STACK_TEMPLATE_BRANCH       Stack templates repo branch
  *   STACK_TEMPLATE_CREDENTIALS  Credentials to the stack templates repo
  *   STACK_TEMPLATE              Heat stack HOT template
+ *   STACK_RECLASS_ADDRESS       Stack reclass address
+ *   STACK_RECLASS_BRANCH        Stack reclass repo branch
  *   STACK_DELETE                Delete stack when finished (bool)
  *   STACK_REUSE                 Reuse stack (don't create one)
  *   STACK_CLEANUP_JOB           Name of job for deleting Heat stack
@@ -131,6 +133,12 @@ timestamps {
                                 'instance_zone': HEAT_STACK_ZONE,
                                 'public_net': HEAT_STACK_PUBLIC_NET
                             ]
+                            try {
+                                envParams.put('cfg_reclass_branch', STACK_RECLASS_BRANCH)
+                                envParams.put('cfg_reclass_address', STACK_RECLASS_ADDRESS)
+                            } catch (MissingPropertyException e) {
+                                common.infoMsg("Property STACK_RECLASS_BRANCH or STACK_RECLASS_ADDRESS not found! Using default values from template.")
+                            }
                             openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
                         }
                     }
