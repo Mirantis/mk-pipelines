@@ -221,6 +221,13 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
                 }
 
+                if (salt.testTarget(saltMaster, 'I@ironic:conductor')){
+                    stage('Install OpenStack Ironic conductor') {
+                        orchestrate.installIronicConductor(saltMaster)
+                    }
+                }
+
+
                 stage('Install OpenStack compute') {
                     orchestrate.installOpenstackCompute(saltMaster)
 
