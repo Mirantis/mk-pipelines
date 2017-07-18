@@ -7,10 +7,7 @@
  *   COOKIECUTTER_TEMPLATE_BRANCH       Branch for the template.
  *   COOKIECUTTER_TEMPLATE_CONTEXT      Context parameters for the template generation.
  *   EMAIL_ADDRESS                      Email to send a created tar file
- *   RECLASS_MODEL_URL                  Reclass model repo address
- *   RECLASS_MODEL_CREDENTIALS          Credentials to the Reclass model repo.
- *   RECLASS_MODEL_BRANCH               Branch for the template to push to model.
- *   COMMIT_CHANGES                     Commit model to repo
+ *   SHARED_RECLASS_URL                 Git repository with shared reclass
  *
 **/
 
@@ -44,9 +41,12 @@ timestamps {
                 git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
             }
 
-            stage ('Download full Reclass model') {
-                if (RECLASS_MODEL_URL != '') {
-                    git.checkoutGitRepository(modelEnv, RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, RECLASS_MODEL_CREDENTIALS)
+            stage ('Create empty reclass model') {
+                sh "git init"
+
+                if (SHARED_RECLASS_URL != '') {
+                    sh "git submodule add ${SHARED_RECLASS_URL} classes/system"
+                    git.commitGitChanges(modelEnv, "Added new shared reclass submodule")
                 }
             }
 
@@ -82,26 +82,29 @@ parameters:
 """
                 sh "mkdir -p ${modelEnv}/nodes/"
                 writeFile(file: nodeFile, text: nodeString)
+
+                git.commitGitChanges(modelEnv, "Create model ${clusterDomain}")
             }
 
             stage("Test") {
-                if (RECLASS_MODEL_URL == "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
+                if (SHARED_RECLASS_URL != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
                     sh("cp -r ${modelEnv} ${testEnv}")
-                    def defaultReclassModel = "ssh://jenkins-mk@gerrit.mcp.mirantis.net:29418/salt-models/reclass-system"
-                    git.checkoutGitRepository("${testEnv}/classes/system", defaultReclassModel, RECLASS_MODEL_BRANCH, RECLASS_MODEL_CREDENTIALS)
                     saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", "", testEnv)
                 }
             }
 
-            stage ('Save changes to Reclass model') {
-                if (env.getEnvironment().containsKey('COMMIT_CHANGES') && COMMIT_CHANGES.toBoolean() && RECLASS_MODEL_URL != null && RECLASS_MODEL_URL != "") {
-                    git.changeGitBranch(modelEnv, targetBranch)
-                    git.commitGitChanges(modelEnv, "Added new cluster ${clusterName}")
-                    git.pushGitChanges(modelEnv, targetBranch, 'origin', RECLASS_MODEL_CREDENTIALS)
-                }
+            stage("Generate config drive") {
+                // download create-config-drive
+                // generate user-data.sh
+                // create config-drive
+
+            }
+
+            stage ('Save changes reclass model') {
 
                 sh(returnStatus: true, script: "tar -zcvf ${clusterName}.tar.gz -C ${modelEnv} .")
                 archiveArtifacts artifacts: "${clusterName}.tar.gz"
+
                 if (EMAIl_ADDRESS != null && EMAIL_ADDRESS != ""){
                      emailext(to: EMAIL_ADDRESS,
                               attachmentsPattern: "${clusterName}.tar.gz",
