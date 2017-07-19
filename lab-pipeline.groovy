@@ -160,12 +160,6 @@ timestamps {
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             }
 
-            // Set up override params
-            if (env.getEnvironment().containsKey('SALT_OVERRIDES')) {
-                stage('Set Salt overrides') {
-                    salt.setSaltOverrides(saltMaster,  SALT_OVERRIDES)
-                }
-            }
             //
             // Install
             //
@@ -180,6 +174,13 @@ timestamps {
                     }
 
                     orchestrate.validateFoundationInfra(saltMaster)
+                }
+            }
+
+            // Set up override params
+            if (env.getEnvironment().containsKey('SALT_OVERRIDES')) {
+                stage('Set Salt overrides') {
+                    salt.setSaltOverrides(saltMaster,  SALT_OVERRIDES)
                 }
             }
 
