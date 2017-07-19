@@ -33,6 +33,12 @@ timestamps {
             def templateBaseDir = "${env.WORKSPACE}/template"
             def templateDir = "${templateEnv}/template/dir"
             def templateOutputDir = templateBaseDir
+            def user
+            wrap([$class: 'BuildUser']) {
+                user = env.BUILD_USER_ID
+            }
+
+
 
             currentBuild.description = clusterName
             print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
@@ -42,11 +48,14 @@ timestamps {
             }
 
             stage ('Create empty reclass model') {
-                sh "git init"
+                dir(path: modelEnv) {
+                    sh "rm -rfv .git"
+                    sh "git init"
 
-                if (SHARED_RECLASS_URL != '') {
-                    sh "git submodule add ${SHARED_RECLASS_URL} classes/system"
-                    git.commitGitChanges(modelEnv, "Added new shared reclass submodule")
+                    if (SHARED_RECLASS_URL != '') {
+                        sh "git submodule add ${SHARED_RECLASS_URL} '${modelEnv}/classes/system'"
+                        git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
+                    }
                 }
             }
 
@@ -83,7 +92,7 @@ parameters:
                 sh "mkdir -p ${modelEnv}/nodes/"
                 writeFile(file: nodeFile, text: nodeString)
 
-                git.commitGitChanges(modelEnv, "Create model ${clusterDomain}")
+                git.commitGitChanges(modelEnv, "Create model ${clusterName}", "${user}@localhost", "${user}")
             }
 
             stage("Test") {
@@ -94,18 +103,42 @@ parameters:
             }
 
             stage("Generate config drive") {
-                // download create-config-drive
-                // generate user-data.sh
-                // create config-drive
+                // apt package genisoimage is required for this stage
 
+                // download create-config-drive
+                def config_drive_script_url = "https://raw.githubusercontent.com/pupapaik/virt-utils/master/create-config-drive"
+                def user_data_script_url = "https://raw.githubusercontent.com/mceloud/scripts/master/master_config.sh"
+
+                sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
+                sh "wget -O user_data.sh ${user_data_script_url}"
+
+
+                // load data from model
+                def smc = [:]
+                smc['SALT_MASTER_MINION_ID'] = "cfg.${clusterDomain}"
+                smc['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
+                smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
+                smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
+                smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
+
+                for (i in common.entries(smc)) {
+                    sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" user_data.sh"
+                }
+
+                // create config-drive
+                sh "./create-config-drive --user-data user_data.sh --hostname cfg --model ${modelEnv} cfg.${clusterDomain}-config.iso"
+
+                // save iso to artifacts
+                archiveArtifacts artifacts: "cfg.${clusterDomain}-config.iso"
             }
 
             stage ('Save changes reclass model') {
 
-                sh(returnStatus: true, script: "tar -zcvf ${clusterName}.tar.gz -C ${modelEnv} .")
+                sh(returnStatus: true, script: "tar -zcf ${clusterName}.tar.gz -C ${modelEnv} .")
                 archiveArtifacts artifacts: "${clusterName}.tar.gz"
 
-                if (EMAIl_ADDRESS != null && EMAIL_ADDRESS != ""){
+
+                if (EMAIL_ADDRESS != null && EMAIL_ADDRESS != "") {
                      emailext(to: EMAIL_ADDRESS,
                               attachmentsPattern: "${clusterName}.tar.gz",
                               body: "Mirantis Jenkins\n\nRequested reclass model ${clusterName} has been created and attached to this email.\nEnjoy!\n\nMirantis",
@@ -119,8 +152,8 @@ parameters:
              throw e
         } finally {
             stage ('Clean workspace directories') {
-                sh(returnStatus: true, script: "rm -rfv ${templateEnv}")
-                sh(returnStatus: true, script: "rm -rfv ${modelEnv}")
+                sh(returnStatus: true, script: "rm -rf ${templateEnv}")
+                sh(returnStatus: true, script: "rm -rf ${modelEnv}")
             }
              // common.sendNotification(currentBuild.result,"",["slack"])
         }
