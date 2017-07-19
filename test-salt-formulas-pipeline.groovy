@@ -106,13 +106,18 @@ node("python") {
           }
           common.infoMsg("Running kitchen testing, parallel mode: " + KITCHEN_TESTS_PARALLEL.toBoolean())
           wrap([$class: 'AnsiColorBuildWrapper']) {
-            filteredEnvs = ruby.filterKitchenEnvs(kitchenEnvs).unique()
-            if(kitchenEnvs && !kitchenEnvs.isEmpty() && !filteredEnvs.isEmpty()){
-              for(int i=0; i<filteredEnvs.size(); i++){
-                common.infoMsg("Found " + filteredEnvs.size() + " environment, kitchen running with env: " + filteredEnvs[i])
-                ruby.runKitchenTests(filteredEnvs[i], KITCHEN_TESTS_PARALLEL.toBoolean())
+            if(CUSTOM_KITCHEN_ENVS != null && CUSTOM_KITCHEN_ENVS != ''){
+                filteredEnvs = CUSTOM_KITCHEN_ENVS.tokenize('\n')
+              } else {
+                filteredEnvs = ruby.filterKitchenEnvs(kitchenEnvs).unique()
               }
-            }else{
+              // Allow custom filteredEnvs in case of empty kitchenEnvs
+            if((kitchenEnvs && !kitchenEnvs.isEmpty() && !filteredEnvs.isEmpty()) || ((kitchenEnvs==null || kitchenEnvs=='') && !filteredEnvs.isEmpty())){
+              for(int i=0; i<filteredEnvs.size(); i++){
+                common.infoMsg("Found " + filteredEnvs.size() + " environment, kitchen running with env: " + filteredEnvs[i].trim())
+                ruby.runKitchenTests(filteredEnvs[i].trim(), KITCHEN_TESTS_PARALLEL.toBoolean())
+              }
+            } else {
               ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
             }
           }
