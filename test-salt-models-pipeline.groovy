@@ -14,6 +14,13 @@ def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
 def git = new com.mirantis.mk.Git()
 
+def  config_node_name_pattern
+try {
+  config_node_name_pattern = CONFIG_NODE_NAME_PATTERN
+} catch (MissingPropertyException e) {
+  config_node_name_pattern = "cfg01"
+}
+
 def gerritRef
 try {
   gerritRef = GERRIT_REFSPEC
@@ -81,7 +88,7 @@ node("python") {
 
     stage("test-nodes") {
       if(checkouted) {
-        def nodes = sh(script: "find ./nodes -type f -name 'cfg*.yml'", returnStdout: true).tokenize()
+        def nodes = sh(script: "find ./nodes -type f -name '${config_node_name_pattern}*.yml'", returnStdout: true).tokenize()
         def branches = [:]
         def acc = 0
         for (int i = 0; i < nodes.size(); i++) {
