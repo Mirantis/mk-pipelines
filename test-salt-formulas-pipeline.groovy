@@ -114,7 +114,7 @@ node("python") {
               // Allow custom filteredEnvs in case of empty kitchenEnvs
             if((kitchenEnvs && !kitchenEnvs.isEmpty() && !filteredEnvs.isEmpty()) || ((kitchenEnvs==null || kitchenEnvs=='') && !filteredEnvs.isEmpty())){
               for(int i=0; i<filteredEnvs.size(); i++){
-                common.infoMsg("Found " + filteredEnvs.size() + " environment, kitchen running with env: " + filteredEnvs[i].trim())
+                common.infoMsg("Found " + filteredEnvs.size() + " environment, kitchen running with env number " + (i+1) + ": " + filteredEnvs[i].trim())
                 ruby.runKitchenTests(filteredEnvs[i].trim(), KITCHEN_TESTS_PARALLEL.toBoolean())
               }
             } else {
