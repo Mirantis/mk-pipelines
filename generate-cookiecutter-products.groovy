@@ -38,8 +38,6 @@ timestamps {
                 user = env.BUILD_USER_ID
             }
 
-
-
             currentBuild.description = clusterName
             print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
 
@@ -61,18 +59,34 @@ timestamps {
 
             def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
             for (product in productList) {
-                def stagename = (product == "infra") ? "Generate base infrastructure" : "Generate product ${product}"
-                stage(stagename) {
-                    if (product == "infra" || (templateContext.default_context["${product}_enabled"]
-                        && templateContext.default_context["${product}_enabled"].toBoolean())) {
-                        templateDir = "${templateEnv}/cluster_product/${product}"
-                        templateOutputDir = "${env.WORKSPACE}/template/output/${product}"
-                        sh "mkdir -p ${templateOutputDir}"
-                        sh "mkdir -p ${outputDestination}"
-                        python.setupCookiecutterVirtualenv(cutterEnv)
-                        python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                        sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+
+                // get templateOutputDir and productDir
+                if (product.startsWith("stacklight")) {
+                    templateOutputDir = "${env.WORKSPACE}/output/stacklight"
+                    try {
+                        productDir = "stacklight" + templateContext.default_context['stacklight_version']
+                    } catch (Throwable e) {
+                        productDir = "stacklight1"
                     }
+                } else {
+                    templateOutputDir = "${env.WORKSPACE}/output/${product}"
+                    productDir = product
+                }
+
+                if (product == "infra" || (templateContext.default_context["${product}_enabled"]
+                    && templateContext.default_context["${product}_enabled"].toBoolean())) {
+
+                    templateDir = "${templateEnv}/cluster_product/${productDir}"
+                    common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
+
+                    sh "rm -rf ${templateOutputDir} || true"
+                    sh "mkdir -p ${templateOutputDir}"
+                    sh "mkdir -p ${outputDestination}"
+
+                    python.buildCookiecutterTemplate(templateDir, content, templateOutputDir, cutterEnv, templateBaseDir)
+                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+                } else {
+                    common.warningMsg("Product " + product + " is disabled")
                 }
             }
 

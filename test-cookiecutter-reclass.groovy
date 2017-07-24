@@ -39,19 +39,38 @@ def generateModel(modelFile, cutterEnv) {
     def templateOutputDir = templateBaseDir
     sh "rm -rf ${generatedModel} || true"
 
-    println "Generating model from context ${modelFile}"
+    common.infoMsg("Generating model from context ${modelFile}")
 
     def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
     for (product in productList) {
+
+        // get templateOutputDir and productDir
+        if (product.startsWith("stacklight")) {
+            templateOutputDir = "${env.WORKSPACE}/output/stacklight"
+            try {
+                productDir = "stacklight" + templateContext.default_context['stacklight_version']
+            } catch (Throwable e) {
+                productDir = "stacklight1"
+            }
+        } else {
+            templateOutputDir = "${env.WORKSPACE}/output/${product}"
+            productDir = product
+        }
+
         if (product == "infra" || (templateContext.default_context["${product}_enabled"]
             && templateContext.default_context["${product}_enabled"].toBoolean())) {
-            templateDir = "${templateEnv}/cluster_product/${product}"
-            templateOutputDir = "${env.WORKSPACE}/output/${product}"
+
+            templateDir = "${templateEnv}/cluster_product/${productDir}"
+            common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
+
             sh "rm -rf ${templateOutputDir} || true"
             sh "mkdir -p ${templateOutputDir}"
             sh "mkdir -p ${outputDestination}"
+
             python.buildCookiecutterTemplate(templateDir, content, templateOutputDir, cutterEnv, templateBaseDir)
             sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+        } else {
+            common.warningMsg("Product " + product + " is disabled")
         }
     }
     generateSaltMaster(generatedModel, clusterDomain, clusterName)
