@@ -78,7 +78,11 @@ timestamps {
             }
 
             stage('Connect to OpenStack cloud') {
-                openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+                openstackCloud = openstack.createOpenstackEnv(
+                    OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
+                    OPENSTACK_API_PROJECT, OPENSTACK_API_PROJECT_DOMAIN,
+                    OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,
+                    OPENSTACK_API_VERSION)
                 openstack.getKeystoneToken(openstackCloud, openstackEnv)
                 wrap([$class: 'BuildUser']) {
                     if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !HEAT_STACK_REUSE.toBoolean()) {
