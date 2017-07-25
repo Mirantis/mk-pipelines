@@ -57,23 +57,26 @@ timestamps {
 
             salt.runSaltProcessStep(saltMaster, 'I@cassandra:backup:client', 'service.start', ['supervisor-database'], null, true)
 
-            sleep(30)
+            // wait until supervisor-database service is up
+            salt.commandStatus(saltMaster, 'I@cassandra:backup:client', 'service supervisor-database status', 'running')
 
             // performs restore
             salt.cmdRun(saltMaster, 'I@cassandra:backup:client', "su root -c 'salt-call state.sls cassandra'")
             salt.runSaltProcessStep(saltMaster, 'I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
             salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control and not I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
-            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control and not I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
 
-            sleep(60)
+            // wait until supervisor-database service is up
+            salt.commandStatus(saltMaster, 'I@cassandra:backup:client', 'service supervisor-database status', 'running')
+            salt.commandStatus(saltMaster, 'I@opencontrail:control and not I@cassandra:backup:client', 'service supervisor-database status', 'running')
+            sleep(5)
+
             salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.restart', ['supervisor-database'], null, true)
 
-            sleep(50)
+            // wait until contrail-status is up
+            salt.commandStatus(saltMaster, 'I@opencontrail:control', "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)
+            
             salt.cmdRun(saltMaster, 'I@opencontrail:control', "nodetool status")
             salt.cmdRun(saltMaster, 'I@opencontrail:control', "contrail-status")
         }
     }
 }
-
-
-

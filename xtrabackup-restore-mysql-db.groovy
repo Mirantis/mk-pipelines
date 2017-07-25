@@ -70,7 +70,10 @@ timestamps {
             salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
             salt.cmdRun(saltMaster, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
             salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'service.start', ['mysql'], null, true)
-            sleep(5)
+
+            // wait until mysql service on galera master is up
+            salt.commandStatus(saltMaster, 'I@galera:master', 'service mysql status', 'running')
+
             salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'service.start', ['mysql'], null, true)
             sleep(15)
             salt.cmdRun(saltMaster, 'I@galera:master', "su root -c 'salt-call mysql.status | grep -A1 wsrep_cluster_size'")

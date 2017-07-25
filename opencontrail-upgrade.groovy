@@ -34,15 +34,20 @@ def ANALYTIC_PKGS = 'contrail-analytics contrail-lib contrail-nodemgr contrail-u
 def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
 def KERNEL_MODULE_RELOAD = 'service supervisor-vrouter stop;ifdown vhost0;rmmod vrouter;modprobe vrouter;ifup vhost0;service supervisor-vrouter start;'
 
-
 def void runCommonCommands(target, command, args, check, salt, saltMaster, common) {
 
     out = salt.runSaltCommand(saltMaster, 'local', ['expression': target, 'type': 'compound'], command, null, args, null)
     salt.printSaltCommandResult(out)
-    sleep(60)
-    out = salt.runSaltCommand(saltMaster, 'local', ['expression': target, 'type': 'compound'], command, null, check, null)
-    salt.printSaltCommandResult(out)
-    input message: "Please check the output of \'${check}\' and continue if it is correct."
+    // wait until $check is in correct state
+    if ( check == "nodetool status" ) {
+        salt.commandStatus(saltMaster, target, check, 'Status=Up')  
+    } else if ( check == "contrail-status" ) {
+        salt.commandStatus(saltMaster, target, "${check} | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)  
+    }
+
+    //out = salt.runSaltCommand(saltMaster, 'local', ['expression': target, 'type': 'compound'], command, null, check, null)
+    //salt.printSaltCommandResult(out)
+    //input message: "Please check the output of \'${check}\' and continue if it is correct."
 }
 
 timestamps {
@@ -142,21 +147,21 @@ timestamps {
                 args = 'apt install contrail-database -y;'
                 check = 'nodetool status'
 
-                // ntw01
+                // nal01
                 runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, saltMaster, common)
-                // ntw02
+                // nal02
                 runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, saltMaster, common)
-                // ntw03
+                // nal03
                 runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, saltMaster, common)
 
                 args = "apt install -o Dpkg::Options::=\"--force-confold\" ${ANALYTIC_PKGS} -y --force-yes;"
                 check = 'contrail-status'
 
-                // ntw01
+                // nal01
                 runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, saltMaster, common)
-                // ntw02
+                // nal02
                 runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, saltMaster, common)
-                // ntw03
+                // nal03
                 runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, saltMaster, common)
 
                 try {
@@ -221,7 +226,9 @@ timestamps {
                     }
 
                     salt.runSaltProcessStep(saltMaster, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                    sleep(10)
+
+                    //sleep(10)
+                    salt.commandStatus(saltMaster, targetLiveSubset, "${check} | grep -v == | grep -v active", null, false)
 
                     out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
                     salt.printSaltCommandResult(out)
@@ -257,7 +264,8 @@ timestamps {
                     }
 
                     salt.runSaltProcessStep(saltMaster, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                    sleep(10)
+                    //sleep(10)
+                    salt.commandStatus(saltMaster, targetLiveAll, "${check} | grep -v == | grep -v active", null, false)
 
                     out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
                     salt.printSaltCommandResult(out)
@@ -349,21 +357,21 @@ timestamps {
                 args = 'apt install contrail-database -y --force-yes;'
                 check = 'nodetool status'
 
-                // ntw01
+                // nal01
                 runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, saltMaster, common)
-                // ntw02
+                // nal02
                 runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, saltMaster, common)
-                // ntw03
+                // nal03
                 runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, saltMaster, common)
 
                 args = "apt install -o Dpkg::Options::=\"--force-confold\" ${ANALYTIC_PKGS} -y --force-yes;"
                 check = 'contrail-status'
 
-                // ntw01
+                // nal01
                 runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, saltMaster, common)
-                // ntw02
+                // nal02
                 runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, saltMaster, common)
-                // ntw03
+                // nal03
                 runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, saltMaster, common)
 
                 try {
@@ -428,7 +436,8 @@ timestamps {
                     }
 
                     salt.runSaltProcessStep(saltMaster, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                    sleep(10)
+                    //sleep(10)
+                    salt.commandStatus(saltMaster, targetLiveSubset, "${check} | grep -v == | grep -v active", null, false)
 
                     out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
                     salt.printSaltCommandResult(out)
@@ -465,7 +474,9 @@ timestamps {
                     }
 
                     salt.runSaltProcessStep(saltMaster, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                    sleep(10)
+
+                    //sleep(10)
+                    salt.commandStatus(saltMaster, targetLiveAll, "${check} | grep -v == | grep -v active", null, false)
 
                     out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
                     salt.printSaltCommandResult(out)

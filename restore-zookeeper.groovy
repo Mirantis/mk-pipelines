@@ -42,7 +42,10 @@ timestamps {
             } catch (Exception er) {
                 common.warningMsg('Zookeeper service already stopped')
             }
-            sleep(5)
+            //sleep(5)
+            // wait until zookeeper service is down
+            salt.commandStatus(saltMaster, 'I@opencontrail:control', 'service zookeeper status', 'stop')
+
             try {
                 salt.cmdRun(saltMaster, 'I@opencontrail:control', "mkdir -p /root/zookeeper/zookeeper.bak")
             } catch (Exception er) {
@@ -73,7 +76,9 @@ timestamps {
             salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.start', ['supervisor-config'], null, true)
             salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.start', ['supervisor-control'], null, true)
 
-            sleep(50)
+            // wait until contrail-status is up
+            salt.commandStatus(saltMaster, 'I@opencontrail:control', "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)
+            
             salt.cmdRun(saltMaster, 'I@opencontrail:control', "ls /var/lib/zookeeper/version-2")
             try {
                 salt.cmdRun(saltMaster, 'I@opencontrail:control', "echo stat | nc localhost 2181")

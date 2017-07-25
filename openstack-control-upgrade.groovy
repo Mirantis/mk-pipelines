@@ -81,7 +81,8 @@ timestamps {
                 // salt 'kvm02*' state.sls salt.control
                 salt.enforceState(saltMaster, "${upgNodeProvider}", 'salt.control')
 
-                sleep(70)
+                // wait until upg node is registered in salt-key
+                salt.minionPresent(saltMaster, 'I@salt:master', 'upg01')
 
                 // salt '*' saltutil.refresh_pillar
                 salt.runSaltProcessStep(saltMaster, 'upg*', 'saltutil.refresh_pillar', [], null, true)
@@ -288,7 +289,13 @@ timestamps {
                 // salt 'kvm*' state.sls salt.control
                 salt.enforceState(saltMaster, 'I@salt:control', 'salt.control')
 
-                sleep(70)
+                // wait until ctl and prx nodes are registered in salt-key
+                salt.minionPresent(saltMaster, 'I@salt:master', 'ctl01')
+                salt.minionPresent(saltMaster, 'I@salt:master', 'ctl02')
+                salt.minionPresent(saltMaster, 'I@salt:master', 'ctl03')
+                salt.minionPresent(saltMaster, 'I@salt:master', 'prx01')
+                salt.minionPresent(saltMaster, 'I@salt:master', 'prx02')
+
 
                 // salt '*' saltutil.refresh_pillar
                 salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
@@ -410,7 +417,10 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
                     salt.cmdRun(saltMaster, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
                     salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'service.start', ['mysql'], null, true)
-                    sleep(5)
+
+                    // wait until mysql service on galera master is up
+                    salt.commandStatus(saltMaster, 'I@galera:master', 'service mysql status', 'running')
+
                     salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'service.start', ['mysql'], null, true)
                     //
 
@@ -559,7 +569,10 @@ timestamps {
                 salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
                 salt.cmdRun(saltMaster, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
                 salt.runSaltProcessStep(saltMaster, 'I@galera:master', 'service.start', ['mysql'], null, true)
-                sleep(5)
+
+                // wait until mysql service on galera master is up
+                salt.commandStatus(saltMaster, 'I@galera:master', 'service mysql status', 'running')
+
                 salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'service.start', ['mysql'], null, true)
                 //
 
@@ -572,7 +585,12 @@ timestamps {
                 // salt 'cmp*' cmd.run 'service nova-compute restart'
                 salt.runSaltProcessStep(saltMaster, 'cmp*', 'service.restart', ['nova-compute'], null, true)
 
-                sleep(70)
+                // wait until ctl and prx nodes are registered in salt-key
+                salt.minionPresent(saltMaster, 'I@salt:master', 'ctl01')
+                salt.minionPresent(saltMaster, 'I@salt:master', 'ctl02')
+                salt.minionPresent(saltMaster, 'I@salt:master', 'ctl03')
+                salt.minionPresent(saltMaster, 'I@salt:master', 'prx01')
+                salt.minionPresent(saltMaster, 'I@salt:master', 'prx02')
 
                 salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['nova-conductor'], null, true)
                 salt.runSaltProcessStep(saltMaster, 'ctl*', 'service.restart', ['nova-scheduler'], null, true)
