@@ -15,6 +15,7 @@ common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
+ssh = new com.mirantis.mk.Ssh()
 
 timestamps {
     node("python&&docker") {
@@ -51,7 +52,7 @@ timestamps {
                     sh "git init"
 
                     if (SHARED_RECLASS_URL != '') {
-                        sh "git submodule add ${SHARED_RECLASS_URL} '${modelEnv}/classes/system'"
+                        ssh.agentSh "git submodule add ${SHARED_RECLASS_URL} '${modelEnv}/classes/system'"
                         git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
                     }
                 }
