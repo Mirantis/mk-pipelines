@@ -52,7 +52,7 @@ timestamps {
                     sh "git init"
 
                     if (SHARED_RECLASS_URL != '') {
-                        ssh.agentSh "git submodule add ${SHARED_RECLASS_URL} '${modelEnv}/classes/system'"
+                        ssh.agentSh "git submodule add \"${SHARED_RECLASS_URL}\" \"classes/system\""
                         git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
                     }
                 }
