@@ -120,8 +120,8 @@ timestamps {
                         stage('Launch new Heat stack') {
                             // create stack
                             envParams = [
-                                'instance_zone': HEAT_STACK_ZONE,
-                                'public_net': HEAT_STACK_PUBLIC_NET
+                                'cluster_zone': HEAT_STACK_ZONE,
+                                'cluster_public_net': HEAT_STACK_PUBLIC_NET
                             ]
                             openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, false)
                         }
