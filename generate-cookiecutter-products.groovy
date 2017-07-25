@@ -84,6 +84,7 @@ timestamps {
                     sh "mkdir -p ${templateOutputDir}"
                     sh "mkdir -p ${outputDestination}"
 
+                    python.setupCookiecutterVirtualenv(cutterEnv)
                     python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
                     sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 } else {
