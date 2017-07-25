@@ -84,7 +84,7 @@ timestamps {
                     sh "mkdir -p ${templateOutputDir}"
                     sh "mkdir -p ${outputDestination}"
 
-                    python.buildCookiecutterTemplate(templateDir, content, templateOutputDir, cutterEnv, templateBaseDir)
+                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
                     sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 } else {
                     common.warningMsg("Product " + product + " is disabled")
