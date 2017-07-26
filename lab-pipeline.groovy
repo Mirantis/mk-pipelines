@@ -318,14 +318,9 @@ timestamps {
                 }
             }
 
-            stage('Finalize') {
-                if (STACK_INSTALL != '') {
-                    try {
-                        salt.runSaltProcessStep(saltMaster, '*', 'state.apply', [], null, true)
-                    } catch (Exception e) {
-                        common.warningMsg('State apply failed but we should continue to run')
-                        throw e
-                    }
+            if (common.checkContains('STACK_INSTALL', 'finalize')) {
+                stage('Finalize') {
+                    salt.runSaltProcessStep(saltMaster, '*', 'state.apply', [], null, true)
                 }
             }
         } catch (Throwable e) {
