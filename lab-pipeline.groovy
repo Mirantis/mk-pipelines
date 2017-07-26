@@ -35,14 +35,15 @@
  *
  * required for STACK_TYPE=NONE or empty string
  *   SALT_MASTER_URL            URL of Salt-API
-
- *   K8S_API_SERVER             Kubernetes API address
- *   K8S_CONFORMANCE_IMAGE      Path to docker image with conformance e2e tests
  *
- *   TEMPEST_IMAGE              Tempest image link
- *   TARGET_TEST_NODE           Node to run tests
- *   DOCKER_INSTALL             Install docker on the target if tue
- *   PATTERN                    If not false, run tests matched to pattern only
+ * Test settings:
+ *   TEST_K8S_API_SERVER     Kubernetes API address
+ *   TEST_K8S_CONFORMANCE_IMAGE   Path to docker image with conformance e2e tests
+ *
+ *   TEST_TEMPEST_IMAGE           Tempest image link
+ *   TEST_DOCKER_INSTALL          Install docker on the target if tue
+ *   TEST_TEMPEST_PATTERN         If not false, run tests matched to pattern only
+ *   TEST_TEMPEST_TARGET          Salt target for tempest node
  *
  * optional parameters for overwriting soft params
  *   SALT_OVERRIDES              YAML with overrides for Salt deployment
@@ -273,7 +274,7 @@ timestamps {
                     def output_file = image.replaceAll('/', '-') + '.output'
 
                     // run image
-                    test.runConformanceTests(saltMaster, K8S_API_SERVER, image)
+                    test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
 
                     // collect output
                     sh "mkdir -p ${artifacts_dir}"
@@ -286,13 +287,13 @@ timestamps {
                 }
 
                 stage('Run k8s conformance e2e tests') {
-                    //test.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
+                    //test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, TEST_K8S_CONFORMANCE_IMAGE)
 
-                    def image = K8S_CONFORMANCE_IMAGE
+                    def image = TEST_K8S_CONFORMANCE_IMAGE
                     def output_file = image.replaceAll('/', '-') + '.output'
 
                     // run image
-                    test.runConformanceTests(saltMaster, K8S_API_SERVER, image)
+                    test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
 
                     // collect output
                     sh "mkdir -p ${artifacts_dir}"
@@ -306,15 +307,15 @@ timestamps {
             }
 
             if (common.checkContains('STACK_TEST', 'openstack')) {
-                if (common.checkContains('DOCKER_INSTALL', 'true')) {
-                    test.install_docker(saltMaster, TARGET)
+                if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
+                    test.install_docker(saltMaster, TEST_TEMPEST_TARGET)
                 }
                 stage('Run OpenStack tests') {
-                    test.runTempestTests(saltMaster, TEMPEST_IMAGE, TARGET, PATTERN)
+                    test.runTempestTests(saltMaster, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
                 }
 
                 stage('Copy Tempest results to config node') {
-                    test.copyTempestResults(saltMaster, TARGET)
+                    test.copyTempestResults(saltMaster, TEST_TEMPEST_TARGET)
                 }
             }
 

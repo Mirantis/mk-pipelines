@@ -31,15 +31,22 @@
  *   OPENSTACK_API_PROJECT      OpenStack project to connect to
  *   OPENSTACK_API_CLIENT       Versions of OpenStack python clients
  *   OPENSTACK_API_VERSION      Version of the OpenStack API (2/3)
- *
+
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
+ *  required for STACK_TYPE=NONE or empty string
  *   SALT_MASTER_URL            URL of Salt master
+
+ * Test settings:
+ *   TEST_K8S_API_SERVER     Kubernetes API address
+ *   TEST_K8S_CONFORMANCE_IMAGE   Path to docker image with conformance e2e tests
  *
- *   K8S_API_SERVER             Kubernetes API address
- *   K8S_CONFORMANCE_IMAGE      Path to docker image with conformance e2e tests
- *   SALT_OVERRIDES             YAML with overrides for Salt deployment
+ *   TEST_DOCKER_INSTALL          Install docker on the target if true
+ *   TEST_TEMPEST_IMAGE           Tempest image link
+ *   TEST_TEMPEST_PATTERN         If not false, run tests matched to pattern only
+ *   TEST_TEMPEST_TARGET          Salt target for tempest node
  *
- *   TEMPEST_IMAGE_LINK         Tempest image link
+ * optional parameters for overwriting soft params
+ *   SALT_OVERRIDES              YAML with overrides for Salt deployment
  *
  */
 common = new com.mirantis.mk.Common()
@@ -323,7 +330,7 @@ timestamps {
                     def output_file = image.replaceAll('/', '-') + '.output'
 
                     // run image
-                    test.runConformanceTests(saltMaster, K8S_API_SERVER, image)
+                    test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
 
                     // collect output
                     sh "mkdir -p ${artifacts_dir}"
@@ -336,13 +343,11 @@ timestamps {
                 }
 
                 stage('Run k8s conformance e2e tests') {
-                    //test.runConformanceTests(saltMaster, K8S_API_SERVER, K8S_CONFORMANCE_IMAGE)
-
                     def image = K8S_CONFORMANCE_IMAGE
                     def output_file = image.replaceAll('/', '-') + '.output'
 
                     // run image
-                    test.runConformanceTests(saltMaster, K8S_API_SERVER, image)
+                    test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
 
                     // collect output
                     sh "mkdir -p ${artifacts_dir}"
@@ -356,12 +361,15 @@ timestamps {
             }
 
             if (common.checkContains('STACK_TEST', 'openstack')) {
-                stage('Run deployment tests') {
-                    test.runTempestTests(saltMaster, TEMPEST_IMAGE_LINK)
+                if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
+                    test.install_docker(saltMaster, TEST_TEMPEST_TARGET)
+                }
+                stage('Run OpenStack tests') {
+                    test.runTempestTests(saltMaster, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
                 }
 
-                stage('Copy test results to config node') {
-                    test.copyTempestResults(saltMaster)
+                stage('Copy Tempest results to config node') {
+                    test.copyTempestResults(saltMaster, TEST_TEMPEST_TARGET)
                 }
             }
 
@@ -391,12 +399,21 @@ timestamps {
                     common.errorMsg('Stack cleanup job triggered')
                     build(job: STACK_CLEANUP_JOB, parameters: [
                         [$class: 'StringParameterValue', name: 'STACK_NAME', value: STACK_NAME],
-                        [$class: 'StringParameterValue', name: 'STACK_TYPE', value: STACK_TYPE]
+                        [$class: 'StringParameterValue', name: 'STACK_TYPE', value: STACK_TYPE],
+                        [$class: 'StringParameterValue', name: 'OPENSTACK_API_URL', value: OPENSTACK_API_URL],
+                        [$class: 'StringParameterValue', name: 'OPENSTACK_API_CREDENTIALS', value: OPENSTACK_API_CREDENTIALS],
+                        [$class: 'StringParameterValue', name: 'OPENSTACK_API_PROJECT', value: OPENSTACK_API_PROJECT],
+                        [$class: 'StringParameterValue', name: 'OPENSTACK_API_PROJECT_DOMAIN', value: OPENSTACK_API_PROJECT_DOMAIN],
+                        [$class: 'StringParameterValue', name: 'OPENSTACK_API_PROJECT_ID', value: OPENSTACK_API_PROJECT_ID],
+                        [$class: 'StringParameterValue', name: 'OPENSTACK_API_USER_DOMAIN', value: OPENSTACK_API_USER_DOMAIN],
+                        [$class: 'StringParameterValue', name: 'OPENSTACK_API_CLIENT', value: OPENSTACK_API_CLIENT],
+                        [$class: 'StringParameterValue', name: 'OPENSTACK_API_VERSION', value: OPENSTACK_API_VERSION]
                     ])
                 }
             } else {
                 if (currentBuild.result == 'FAILURE') {
                     common.errorMsg("Deploy job FAILED and was not deleted. Please fix the problem and delete stack on you own.")
+
                     if (SALT_MASTER_URL) {
                         common.errorMsg("Salt master URL: ${SALT_MASTER_URL}")
                     }
