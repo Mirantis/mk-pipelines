@@ -1,4 +1,26 @@
 /**
+
+
+
+
+
+
+
+
+
+* This pipeline is deprecated, please use cloud-deploy-pipeline
+
+
+
+
+
+
+
+
+
+
+
+
  *
  * Launch heat stack with basic k8s
  * Flow parameters:

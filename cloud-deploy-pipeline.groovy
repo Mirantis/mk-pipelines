@@ -4,15 +4,15 @@
  *
  * Expected parameters:
  *   STACK_NAME                 Infrastructure stack name
- *   STACK_TEMPLATE             Stack HOT/CFN template
- *   STACK_TYPE                 Deploy OpenStack/AWS [heat/aws]
+ *   STACK_TEMPLATE             File with stack template
+ *   STACK_TYPE                 Deploy OpenStack/AWS [heat/aws], use 'physical' if no stack should be started
  *
  *   STACK_TEMPLATE_URL         URL to git repo with stack templates
  *   STACK_TEMPLATE_CREDENTIALS Credentials to the templates repo
  *   STACK_TEMPLATE_BRANCH      Stack templates repo branch
  *
  *   STACK_DELETE               Delete stack when finished (bool)
- *   STACK_REUSE                Reuse existing stack (don't create one)
+ *   STACK_REUSE                Reuse existing stack (don't create one, only read outputs)
  *   STACK_INSTALL              What should be installed (k8s, openstack, ...)
  *   STACK_TEST                 Run tests (bool)
  *   STACK_CLEANUP_JOB          Name of job for deleting stack
@@ -33,7 +33,7 @@
  *   OPENSTACK_API_VERSION      Version of the OpenStack API (2/3)
 
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
- *  required for STACK_TYPE=NONE or empty string
+ *  required for STACK_TYPE=physical
  *   SALT_MASTER_URL            URL of Salt master
 
  * Test settings:
@@ -108,7 +108,11 @@ timestamps {
 
                     // create openstack env
                     openstack.setupOpenstackVirtualenv(venv, openstackVersion)
-                    openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+                    openstackCloud = openstack.createOpenstackEnv(
+                        OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
+                        OPENSTACK_API_PROJECT, OPENSTACK_API_PROJECT_DOMAIN,
+                        OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,
+                        OPENSTACK_API_VERSION)
                     openstack.getKeystoneToken(openstackCloud, venv)
                     //
                     // Verify possibility of create stack for given user and stack type
@@ -125,11 +129,19 @@ timestamps {
                     // launch stack
                     if (STACK_REUSE.toBoolean() == false) {
                         stage('Launch new Heat stack') {
-                            // create stack
                             envParams = [
                                 'cluster_zone': HEAT_STACK_ZONE,
                                 'cluster_public_net': HEAT_STACK_PUBLIC_NET
                             ]
+
+                            // set reclass repo in heat env
+                            try {
+                                envParams.put('cfg_reclass_branch', STACK_RECLASS_BRANCH)
+                                envParams.put('cfg_reclass_address', STACK_RECLASS_ADDRESS)
+                            } catch (MissingPropertyException e) {
+                                common.infoMsg("Property STACK_RECLASS_BRANCH or STACK_RECLASS_ADDRESS not found! Using default values from template.")
+                            }
+
                             openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, false)
                         }
                     }
@@ -139,6 +151,7 @@ timestamps {
                     currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
 
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
+
                 } else if (STACK_TYPE == 'aws') {
 
                     // setup environment
@@ -189,14 +202,20 @@ timestamps {
                     currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
 
-                } else if (STACK_TYPE == 'physical') {
-                    common.infoMsg('Using physical stack')
-                } else  {
+                } else if (STACK_TYPE != 'physical') {
                     throw new Exception("STACK_TYPE ${STACK_TYPE} is not supported")
                 }
 
                 // Connect to Salt master
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            }
+
+
+            // Set up override params
+            if (env.getEnvironment().containsKey('SALT_OVERRIDES')) {
+                stage('Set Salt overrides') {
+                    salt.setSaltOverrides(saltMaster,  SALT_OVERRIDES)
+                }
             }
 
             //
@@ -216,14 +235,6 @@ timestamps {
                 }
             }
 
-            // Set up override params
-            if (env.getEnvironment().containsKey('SALT_OVERRIDES')) {
-                stage('Set Salt overrides') {
-                    salt.setSaltOverrides(saltMaster,  SALT_OVERRIDES)
-                }
-            }
-
-
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
 
@@ -234,6 +245,7 @@ timestamps {
                         print(kubernetes_control_address)
                         salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
                     }
+
                     // ensure certificates are generated properly
                     salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
                     salt.enforceState(saltMaster, '*', ['salt.minion.cert'], true)
@@ -244,6 +256,7 @@ timestamps {
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
                     stage('Install Contrail for Kubernetes') {
                         orchestrate.installContrailNetwork(saltMaster)
+                        orchestrate.installContrailCompute(saltMaster)
                         orchestrate.installKubernetesContrailCompute(saltMaster)
                     }
                 }
@@ -295,6 +308,13 @@ timestamps {
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
                     salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
                 }
+
+                if (salt.testTarget(saltMaster, 'I@ironic:conductor')){
+                    stage('Install OpenStack Ironic conductor') {
+                        orchestrate.installIronicConductor(saltMaster)
+                    }
+                }
+
 
                 stage('Install OpenStack compute') {
                     orchestrate.installOpenstackCompute(saltMaster)
