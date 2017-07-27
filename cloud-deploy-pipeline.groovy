@@ -49,6 +49,7 @@
  *   SALT_OVERRIDES              YAML with overrides for Salt deployment
  *
  */
+
 common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
@@ -82,7 +83,6 @@ timestamps {
                 if (STACK_TYPE == 'heat') {
                     // value defaults
                     def openstackCloud
-                    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
 
                     if (STACK_REUSE.toBoolean() == true && STACK_NAME == '') {
                         error("If you want to reuse existing stack you need to provide it's name")
@@ -107,7 +107,7 @@ timestamps {
                     git.checkoutGitRepository('template', STACK_TEMPLATE_URL, STACK_TEMPLATE_BRANCH, STACK_TEMPLATE_CREDENTIALS)
 
                     // create openstack env
-                    openstack.setupOpenstackVirtualenv(venv, openstackVersion)
+                    openstack.setupOpenstackVirtualenv(venv, OPENSTACK_API_CLIENT)
                     openstackCloud = openstack.createOpenstackEnv(
                         OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
                         OPENSTACK_API_PROJECT, OPENSTACK_API_PROJECT_DOMAIN,
