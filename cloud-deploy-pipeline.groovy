@@ -1,6 +1,6 @@
 /**
  *
- * Launch heat/cloudformation stack
+ * Launch stack and work with it
  *
  * Expected parameters:
  *   STACK_NAME                 Infrastructure stack name
@@ -189,7 +189,9 @@ timestamps {
                     currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
                     SALT_MASTER_URL = "http://${saltMasterHost}:6969"
 
-                } else {
+                } else if (STACK_TYPE == 'physical') {
+                    common.infoMsg('Using physical stack')
+                } else  {
                     throw new Exception("STACK_TYPE ${STACK_TYPE} is not supported")
                 }
 
