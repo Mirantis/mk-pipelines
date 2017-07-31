@@ -108,11 +108,7 @@ timestamps {
 
                     // create openstack env
                     openstack.setupOpenstackVirtualenv(venv, OPENSTACK_API_CLIENT)
-                    openstackCloud = openstack.createOpenstackEnv(
-                        OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
-                        OPENSTACK_API_PROJECT, OPENSTACK_API_PROJECT_DOMAIN,
-                        OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,
-                        OPENSTACK_API_VERSION)
+                    openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
                     openstack.getKeystoneToken(openstackCloud, venv)
                     //
                     // Verify possibility of create stack for given user and stack type
