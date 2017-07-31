@@ -9,6 +9,7 @@
  *  SYSTEM_GIT_URL
  *  SYSTEM_GIT_REF
  *  FORMULAS_SOURCE
+ *  MAX_CPU_PER_JOB
  */
 
 def common = new com.mirantis.mk.Common()
@@ -52,7 +53,7 @@ node("python") {
     stage("test node") {
       if (checkouted) {
         def workspace = common.getWorkspace()
-        saltModelTesting.setupAndTestNode(NODE_TARGET, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION)
+        saltModelTesting.setupAndTestNode(NODE_TARGET, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION, MAX_CPU_PER_JOB.toInteger())
       }
     }
   } catch (Throwable e) {

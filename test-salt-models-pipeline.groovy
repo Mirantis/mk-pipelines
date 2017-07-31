@@ -7,6 +7,7 @@
  *  EXTRA_FORMULAS
  *  SYSTEM_GIT_URL
  *  SYSTEM_GIT_REF
+ *  MAX_CPU_PER_JOB
  */
 
 def common = new com.mirantis.mk.Common()
@@ -100,6 +101,7 @@ node("python") {
               [$class: 'StringParameterValue', name: 'FORMULAS_REVISION', value: FORMULAS_REVISION],
               [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
               [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
+              [$class: 'StringParameterValue', name: 'MAX_CPU_PER_JOB', value: MAX_CPU_PER_JOB],
               [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF]
             ]}
           acc++;
