@@ -70,7 +70,7 @@ if (STACK_TYPE == 'aws') {
 }
 
 timestamps {
-    node {
+    node("python") {
         try {
             // Set build-specific variables
             venv = "${env.WORKSPACE}/venv"
