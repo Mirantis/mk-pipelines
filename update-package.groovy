@@ -53,7 +53,11 @@ node() {
         }
 
         stage("List package upgrades") {
+            common.infoMsg("Listing all the packages that have a new update available on test nodes: ${targetTestSubset}")
             salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.list_upgrades', [], null, true)
+            if(TARGET_PACKAGES != "" && TARGET_PACKAGES != "*"){
+                common.infoMsg("Note that only the ${TARGET_PACKAGES} would be installed from the above list of available updates on the ${targetTestSubset}")
+            }
         }
 
         stage('Confirm live package upgrades on sample') {
