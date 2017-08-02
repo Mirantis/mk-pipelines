@@ -410,12 +410,12 @@ node("python") {
         // Clean
         //
 
-        if (STACK_NAME && STACK_NAME != '') {
+        if (env.getEnvironment().containsKey('STACK_NAME') && STACK_NAME != '') {
             // send notification
             common.sendNotification(currentBuild.result, STACK_NAME, ["slack"])
         }
 
-        if (STACK_DELETE.toBoolean() == true) {
+        if (env.getEnvironment().containsKey('STACK_DELETE') && STACK_DELETE.toBoolean() == true) {
             stage('Trigger cleanup job') {
                 common.errorMsg('Stack cleanup job triggered')
                 build(job: STACK_CLEANUP_JOB, parameters: [
@@ -435,7 +435,7 @@ node("python") {
             if (currentBuild.result == 'FAILURE') {
                 common.errorMsg("Deploy job FAILED and was not deleted. Please fix the problem and delete stack on you own.")
 
-                if (SALT_MASTER_URL) {
+                if (env.getEnvironment().containsKey('SALT_MASTER_URL')) {
                     common.errorMsg("Salt master URL: ${SALT_MASTER_URL}")
                 }
             }
