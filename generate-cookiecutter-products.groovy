@@ -17,84 +17,84 @@ python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 ssh = new com.mirantis.mk.Ssh()
 
-timestamps {
-    node("python&&docker") {
-        def templateEnv = "${env.WORKSPACE}/template"
-        def modelEnv = "${env.WORKSPACE}/model"
-        def testEnv = "${env.WORKSPACE}/test"
 
-        try {
-            def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
-            def clusterDomain = templateContext.default_context.cluster_domain
-            def clusterName = templateContext.default_context.cluster_name
-            def cutterEnv = "${env.WORKSPACE}/cutter"
-            def jinjaEnv = "${env.WORKSPACE}/jinja"
-            def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
-            def targetBranch = "feature/${clusterName}"
-            def templateBaseDir = "${env.WORKSPACE}/template"
-            def templateDir = "${templateEnv}/template/dir"
-            def templateOutputDir = templateBaseDir
-            def user
-            wrap([$class: 'BuildUser']) {
-                user = env.BUILD_USER_ID
-            }
+node("python&&docker") {
+    def templateEnv = "${env.WORKSPACE}/template"
+    def modelEnv = "${env.WORKSPACE}/model"
+    def testEnv = "${env.WORKSPACE}/test"
 
-            currentBuild.description = clusterName
-            print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
+    try {
+        def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
+        def clusterDomain = templateContext.default_context.cluster_domain
+        def clusterName = templateContext.default_context.cluster_name
+        def cutterEnv = "${env.WORKSPACE}/cutter"
+        def jinjaEnv = "${env.WORKSPACE}/jinja"
+        def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
+        def targetBranch = "feature/${clusterName}"
+        def templateBaseDir = "${env.WORKSPACE}/template"
+        def templateDir = "${templateEnv}/template/dir"
+        def templateOutputDir = templateBaseDir
+        def user
+        wrap([$class: 'BuildUser']) {
+            user = env.BUILD_USER_ID
+        }
 
-            stage ('Download Cookiecutter template') {
-                git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
-            }
+        currentBuild.description = clusterName
+        print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
 
-            stage ('Create empty reclass model') {
-                dir(path: modelEnv) {
-                    sh "rm -rfv .git"
-                    sh "git init"
+        stage ('Download Cookiecutter template') {
+            git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
+        }
 
-                    if (SHARED_RECLASS_URL != '') {
-                        ssh.agentSh "git submodule add \"${SHARED_RECLASS_URL}\" \"classes/system\""
-                        git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
-                    }
+        stage ('Create empty reclass model') {
+            dir(path: modelEnv) {
+                sh "rm -rfv .git"
+                sh "git init"
+
+                if (SHARED_RECLASS_URL != '') {
+                    ssh.agentSh "git submodule add \"${SHARED_RECLASS_URL}\" \"classes/system\""
+                    git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
                 }
             }
+        }
 
-            def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
-            for (product in productList) {
+        def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
+        for (product in productList) {
 
-                // get templateOutputDir and productDir
-                if (product.startsWith("stacklight")) {
-                    templateOutputDir = "${env.WORKSPACE}/output/stacklight"
-                    try {
-                        productDir = "stacklight" + templateContext.default_context['stacklight_version']
-                    } catch (Throwable e) {
-                        productDir = "stacklight1"
-                    }
-                } else {
-                    templateOutputDir = "${env.WORKSPACE}/output/${product}"
-                    productDir = product
+            // get templateOutputDir and productDir
+            if (product.startsWith("stacklight")) {
+                templateOutputDir = "${env.WORKSPACE}/output/stacklight"
+                try {
+                    productDir = "stacklight" + templateContext.default_context['stacklight_version']
+                } catch (Throwable e) {
+                    productDir = "stacklight1"
                 }
-
-                if (product == "infra" || (templateContext.default_context["${product}_enabled"]
-                    && templateContext.default_context["${product}_enabled"].toBoolean())) {
-
-                    templateDir = "${templateEnv}/cluster_product/${productDir}"
-                    common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
-
-                    sh "rm -rf ${templateOutputDir} || true"
-                    sh "mkdir -p ${templateOutputDir}"
-                    sh "mkdir -p ${outputDestination}"
-
-                    python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-                } else {
-                    common.warningMsg("Product " + product + " is disabled")
-                }
+            } else {
+                templateOutputDir = "${env.WORKSPACE}/output/${product}"
+                productDir = product
             }
 
-            stage('Generate new SaltMaster node') {
-                def nodeFile = "${modelEnv}/nodes/cfg01.${clusterDomain}.yml"
-                def nodeString = """classes:
+            if (product == "infra" || (templateContext.default_context["${product}_enabled"]
+                && templateContext.default_context["${product}_enabled"].toBoolean())) {
+
+                templateDir = "${templateEnv}/cluster_product/${productDir}"
+                common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
+
+                sh "rm -rf ${templateOutputDir} || true"
+                sh "mkdir -p ${templateOutputDir}"
+                sh "mkdir -p ${outputDestination}"
+
+                python.setupCookiecutterVirtualenv(cutterEnv)
+                python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
+                sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+            } else {
+                common.warningMsg("Product " + product + " is disabled")
+            }
+        }
+
+        stage('Generate new SaltMaster node') {
+            def nodeFile = "${modelEnv}/nodes/cfg01.${clusterDomain}.yml"
+            def nodeString = """classes:
 - cluster.${clusterName}.infra.config
 parameters:
   _param:
@@ -105,73 +105,72 @@ parameters:
       name: cfg01
       domain: ${clusterDomain}
 """
-                sh "mkdir -p ${modelEnv}/nodes/"
-                writeFile(file: nodeFile, text: nodeString)
+            sh "mkdir -p ${modelEnv}/nodes/"
+            writeFile(file: nodeFile, text: nodeString)
 
-                git.commitGitChanges(modelEnv, "Create model ${clusterName}", "${user}@localhost", "${user}")
-            }
-
-            stage("Test") {
-                if (SHARED_RECLASS_URL != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
-                    sh("cp -r ${modelEnv} ${testEnv}")
-                    saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", "", testEnv)
-                }
-            }
-
-            stage("Generate config drive") {
-                // apt package genisoimage is required for this stage
-
-                // download create-config-drive
-                def config_drive_script_url = "https://raw.githubusercontent.com/pupapaik/virt-utils/master/create-config-drive"
-                def user_data_script_url = "https://raw.githubusercontent.com/mceloud/scripts/master/master_config.sh"
-
-                sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
-                sh "wget -O user_data.sh ${user_data_script_url}"
-
-
-                // load data from model
-                def smc = [:]
-                smc['SALT_MASTER_MINION_ID'] = "cfg.${clusterDomain}"
-                smc['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
-                smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
-                smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
-                smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
-
-                for (i in common.entries(smc)) {
-                    sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" user_data.sh"
-                }
-
-                // create config-drive
-                sh "./create-config-drive --user-data user_data.sh --hostname cfg --model ${modelEnv} cfg.${clusterDomain}-config.iso"
-
-                // save iso to artifacts
-                archiveArtifacts artifacts: "cfg.${clusterDomain}-config.iso"
-            }
-
-            stage ('Save changes reclass model') {
-
-                sh(returnStatus: true, script: "tar -zcf ${clusterName}.tar.gz -C ${modelEnv} .")
-                archiveArtifacts artifacts: "${clusterName}.tar.gz"
-
-
-                if (EMAIL_ADDRESS != null && EMAIL_ADDRESS != "") {
-                     emailext(to: EMAIL_ADDRESS,
-                              attachmentsPattern: "${clusterName}.tar.gz",
-                              body: "Mirantis Jenkins\n\nRequested reclass model ${clusterName} has been created and attached to this email.\nEnjoy!\n\nMirantis",
-                              subject: "Your Salt model ${clusterName}")
-                }
-            }
-
-        } catch (Throwable e) {
-             // If there was an error or exception thrown, the build failed
-             currentBuild.result = "FAILURE"
-             throw e
-        } finally {
-            stage ('Clean workspace directories') {
-                sh(returnStatus: true, script: "rm -rf ${templateEnv}")
-                sh(returnStatus: true, script: "rm -rf ${modelEnv}")
-            }
-             // common.sendNotification(currentBuild.result,"",["slack"])
+            git.commitGitChanges(modelEnv, "Create model ${clusterName}", "${user}@localhost", "${user}")
         }
+
+        stage("Test") {
+            if (SHARED_RECLASS_URL != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
+                sh("cp -r ${modelEnv} ${testEnv}")
+                saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", "", testEnv)
+            }
+        }
+
+        stage("Generate config drive") {
+            // apt package genisoimage is required for this stage
+
+            // download create-config-drive
+            def config_drive_script_url = "https://raw.githubusercontent.com/pupapaik/virt-utils/master/create-config-drive"
+            def user_data_script_url = "https://raw.githubusercontent.com/mceloud/scripts/master/master_config.sh"
+
+            sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
+            sh "wget -O user_data.sh ${user_data_script_url}"
+
+
+            // load data from model
+            def smc = [:]
+            smc['SALT_MASTER_MINION_ID'] = "cfg.${clusterDomain}"
+            smc['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
+            smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
+            smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
+            smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
+
+            for (i in common.entries(smc)) {
+                sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" user_data.sh"
+            }
+
+            // create config-drive
+            sh "./create-config-drive --user-data user_data.sh --hostname cfg --model ${modelEnv} cfg.${clusterDomain}-config.iso"
+
+            // save iso to artifacts
+            archiveArtifacts artifacts: "cfg.${clusterDomain}-config.iso"
+        }
+
+        stage ('Save changes reclass model') {
+
+            sh(returnStatus: true, script: "tar -zcf ${clusterName}.tar.gz -C ${modelEnv} .")
+            archiveArtifacts artifacts: "${clusterName}.tar.gz"
+
+
+            if (EMAIL_ADDRESS != null && EMAIL_ADDRESS != "") {
+                 emailext(to: EMAIL_ADDRESS,
+                          attachmentsPattern: "${clusterName}.tar.gz",
+                          body: "Mirantis Jenkins\n\nRequested reclass model ${clusterName} has been created and attached to this email.\nEnjoy!\n\nMirantis",
+                          subject: "Your Salt model ${clusterName}")
+            }
+        }
+
+    } catch (Throwable e) {
+         // If there was an error or exception thrown, the build failed
+         currentBuild.result = "FAILURE"
+         throw e
+    } finally {
+        stage ('Clean workspace directories') {
+            sh(returnStatus: true, script: "rm -rf ${templateEnv}")
+            sh(returnStatus: true, script: "rm -rf ${modelEnv}")
+        }
+         // common.sendNotification(currentBuild.result,"",["slack"])
     }
 }

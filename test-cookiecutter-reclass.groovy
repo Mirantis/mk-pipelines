@@ -92,82 +92,80 @@ try {
   gerritRef = null
 }
 
-timestamps {
-    node("python&&docker") {
-        def templateEnv = "${env.WORKSPACE}"
-        def cutterEnv = "${env.WORKSPACE}/cutter"
-        def jinjaEnv = "${env.WORKSPACE}/jinja"
+node("python&&docker") {
+    def templateEnv = "${env.WORKSPACE}"
+    def cutterEnv = "${env.WORKSPACE}/cutter"
+    def jinjaEnv = "${env.WORKSPACE}/jinja"
 
-        try {
-            stage("Cleanup") {
-                sh("rm -rf * || true")
-            }
-
-            stage ('Download Cookiecutter template') {
-                if (gerritRef) {
-                    def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
-                    merged = gerritChange.status == "MERGED"
-                    if(!merged){
-                        checkouted = gerrit.gerritPatchsetCheckout ([
-                            credentialsId : CREDENTIALS_ID
-                        ])
-                    } else{
-                        common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
-                    }
-                } else {
-                    git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, CREDENTIALS_ID)
-                }
-            }
-
-            stage("Setup") {
-                python.setupCookiecutterVirtualenv(cutterEnv)
-            }
-
-            def contextFiles
-            dir("${templateEnv}/contexts") {
-                contextFiles = findFiles(glob: "*.yml")
-            }
-
-            def contextFileList = []
-            for (int i = 0; i < contextFiles.size(); i++) {
-                contextFileList << contextFiles[i]
-            }
-
-            stage("generate-model") {
-                for (contextFile in contextFileList) {
-                    generateModel(contextFile, cutterEnv)
-                }
-            }
-
-            dir("${env.WORKSPACE}") {
-                sh(returnStatus: true, script: "tar -zcvf model.tar.gz -C model .")
-                archiveArtifacts artifacts: "model.tar.gz"
-            }
-
-            stage("test-nodes") {
-                def partitions = common.partitionList(contextFileList, PARALLEL_NODE_GROUP_SIZE.toInteger())
-                def buildSteps = [:]
-                for (int i = 0; i < partitions.size(); i++) {
-                    def partition = partitions[i]
-                    buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
-                    for(int k = 0; k < partition.size; k++){
-                        def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
-                        def testEnv = "${env.WORKSPACE}/model/${basename}"
-                        buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv) })
-                    }
-                }
-                common.serial(buildSteps)
-            }
-
-            stage ('Clean workspace directories') {
-                sh(returnStatus: true, script: "rm -rfv * > /dev/null || true")
-            }
-
-        } catch (Throwable e) {
-             currentBuild.result = "FAILURE"
-             throw e
-        } finally {
-            common.sendNotification(currentBuild.result,"",["slack"])
+    try {
+        stage("Cleanup") {
+            sh("rm -rf * || true")
         }
+
+        stage ('Download Cookiecutter template') {
+            if (gerritRef) {
+                def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
+                merged = gerritChange.status == "MERGED"
+                if(!merged){
+                    checkouted = gerrit.gerritPatchsetCheckout ([
+                        credentialsId : CREDENTIALS_ID
+                    ])
+                } else{
+                    common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
+                }
+            } else {
+                git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, CREDENTIALS_ID)
+            }
+        }
+
+        stage("Setup") {
+            python.setupCookiecutterVirtualenv(cutterEnv)
+        }
+
+        def contextFiles
+        dir("${templateEnv}/contexts") {
+            contextFiles = findFiles(glob: "*.yml")
+        }
+
+        def contextFileList = []
+        for (int i = 0; i < contextFiles.size(); i++) {
+            contextFileList << contextFiles[i]
+        }
+
+        stage("generate-model") {
+            for (contextFile in contextFileList) {
+                generateModel(contextFile, cutterEnv)
+            }
+        }
+
+        dir("${env.WORKSPACE}") {
+            sh(returnStatus: true, script: "tar -zcvf model.tar.gz -C model .")
+            archiveArtifacts artifacts: "model.tar.gz"
+        }
+
+        stage("test-nodes") {
+            def partitions = common.partitionList(contextFileList, PARALLEL_NODE_GROUP_SIZE.toInteger())
+            def buildSteps = [:]
+            for (int i = 0; i < partitions.size(); i++) {
+                def partition = partitions[i]
+                buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
+                for(int k = 0; k < partition.size; k++){
+                    def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
+                    def testEnv = "${env.WORKSPACE}/model/${basename}"
+                    buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv) })
+                }
+            }
+            common.serial(buildSteps)
+        }
+
+        stage ('Clean workspace directories') {
+            sh(returnStatus: true, script: "rm -rfv * > /dev/null || true")
+        }
+
+    } catch (Throwable e) {
+         currentBuild.result = "FAILURE"
+         throw e
+    } finally {
+        common.sendNotification(currentBuild.result,"",["slack"])
     }
 }
