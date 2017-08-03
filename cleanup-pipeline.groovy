@@ -33,7 +33,7 @@ node {
     def env_vars
 
     // default STACK_TYPE is heat
-    if (!env.getEnvironment().containsKey("STACK_TYPE") || STACK_TYPE == '') {
+    if (!common.validInputParam(STACK_TYPE)) {
         STACK_TYPE = 'heat'
     }
 
