@@ -43,7 +43,16 @@ node("python&&docker") {
         print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
 
         stage ('Download Cookiecutter template') {
-            git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
+            if (COOKIECUTTER_TEMPLATE_BRANCH.startsWith('refs/changes/')) {
+                git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, 'master', COOKIECUTTER_TEMPLATE_CREDENTIALS)
+
+                dir(templateEnv) {
+                    ssh.agentSh("git fetch ${COOKIECUTTER_TEMPLATE_URL} ${COOKIECUTTER_TEMPLATE_BRANCH} && git checkout FETCH_HEAD")
+                }
+            } else {
+                git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
+            }
+
         }
 
         stage ('Create empty reclass model') {
@@ -64,11 +73,20 @@ node("python&&docker") {
             // get templateOutputDir and productDir
             if (product.startsWith("stacklight")) {
                 templateOutputDir = "${env.WORKSPACE}/output/stacklight"
+
+                def stacklightVersion
                 try {
-                    productDir = "stacklight" + templateContext.default_context['stacklight_version']
+                    stacklightVersion = templateContext.default_context['stacklight_version']
                 } catch (Throwable e) {
+                    common.warningMsg('Stacklight version loading failed')
+                }
+
+                if (stacklightVersion) {
+                    productDir = "stacklight" + stacklightVersion
+                } else {
                     productDir = "stacklight1"
                 }
+
             } else {
                 templateOutputDir = "${env.WORKSPACE}/output/${product}"
                 productDir = product
