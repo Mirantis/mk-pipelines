@@ -141,7 +141,12 @@ node("python") {
                             common.infoMsg("Property STACK_RECLASS_BRANCH or STACK_RECLASS_ADDRESS not found! Using default values from template.")
                         }
 
-                        openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, false)
+                        def legacy_env = false;
+                        if (STACK_TEMPLATE.startsWith('virtual_') && !STACK_TEMPLATE.contains('aio')) {
+                            legacy_env = true;
+                        }
+
+                        openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, legacy_env)
                     }
                 }
 
