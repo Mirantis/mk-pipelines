@@ -397,6 +397,10 @@ node("python") {
             stage('Copy Tempest results to config node') {
                 test.copyTempestResults(saltMaster, TEST_TEMPEST_TARGET)
             }
+
+            stage('Archive rally artifacts') {
+                test.archiveRallyArtifacts(saltMaster, TEST_TEMPEST_TARGET)
+            }
         }
 
         if (common.checkContains('STACK_INSTALL', 'finalize')) {
