@@ -58,10 +58,8 @@ node("python") {
     }
     stage("test") {
       if(checkouted){
-          wrap([$class: 'AnsiColorBuildWrapper']) {
-            sh("make clean")
-            sh("[ $SALT_VERSION != 'latest' ] || export SALT_VERSION=''; make test")
-        }
+        sh("make clean")
+        sh("[ $SALT_VERSION != 'latest' ] || export SALT_VERSION=''; make test")
       }
     }
     stage("kitchen") {
@@ -96,21 +94,20 @@ node("python") {
             ruby.installKitchen()
           }
           common.infoMsg("Running kitchen testing, parallel mode: " + KITCHEN_TESTS_PARALLEL.toBoolean())
-          wrap([$class: 'AnsiColorBuildWrapper']) {
-            if(CUSTOM_KITCHEN_ENVS != null && CUSTOM_KITCHEN_ENVS != ''){
-                filteredEnvs = CUSTOM_KITCHEN_ENVS.tokenize('\n')
-              } else {
-                filteredEnvs = ruby.filterKitchenEnvs(kitchenEnvs).unique()
-              }
-              // Allow custom filteredEnvs in case of empty kitchenEnvs
-            if((kitchenEnvs && !kitchenEnvs.isEmpty() && !filteredEnvs.isEmpty()) || ((kitchenEnvs==null || kitchenEnvs=='') && !filteredEnvs.isEmpty())){
-              for(int i=0; i<filteredEnvs.size(); i++){
-                common.infoMsg("Found " + filteredEnvs.size() + " environment, kitchen running with env number " + (i+1) + ": " + filteredEnvs[i].trim())
-                ruby.runKitchenTests(filteredEnvs[i].trim(), KITCHEN_TESTS_PARALLEL.toBoolean())
-              }
+
+          if(CUSTOM_KITCHEN_ENVS != null && CUSTOM_KITCHEN_ENVS != ''){
+              filteredEnvs = CUSTOM_KITCHEN_ENVS.tokenize('\n')
             } else {
-              ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
+              filteredEnvs = ruby.filterKitchenEnvs(kitchenEnvs).unique()
             }
+            // Allow custom filteredEnvs in case of empty kitchenEnvs
+          if((kitchenEnvs && !kitchenEnvs.isEmpty() && !filteredEnvs.isEmpty()) || ((kitchenEnvs==null || kitchenEnvs=='') && !filteredEnvs.isEmpty())){
+            for(int i=0; i<filteredEnvs.size(); i++){
+              common.infoMsg("Found " + filteredEnvs.size() + " environment, kitchen running with env number " + (i+1) + ": " + filteredEnvs[i].trim())
+              ruby.runKitchenTests(filteredEnvs[i].trim(), KITCHEN_TESTS_PARALLEL.toBoolean())
+            }
+          } else {
+            ruby.runKitchenTests("", KITCHEN_TESTS_PARALLEL.toBoolean())
           }
         } else {
           common.infoMsg(".kitchen.yml not found")

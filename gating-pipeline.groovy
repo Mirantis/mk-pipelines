@@ -21,31 +21,29 @@ node("python") {
         // test max CodeReview
         if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Code-Review", "+")){
           doSubmit = true
-          wrap([$class: 'AnsiColorBuildWrapper']) {
-            def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
-            def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
-            def jobsNamespace = JOBS_NAMESPACE
-            def plural_namespaces = ['salt-formulas', 'salt-models']
-            // remove plural s on the end of job namespace
-            if (JOBS_NAMESPACE in plural_namespaces){
-              jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
-            }
-            // salt-formulas tests have -latest on end of the name
-            if(JOBS_NAMESPACE.equals("salt-formulas")){
-              gerritProject=gerritProject+"-latest"
-            }
-            def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
-            if (_jobExists(testJob)) {
-              common.infoMsg("Test job ${testJob} found, running")
-              def patchsetVerified =  gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified", "+")
-              build job: testJob, parameters: [
-                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
-                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
-              ]
-              giveVerify = true
-            } else {
-              common.infoMsg("Test job ${testJob} not found")
-            }
+          def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
+          def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
+          def jobsNamespace = JOBS_NAMESPACE
+          def plural_namespaces = ['salt-formulas', 'salt-models']
+          // remove plural s on the end of job namespace
+          if (JOBS_NAMESPACE in plural_namespaces){
+            jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
+          }
+          // salt-formulas tests have -latest on end of the name
+          if(JOBS_NAMESPACE.equals("salt-formulas")){
+            gerritProject=gerritProject+"-latest"
+          }
+          def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
+          if (_jobExists(testJob)) {
+            common.infoMsg("Test job ${testJob} found, running")
+            def patchsetVerified =  gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified", "+")
+            build job: testJob, parameters: [
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
+              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
+            ]
+            giveVerify = true
+          } else {
+            common.infoMsg("Test job ${testJob} not found")
           }
         } else {
           common.errorMsg("Change don't have a CodeReview, skipping gate")
