@@ -33,11 +33,9 @@ node {
     def env_vars
 
     // default STACK_TYPE is heat
-    if (!common.validInputParam(STACK_TYPE)) {
+    if (!common.validInputParam('STACK_TYPE')) {
         STACK_TYPE = 'heat'
     }
-
-    common.infoMsg("Going to delelete stack type: " + STACK_TYPE)
 
     stage('Install environment') {
         if (STACK_TYPE == 'heat') {
