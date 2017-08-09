@@ -37,6 +37,8 @@ node {
         STACK_TYPE = 'heat'
     }
 
+    common.infoMsg("Going to delelete stack type: " + STACK_TYPE)
+
     stage('Install environment') {
         if (STACK_TYPE == 'heat') {
 
