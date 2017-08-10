@@ -166,6 +166,7 @@ node("python&&docker") {
          currentBuild.result = "FAILURE"
          throw e
     } finally {
-        common.sendNotification(currentBuild.result,"",["slack"])
+         def dummy = "dummy"
+         //FAILING common.sendNotification(currentBuild.result,"",["slack"])
     }
 }
