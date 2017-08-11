@@ -239,6 +239,12 @@ node("python") {
             }
         }
 
+        // install ceph
+        if (common.checkContains('STACK_INSTALL', 'ceph')) {
+            orchestrate.installCephMon(saltMaster)
+            orchestrate.installCephOsd(saltMaster)
+        }
+
         // install k8s
         if (common.checkContains('STACK_INSTALL', 'k8s')) {
 
