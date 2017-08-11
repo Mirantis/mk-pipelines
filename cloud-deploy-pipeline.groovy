@@ -142,7 +142,8 @@ node("python") {
                         }
 
                         def legacy_env = false;
-                        if (STACK_TEMPLATE.startsWith('virtual_') && !STACK_TEMPLATE.contains('aio')) {
+                        //FIXME:
+                        if (false && STACK_TEMPLATE.startsWith('virtual_') && !STACK_TEMPLATE.contains('aio')) {
                             legacy_env = true;
                         }
 
