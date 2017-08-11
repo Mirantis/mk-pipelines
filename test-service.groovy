@@ -86,7 +86,7 @@ node("python") {
             }
 
             writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml')
-            junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor, TEST_JUNIT_RATIO)
+            junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor: TEST_JUNIT_RATIO)
         }
 
     } catch (Throwable e) {
