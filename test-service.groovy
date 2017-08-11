@@ -88,12 +88,8 @@ node("python") {
             //    test.copyTempestResults(saltMaster, TEST_TEMPEST_TARGET)
             //
 
-            def rally_file = salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml')
-            print(rally_file)
-            writeFile(file: 'report.xml', text: rally_file)
-
-            junit keepLongStdio: true, testResults: 'report.xml'
-
+            writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml')
+            junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor, TEST_JUNIT_RATIO)
 
         }
 
