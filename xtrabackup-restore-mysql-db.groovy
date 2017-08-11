@@ -74,8 +74,12 @@ node() {
         salt.commandStatus(saltMaster, 'I@galera:master', 'service mysql status', 'running')
 
         salt.runSaltProcessStep(saltMaster, 'I@galera:slave', 'service.start', ['mysql'], null, true)
-        sleep(15)
+        try {
+            salt.commandStatus(saltMaster, 'I@galera:slave', 'service mysql status', 'running')
+        } catch (Exception er) {
+            common.warningMsg('Either there are no galera slaves or something failed when starting mysql on galera slaves')
+        }
+        sleep(5)
         salt.cmdRun(saltMaster, 'I@galera:master', "su root -c 'salt-call mysql.status | grep -A1 wsrep_cluster_size'")
-
     }
 }

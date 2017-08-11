@@ -146,7 +146,6 @@ parameters:
             sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
             sh "wget -O user_data.sh ${user_data_script_url}"
 
-
             // load data from model
             def smc = [:]
             smc['SALT_MASTER_MINION_ID'] = "cfg.${clusterDomain}"
@@ -154,6 +153,8 @@ parameters:
             smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
             smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
             smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
+            smc['CICD_CONTROL_ADDRESS'] = templateContext['default_context']['cicd_control_address']
+            smc['INFRA_CONFIG_ADDRESS'] = templateContext['default_context']['infra_config_address']
 
             for (i in common.entries(smc)) {
                 sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" user_data.sh"
