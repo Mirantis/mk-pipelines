@@ -77,20 +77,16 @@ node("python") {
         }
 
         if (common.checkContains('TEST_SERVICE', 'openstack')) {
-            // if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
-            //     test.install_docker(saltMaster, TEST_TEMPEST_TARGET)
-            // }
-            // stage('Run OpenStack tests') {
-            //     test.runTempestTests(saltMaster, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
-            // }
+            if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
+                test.install_docker(saltMaster, TEST_TEMPEST_TARGET)
+            }
 
-            //stage('Copy Tempest results to config node') {
-            //    test.copyTempestResults(saltMaster, TEST_TEMPEST_TARGET)
-            //
+            stage('Run OpenStack tests') {
+                test.runTempestTests(saltMaster, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
+            }
 
             writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml')
             junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor, TEST_JUNIT_RATIO)
-
         }
 
     } catch (Throwable e) {
