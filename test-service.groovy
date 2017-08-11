@@ -85,7 +85,7 @@ node("python") {
                 test.runTempestTests(saltMaster, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
             }
 
-            writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml')
+            writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml'))
             junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor: TEST_JUNIT_RATIO)
         }
 
