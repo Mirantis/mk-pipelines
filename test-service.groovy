@@ -90,6 +90,9 @@ node("python") {
 
             def rally_file = salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml')
             print(rally_file)
+            writeFile(file: 'report.xml', text: rally_file)
+
+            junit keepLongStdio: true, testResults: 'report.xml'
 
 
         }
