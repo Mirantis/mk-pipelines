@@ -268,7 +268,6 @@ node("python") {
                 stage('Install Contrail for Kubernetes') {
                     orchestrate.installContrailNetwork(saltMaster)
                     orchestrate.installContrailCompute(saltMaster)
-                    orchestrate.installKubernetesContrailCompute(saltMaster)
                 }
             }
 
