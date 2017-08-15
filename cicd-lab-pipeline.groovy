@@ -250,8 +250,8 @@ node {
                 println 'Waiting for Elasticsearch to come up..'
                 salt.cmdRun(saltMaster, 'I@elasticsearch:client', 'while true; do curl -sf 172.16.10.254:9200 >/dev/null && break; done')
             }
-            retry(2){
-              sleep(5)
+            retry(3){
+              sleep(10)
               // XXX: first run sometimes fails on update indexes, so we need to wait
               salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
             }
