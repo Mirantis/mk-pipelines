@@ -227,6 +227,7 @@ node {
                 println "Waiting for postgresql database to come up.."
                 salt.cmdRun(saltMaster, 'I@postgresql:client', 'while true; do if docker service logs postgresql_db | grep "ready to accept"; then break; else sleep 5; fi; done')
             }
+            // XXX: first run usually fails on some inserts, but we need to create databases at first 
             salt.enforceState(saltMaster, 'I@postgresql:client', 'postgresql.client', true, false)
 
             // Setup postgres database with integration between
@@ -249,7 +250,11 @@ node {
                 println 'Waiting for Elasticsearch to come up..'
                 salt.cmdRun(saltMaster, 'I@elasticsearch:client', 'while true; do curl -sf 172.16.10.254:9200 >/dev/null && break; done')
             }
-            salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
+            retry(2){
+              sleep(5)
+              // XXX: first run sometimes fails on update indexes, so we need to wait
+              salt.enforceState(saltMaster, 'I@elasticsearch:client', 'elasticsearch.client', true)
+            }
         }
 
         stage("Finalize") {
