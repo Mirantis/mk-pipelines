@@ -58,11 +58,11 @@ node() {
         }
 
         stage('Promote config change in repo') {
-            build job: "gerrit-merge-branch", parameters: [
-              [$class: 'StringParameterValue', name: 'MODEL_REPO_URL', value: MODEL_REPO_URL],
-              [$class: 'StringParameterValue', name: 'MODEL_REPO_CREDENTIALS', value: MODEL_REPO_CREDENTIALS],
-              [$class: 'StringParameterValue', name: 'MODEL_REPO_SOURCE_BRANCH', value: MODEL_REPO_SOURCE_BRANCH],
-              [$class: 'StringParameterValue', name: 'MODEL_REPO_TARGET_BRANCH', value: MODEL_REPO_TARGET_BRANCH],
+            build job: "git-merge-branches", parameters: [
+              [$class: 'StringParameterValue', name: 'REPO_URL', value: MODEL_REPO_URL],
+              [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: MODEL_REPO_CREDENTIALS],
+              [$class: 'StringParameterValue', name: 'SOURCE_BRANCH', value: MODEL_REPO_SOURCE_BRANCH],
+              [$class: 'StringParameterValue', name: 'TARGET_BRANCH', value: MODEL_REPO_TARGET_BRANCH],
             ]
         }
 
@@ -79,7 +79,7 @@ node() {
         }
 
         stage('Test config change on prod env') {
-            build job: "deploy-test-service", parameters: [
+            def result = build job: "deploy-test-service", parameters: [
               [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: PRD_SALT_MASTER_URL],
               [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: PRD_SALT_MASTER_CREDENTIALS],
               [$class: 'StringParameterValue', name: 'TEST_SERVICE', value: TEST_SERVICE],
