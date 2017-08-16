@@ -88,7 +88,18 @@ node("python") {
             writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml'))
             junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor:  Double.parseDouble(TEST_JUNIT_RATIO))
         }
-
+        stage("Approve test results"){
+          try {
+            timeout(time: 1, unit: 'HOURS'){
+              userInput = input message: 'Do you want to approve test results?'
+            }
+            common.successMsg("Test results approved")
+            currentBuild.desc = "result: true"
+          } catch(err) { // timeout reached or input false
+            common.errorMsg("Test results not approved")
+            currentBuild.desc = "result: false"
+          }
+        }
     } catch (Throwable e) {
         currentBuild.result = 'FAILURE'
         throw e
