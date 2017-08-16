@@ -19,6 +19,7 @@ salt = new com.mirantis.mk.Salt()
 // configure global variables
 def saltMaster
 def flags = CLUSTER_FLAGS.tokenize(',')
+def osds = OSD.tokenize(',')
 
 def runCephCommand(master, cmd) {
     return salt.cmdRun(master, ADMIN_HOST, cmd)
@@ -44,7 +45,10 @@ node("python") {
     def osd_ids = []
 
     for (i in pillar_disks.keySet()) {
-        osd_ids.add('osd.' + (hostname_id + i).toInteger())
+        def osd_id = (hostname_id + i).toInteger()
+        if (osd_id in osds) {
+            osd_ids.add('osd.' + osd_id)
+        }
     }
 
     // `ceph osd out <id> <id>`
