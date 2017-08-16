@@ -46,7 +46,7 @@ node("python") {
 
     for (i in pillar_disks.keySet()) {
         def osd_id = (hostname_id + i).toInteger()
-        if (osd_id in osds) {
+        if (osd_id in osds || OSD == '*') {
             osd_ids.add('osd.' + osd_id)
         }
     }
