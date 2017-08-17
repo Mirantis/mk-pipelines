@@ -85,7 +85,7 @@ node("python") {
         def acc = 0
         for (int i = 0; i < nodes.size(); i++) {
           def testTarget = sh(script: "basename ${nodes[i]} .yml", returnStdout: true).trim()
-          def clusterName = testTarget.substring(target.indexOf(".") + 1, target.lastIndexOf("."))
+          def clusterName = testTarget.substring(testTarget.indexOf(".") + 1, testTarget.lastIndexOf("."))
           if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
             parallel branches
             branches = [:]
