@@ -85,6 +85,7 @@ node("python") {
         def acc = 0
         for (int i = 0; i < nodes.size(); i++) {
           def testTarget = sh(script: "basename ${nodes[i]} .yml", returnStdout: true).trim()
+          def clusterName = testTarget.substring(target.indexOf(".") + 1, target.lastIndexOf("."))
           if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
             parallel branches
             branches = [:]
@@ -95,6 +96,7 @@ node("python") {
             build job: "test-salt-model-node", parameters: [
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
+              [$class: 'StringParameterValue', name: 'CLUSTER_NAME', value: clusterName],
               [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
               [$class: 'StringParameterValue', name: 'FORMULAS_SOURCE', value: formulasSource],
               [$class: 'StringParameterValue', name: 'EXTRA_FORMULAS', value: EXTRA_FORMULAS],
