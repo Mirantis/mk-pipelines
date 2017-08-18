@@ -20,6 +20,8 @@ def runCephCommand(master, cmd) {
     return salt.cmdRun(master, ADMIN_HOST, cmd)
 }
 
+def grains
+
 node("python") {
 
     stage('Load cluster information') {
@@ -27,8 +29,8 @@ node("python") {
         saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
         // get list of disk from grains
-        def grains = salt.getGrain(saltMaster, 'I@ceph:osd')['return'][0]
-
+        grains = salt.getGrain(saltMaster, 'I@ceph:osd')['return'][0]
+        common.prettyPring(grains)
 
     }
 
