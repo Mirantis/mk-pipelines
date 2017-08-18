@@ -40,14 +40,21 @@ node("python") {
 
     // get list of disk at the osd
     def pillar_disks = salt.getPillar(saltMaster, HOST, 'ceph:osd:disk')['return'][0].values()[0]
-    def hostname = salt.getPillar(saltMaster, HOST, 'linux:system:name')['return'][0].values()[0]
-    def hostname_id = hostname.replaceAll('osd', '')
+    def hostname_id = salt.getPillar(saltMaster, HOST, 'ceph:osd:host_id')['return'][0].values()[0]
     def osd_ids = []
 
-    for (i in pillar_disks.keySet()) {
-        def osd_id = (hostname_id + i).toInteger()
+    print("host_id is ${hostname_id}")
+    print("osds:")
+    print(osds)
+
+    for (i in pillar_disks) {
+        def osd_id = (hostname_id + i.key).toInteger().toString()
+        print("Evaluating ${osd_id}")
         if (osd_id in osds || OSD == '*') {
             osd_ids.add('osd.' + osd_id)
+            print("Will delete " + osd_id)
+        } else {
+            print("Skipping " + osd_id)
         }
     }
 
