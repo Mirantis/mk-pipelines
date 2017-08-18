@@ -30,7 +30,7 @@ node("python") {
 
         // get list of disk from grains
         grains = salt.getGrain(saltMaster, 'I@ceph:osd')['return'][0]
-        common.prettyPring(grains)
+        common.prettyPrint(grains)
 
     }
 
