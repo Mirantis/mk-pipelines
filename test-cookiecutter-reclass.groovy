@@ -80,8 +80,9 @@ def testModel(modelFile, testEnv) {
     def templateEnv = "${env.WORKSPACE}"
     def content = readFile(file: "${templateEnv}/contexts/${modelFile}.yml")
     def templateContext = readYaml text: content
+    def clusterName = templateContext.default_context.cluster_name
     def clusterDomain = templateContext.default_context.cluster_domain
-    git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
+    git.checkoutGitRepository("${testEnv}/classes/system", clusterName, RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
     saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", EXTRA_FORMULAS, testEnv)
 }
 
