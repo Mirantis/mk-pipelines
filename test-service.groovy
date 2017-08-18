@@ -87,7 +87,7 @@ node("python") {
 
             writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml'))
             junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor:  Double.parseDouble(TEST_JUNIT_RATIO))
-            def testResults = test.collectJUnitResults(currentBuild.rawBuild.getAction(AbstractTestResultAction.class))
+            def testResults = test.collectJUnitResults(currentBuild.rawBuild.getAction(hudson.tasks.test.AbstractTestResultAction.class))
             if(testResults){
                 currentBuild.desc = String.format("result: %s", testResults["failed"] / testResults["total"])
             }
