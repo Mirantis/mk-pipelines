@@ -242,8 +242,13 @@ node("python") {
 
         // install ceph
         if (common.checkContains('STACK_INSTALL', 'ceph')) {
-            orchestrate.installCephMon(saltMaster)
-            orchestrate.installCephOsd(saltMaster)
+            stage('Install Ceph MONs') {
+                orchestrate.installCephMon(saltMaster)
+            }
+
+            stage('Install Ceph OSDs') {
+                orchestrate.installCephOsd(saltMaster)
+            }
         }
 
         // install k8s
