@@ -418,8 +418,10 @@ node("python") {
 
         if (common.checkContains('STACK_TEST', 'ceph')) {
             stage('Run infra tests') {
-                def cmd = "apt-get install python-pip && pip install -r /usr/share/salt-formulas/env/ceph/files/testinfra/requirements.txt && python -m pytest --junitxml=testinfra.xml /usr/share/salt-formulas/env/ceph/files/testinfra/"
+                def cmd = "apt-get install -y python-pip && pip install -r /usr/share/salt-formulas/env/ceph/files/testinfra/requirements.txt && python -m pytest --junitxml=/root/report.xml /usr/share/salt-formulas/env/ceph/files/testinfra/"
                 salt.cmdRun(saltMaster, 'I@ceph:mon', cmd)
+                writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml'))
+                junit(keepLongStdio: true, testResults: 'report.xml')
             }
         }
 
