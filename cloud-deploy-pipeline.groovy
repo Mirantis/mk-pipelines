@@ -417,18 +417,9 @@ node("python") {
 
 
         if (common.checkContains('STACK_TEST', 'ceph')) {
-            stage('Check Ceph health') {
-                def commands = [
-                    'ceph health',
-                    'ceph status',
-                    'ceph osd tree',
-                    'ceph df',
-                    'ceph osd pool ls',
-                    'ceph auth list'
-                ]
-                for (cmd in commands) {
-                    salt.cmdRun(saltMaster, 'I@ceph:mon', cmd)
-                }
+            stage('Run infra tests') {
+                def cmd = "apt-get install python-pip && pip install -r /usr/share/salt-formulas/ceph/files/testinfra/requirements.txt && python -m pytest --junitxml=testinfra.xml /usr/share/salt-formulas/ceph/files/testinfra/"
+                salt.cmdRun(saltMaster, 'I@ceph:mon', cmd)
             }
         }
 
