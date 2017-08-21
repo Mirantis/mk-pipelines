@@ -415,6 +415,24 @@ node("python") {
             }
         }
 
+
+        if (common.checkContains('STACK_TEST', 'ceph')) {
+            stage('Check Ceph health') {
+                def commands = [
+                    'ceph health',
+                    'ceph status',
+                    'ceph osd tree',
+                    'ceph df',
+                    'ceph osd pool ls',
+                    'ceph auth list'
+                ]
+                for (cmd in commands) {
+                    salt.cmdRun(saltMaster, 'I@ceph:mon', cmd)
+                }
+            }
+        }
+
+
         if (common.checkContains('STACK_INSTALL', 'finalize')) {
             stage('Finalize') {
                 salt.runSaltProcessStep(saltMaster, '*', 'state.apply', [], null, true)
