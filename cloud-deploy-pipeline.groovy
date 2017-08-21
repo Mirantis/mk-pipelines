@@ -381,7 +381,7 @@ node("python") {
             }
 
             stage('Run k8s conformance e2e tests') {
-                def image = K8S_CONFORMANCE_IMAGE
+                def image = TEST_K8S_CONFORMANCE_IMAGE
                 def output_file = image.replaceAll('/', '-') + '.output'
 
                 // run image
