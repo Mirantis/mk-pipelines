@@ -418,7 +418,7 @@ node("python") {
 
         if (common.checkContains('STACK_TEST', 'ceph')) {
             stage('Run infra tests') {
-                def cmd = "apt-get install python-pip && pip install -r /usr/share/salt-formulas/ceph/files/testinfra/requirements.txt && python -m pytest --junitxml=testinfra.xml /usr/share/salt-formulas/ceph/files/testinfra/"
+                def cmd = "apt-get install python-pip && pip install -r /usr/share/salt-formulas/env/ceph/files/testinfra/requirements.txt && python -m pytest --junitxml=testinfra.xml /usr/share/salt-formulas/env/ceph/files/testinfra/"
                 salt.cmdRun(saltMaster, 'I@ceph:mon', cmd)
             }
         }
