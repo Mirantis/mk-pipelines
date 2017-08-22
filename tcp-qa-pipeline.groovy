@@ -81,7 +81,7 @@ def runTests() {
             . ${VENV_PATH}/bin/activate
 
             cd tcp_tests
-            if ! py.test -vvv -s -p no:django -p no:ipdb --junit-xml=nosetests.xml -k ${TEST_GROUP}; then
+            if ! py.test -vvv -s -p no:django -p no:ipdb --junit-xml=../nosetests.xml -k ${TEST_GROUP}; then
               echo "Tests failed!"
               exit 1
             fi
@@ -98,14 +98,14 @@ def runTests() {
 
 def uploadResults(){
     stage('Upload tests results'){
-        def thisBuildUrl = "${env.JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}/"
-        def testPlanName = "${env.TESTRAIL_MILESTONE} Integration-${new Date().format('yyyy-MM-dd')}"
+        def thisBuildUrl = "${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}/"
+        def testPlanName = "${TESTRAIL_MILESTONE} Integration-${new Date().format('yyyy-MM-dd')}"
 
         qaCommon.uploadResultsTestRail([
-            junitXml: "${env.WORKSPACE}/nosetests.xml",
+            junitXml: "${WORKSPACE}/nosetests.xml",
             testPlanName: testPlanName,
-            testSuiteName: "${env.TESTRAIL_TEST_SUITE}",
-            testrailMilestone: "${env.TESTRAIL_MILESTONE}",
+            testSuiteName: "${TESTRAIL_TEST_SUITE}",
+            testrailMilestone: "${TESTRAIL_MILESTONE}",
             jobURL: thisBuildUrl,
         ])
     }
