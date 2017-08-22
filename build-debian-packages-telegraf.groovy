@@ -81,6 +81,10 @@ node('docker') {
                         aptly.snapshotRepo(APTLY_URL, APTLY_REPO, timestamp)
                         aptly.publish(APTLY_URL)
                     }
+
+                    stage("rebuild docker images") {
+                        build job: "docker-build-images-prometheus", parameters: []
+                    }
                 }
             }
 
