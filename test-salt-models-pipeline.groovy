@@ -115,6 +115,7 @@ node("python") {
     }
   } catch (Throwable e) {
      currentBuild.result = "FAILURE"
+     currentBuild.description = e.message
      throw e
   } finally {
      common.sendNotification(currentBuild.result,"",["slack"])

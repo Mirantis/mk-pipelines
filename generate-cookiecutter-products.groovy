@@ -184,6 +184,7 @@ parameters:
     } catch (Throwable e) {
          // If there was an error or exception thrown, the build failed
          currentBuild.result = "FAILURE"
+         currentBuild.description = e.message
          throw e
     } finally {
         stage ('Clean workspace directories') {

@@ -337,6 +337,7 @@ DON'T FORGET TO TERMINATE YOUR STACK WHEN YOU DON'T NEED IT!
     } catch (Throwable e) {
         // If there was an error or exception thrown, the build failed
         currentBuild.result = "FAILURE"
+        currentBuild.description = e.message
         throw e
     } finally {
         // Cleanup

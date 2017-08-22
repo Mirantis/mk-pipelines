@@ -117,6 +117,7 @@ node("python") {
   } catch (Throwable e) {
      // If there was an error or exception thrown, the build failed
      currentBuild.result = "FAILURE"
+     currentBuild.description = e.message
      ruby.runKitchenCommand("destroy")
      throw e
   } finally {
