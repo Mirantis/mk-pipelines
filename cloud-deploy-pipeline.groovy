@@ -363,23 +363,6 @@ node("python") {
         def artifacts_dir = '_artifacts/'
 
         if (common.checkContains('STACK_TEST', 'k8s')) {
-            stage('Run k8s bootstrap tests') {
-                def image = 'tomkukral/k8s-scripts'
-                def output_file = image.replaceAll('/', '-') + '.output'
-
-                // run image
-                test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
-
-                // collect output
-                sh "mkdir -p ${artifacts_dir}"
-                file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/' + output_file)
-                writeFile file: "${artifacts_dir}${output_file}", text: file_content
-                sh "cat ${artifacts_dir}${output_file}"
-
-                // collect artifacts
-                archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
-            }
-
             stage('Run k8s conformance e2e tests') {
                 def image = TEST_K8S_CONFORMANCE_IMAGE
                 def output_file = image.replaceAll('/', '-') + '.output'
