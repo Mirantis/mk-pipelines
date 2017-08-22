@@ -165,7 +165,7 @@ node("python&&docker") {
 
     } catch (Throwable e) {
          currentBuild.result = "FAILURE"
-         currentBuild.description = e.message
+         currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
          throw e
     } finally {
          def dummy = "dummy"

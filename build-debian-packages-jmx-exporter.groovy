@@ -69,7 +69,7 @@ node('docker') {
     } catch (Throwable e) {
        // If there was an exception thrown, the build failed
        currentBuild.result = "FAILURE"
-       currentBuild.description = e.message
+       currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
        throw e
     } finally {
        common.sendNotification(currentBuild.result,"",["slack"])

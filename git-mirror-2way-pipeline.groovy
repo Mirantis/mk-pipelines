@@ -38,7 +38,7 @@ stage("Mirror") {
     } catch (Throwable e) {
        // If there was an error or exception thrown, the build failed
        currentBuild.result = "FAILURE"
-       currentBuild.description = e.message
+       currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
        throw e
     } finally {
        common.sendNotification(currentBuild.result,"",["slack"])
