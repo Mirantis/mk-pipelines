@@ -127,28 +127,26 @@ node("python") {
                 }
                 // launch stack
                 if (STACK_REUSE.toBoolean() == false) {
-                    stage('Launch new Heat stack') {
-                        envParams = [
-                            'cluster_zone': HEAT_STACK_ZONE,
-                            'cluster_public_net': HEAT_STACK_PUBLIC_NET
-                        ]
+                    envParams = [
+                        'cluster_zone': HEAT_STACK_ZONE,
+                        'cluster_public_net': HEAT_STACK_PUBLIC_NET
+                    ]
 
-                        // set reclass repo in heat env
-                        try {
-                            envParams.put('cfg_reclass_branch', STACK_RECLASS_BRANCH)
-                            envParams.put('cfg_reclass_address', STACK_RECLASS_ADDRESS)
-                        } catch (MissingPropertyException e) {
-                            common.infoMsg("Property STACK_RECLASS_BRANCH or STACK_RECLASS_ADDRESS not found! Using default values from template.")
-                        }
-
-                        def legacy_env = false;
-                        //FIXME:
-                        if (false && STACK_TEMPLATE.startsWith('virtual_') && !STACK_TEMPLATE.contains('aio')) {
-                            legacy_env = true;
-                        }
-
-                        openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, legacy_env)
+                    // set reclass repo in heat env
+                    try {
+                        envParams.put('cfg_reclass_branch', STACK_RECLASS_BRANCH)
+                        envParams.put('cfg_reclass_address', STACK_RECLASS_ADDRESS)
+                    } catch (MissingPropertyException e) {
+                        common.infoMsg("Property STACK_RECLASS_BRANCH or STACK_RECLASS_ADDRESS not found! Using default values from template.")
                     }
+
+                    def legacy_env = false;
+                    //FIXME:
+                    if (false && STACK_TEMPLATE.startsWith('virtual_') && !STACK_TEMPLATE.contains('aio')) {
+                        legacy_env = true;
+                    }
+
+                    openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, legacy_env)
                 }
 
                 // get SALT_MASTER_URL
