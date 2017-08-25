@@ -247,6 +247,10 @@ node("python") {
             stage('Install Ceph OSDs') {
                 orchestrate.installCephOsd(saltMaster)
             }
+
+            if (salt.testTarget(master, 'I@ceph:radosgw')) {
+                orchestrate.installCephRadosgw(saltMaster)
+            }
         }
 
         // install k8s
