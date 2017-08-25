@@ -153,8 +153,8 @@ parameters:
             smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
             smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
             smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
-            smc['CICD_CONTROL_ADDRESS'] = templateContext['default_context']['cicd_control_address']
-            smc['INFRA_CONFIG_ADDRESS'] = templateContext['default_context']['infra_config_address']
+            smc['CICD_CONTROL_ADDRESS'] = templateContext['default_context']['cicd_control_vip_address']
+            smc['INFRA_CONFIG_ADDRESS'] = templateContext['default_context']['salt_master_address']
 
             for (i in common.entries(smc)) {
                 sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" user_data.sh"
