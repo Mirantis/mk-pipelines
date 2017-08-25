@@ -21,6 +21,9 @@
  *   SPT_AVAILABILITY_ZONE       The name of availability zone
  *   TEST_K8S_API_SERVER         Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE  Path to docker image with conformance e2e tests
+ *   TEST_K8S_NODE               Kubernetes node to run tests from
+ *   GENERATE_REPORT             If not false, run report generation command
+ *   ACCUMULATE_RESULTS          If true, results from the previous build will be used
  *
  */
 
@@ -40,6 +43,9 @@ node() {
 
         stage('Configure') {
             validate.installDocker(saltMaster, TARGET_NODE)
+            if (ACCUMULATE_RESULTS.toBoolean() == false) {
+                sh "rm -r ${artifacts_dir}"
+            }
             sh "mkdir -p ${artifacts_dir}"
             def spt_variables = "-e spt_ssh_user=${SPT_SSH_USER} " +
                     "-e spt_floating_network=${SPT_FLOATING_NETWORK} " +
@@ -75,13 +81,12 @@ node() {
         stage('Run k8s bootstrap tests') {
             if (RUN_K8S_TESTS.toBoolean() == true) {
                 def image = 'tomkukral/k8s-scripts'
-                def output_file = image.replaceAll('/', '-') + '.output'
+                def output_file = 'k8s-bootstrap-tests.txt'
+                def containerName = 'conformance_tests'
+                def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
+                test.runConformanceTests(saltMaster, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
 
-                // run image
-                test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
-
-                // collect output
-                def file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/' + output_file)
+                def file_content = validate.getFileContent(saltMaster, TEST_K8S_NODE, outfile)
                 writeFile file: "${artifacts_dir}${output_file}", text: file_content
             } else {
                 common.infoMsg("Skipping k8s bootstrap tests")
@@ -91,19 +96,25 @@ node() {
         stage('Run k8s conformance e2e tests') {
             if (RUN_K8S_TESTS.toBoolean() == true) {
                 def image = TEST_K8S_CONFORMANCE_IMAGE
-                def output_file = image.replaceAll('/', '-') + '.output'
+                def output_file = 'report-k8s-e2e-tests.txt'
+                def containerName = 'conformance_tests'
+                def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
+                test.runConformanceTests(saltMaster, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
 
-                // run image
-                test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
-
-                // collect output
-                def file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/' + output_file)
+                def file_content = validate.getFileContent(saltMaster, TEST_K8S_NODE, outfile)
                 writeFile file: "${artifacts_dir}${output_file}", text: file_content
             } else {
                 common.infoMsg("Skipping k8s conformance e2e tests")
             }
         }
-
+        stage('Generate report') {
+            if (GENERATE_REPORT.toBoolean() == true) {
+                print("Generating html test report ...")
+                validate.generateTestReport(saltMaster, TARGET_NODE, artifacts_dir)
+            } else {
+                common.infoMsg("Skipping report generation")
+            }
+        }
         stage('Collect results') {
             archiveArtifacts artifacts: "${artifacts_dir}/*"
         }
