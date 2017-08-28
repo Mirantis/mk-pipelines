@@ -242,7 +242,7 @@ node("python") {
                 orchestrate.installCephOsd(saltMaster)
             }
 
-            if (salt.testTarget(master, 'I@ceph:radosgw')) {
+            if (salt.testTarget(saltMaster, 'I@ceph:radosgw')) {
                 orchestrate.installCephRadosgw(saltMaster)
             }
         }
