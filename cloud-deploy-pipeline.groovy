@@ -140,13 +140,7 @@ node("python") {
                         common.infoMsg("Property STACK_RECLASS_BRANCH or STACK_RECLASS_ADDRESS not found! Using default values from template.")
                     }
 
-                    def legacy_env = false;
-                    //FIXME:
-                    if (false && STACK_TEMPLATE.startsWith('virtual_') && !STACK_TEMPLATE.contains('aio')) {
-                        legacy_env = true;
-                    }
-
-                    openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, legacy_env)
+                    openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv)
                 }
 
                 // get SALT_MASTER_URL
