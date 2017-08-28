@@ -31,7 +31,7 @@ node('docker') {
             }
         }
 
-        def img = dockerLib.getImage("tcpcloud/debian-build-ubuntu-xenial")
+        def img = dockerLib.getImage("tcpcloud/debian-build-ubuntu-${DIST}")
         stage("build package") {
             img.inside("-u root:root") {
                 sh("apt-get update && apt-get install ruby ruby-dev && gem install fpm")
