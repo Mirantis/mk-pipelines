@@ -73,7 +73,6 @@ node("python") {
       if (checkouted) {
         if (fileExists(".kitchen.yml")) {
           common.infoMsg(".kitchen.yml found, running kitchen tests")
-          ruby.ensureRubyEnv()
           def kitchenEnvs = []
           def filteredEnvs = []
           if (fileExists(".travis.yml")) {
@@ -91,12 +90,13 @@ node("python") {
             common.infoMsg("CUSTOM_KITCHEN_ENVS not empty. Running with custom enviroments: ${kitchenEnvs}")
           }
           if (kitchenEnvs != null && kitchenEnvs != '') {
+            def acc = 0
+            def kitchenTestRuns = [:]
             common.infoMsg("Found " + kitchenEnvs.size() + " environment(s)")
             for (int i = 0; i < kitchenEnvs.size(); i++) {
-              def acc = 0
               if (acc >= parallelGroupSize) {
                 parallel kitchenTestRuns
-                kitchenTestRuns = [: ]
+                kitchenTestRuns = [:]
                 acc = 0
               }
               def testEnv = kitchenEnvs[i]
@@ -125,7 +125,6 @@ node("python") {
     // If there was an error or exception thrown, the build failed
     currentBuild.result = "FAILURE"
     currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-    ruby.runKitchenCommand("destroy")
     throw e
   } finally {
     if (currentBuild.result == "FAILURE" && fileExists(".kitchen/logs/kitchen.log")) {
