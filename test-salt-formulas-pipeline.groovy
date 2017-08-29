@@ -57,6 +57,8 @@ node("python") {
             common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
           }
         }
+        defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
+        defaultGitRef = GERRIT_REFSPEC
       } else if (defaultGitRef && defaultGitUrl) {
         checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
       } else {
@@ -104,8 +106,8 @@ node("python") {
                 build job: "test-salt-formulas-env", parameters: [
                   [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
                   [$class: 'StringParameterValue', name: 'KITCHEN_ENV', value: testEnv],
-                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: DEFAULT_GIT_REF],
-                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: DEFAULT_GIT_URL],
+                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
+                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
                   [$class: 'StringParameterValue', name: 'SALT_OPTS', value: SALT_OPTS],
                   [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION]
                 ]

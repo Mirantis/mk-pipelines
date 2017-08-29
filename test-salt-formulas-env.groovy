@@ -93,6 +93,5 @@ node("python") {
       common.errorMsg("----------------KITCHEN LOG:---------------")
       println readFile(".kitchen/logs/kitchen.log")
     }
-    common.sendNotification(currentBuild.result, "", ["slack"])
   }
 }
