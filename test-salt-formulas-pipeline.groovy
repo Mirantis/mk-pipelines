@@ -16,6 +16,13 @@ try {
   gerritRef = null
 }
 
+def parallelGroupSize
+try {
+  parallelGroupSize = Integer.valueOf(PARALLEL_GROUP_SIZE)
+} catch (MissingPropertyException e) {
+  parallelGroupSize = 4
+}
+
 def defaultGitRef, defaultGitUrl
 try {
   defaultGitRef = DEFAULT_GIT_REF
@@ -85,8 +92,8 @@ node("python") {
           }
           if (kitchenEnvs != null && kitchenEnvs != '') {
             common.infoMsg("Found " + kitchenEnvs.size() + " environment(s)")
-            print(kitchenEnvs)
             for (int i = 0; i < kitchenEnvs.size(); i++) {
+              def acc = 0
               if (acc >= parallelGroupSize) {
                 parallel kitchenTestRuns
                 kitchenTestRuns = [: ]
