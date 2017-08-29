@@ -82,7 +82,6 @@ def testModel(modelFile, testEnv) {
     def templateContext = readYaml text: content
     def clusterName = templateContext.default_context.cluster_name
     def clusterDomain = templateContext.default_context.cluster_domain
-    sh "python ${env.WORKSPACE}/workflow_definition_test.py"
     git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
     saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", clusterName, EXTRA_FORMULAS, testEnv)
 }
@@ -122,6 +121,10 @@ node("python&&docker") {
 
         stage("Setup") {
             python.setupCookiecutterVirtualenv(cutterEnv)
+        }
+
+        stage("Check workflow_definition") {
+            sh "python ${env.WORKSPACE}/workflow_definition_test.py"
         }
 
         def contextFiles
