@@ -65,6 +65,8 @@ overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 def saltMaster
 def venv
 
+def ipRegex = "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"
+
 if (STACK_TYPE == 'aws') {
     def aws_env_vars
 }
@@ -145,6 +147,12 @@ node("python") {
 
                 // get SALT_MASTER_URL
                 saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, STACK_NAME, 'salt_master_ip', venv)
+                // check that saltMasterHost is valid
+                if (!saltMasterHost || !saltMasterHost.matches(ipRegex)) {
+                    common.errorMsg("saltMasterHost is not a valid ip, value is: ${saltMasterHost}")
+                    throw new Exception("saltMasterHost is not a valid ip")
+                }
+
                 currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
 
                 SALT_MASTER_URL = "http://${saltMasterHost}:6969"
@@ -196,6 +204,12 @@ node("python") {
 
                 // get outputs
                 saltMasterHost = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'SaltMasterIP')
+                // check that saltMasterHost is valid
+                if (!saltMasterHost || !saltMasterHost.matches(ipRegex)) {
+                    common.errorMsg("saltMasterHost is not a valid ip, value is: ${saltMasterHost}")
+                    throw new Exception("saltMasterHost is not a valid ip")
+                }
+
                 currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
                 SALT_MASTER_URL = "http://${saltMasterHost}:6969"
 
