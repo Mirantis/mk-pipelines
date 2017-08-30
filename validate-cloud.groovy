@@ -12,6 +12,13 @@
  *   RUN_TEMPEST_TESTS           If not false, run Tempest tests
  *   RUN_RALLY_TESTS             If not false, run Rally tests
  *   RUN_K8S_TESTS               If not false, run Kubernetes tests
+ *   RUN_SPT_TESTS               If not false, run SPT tests
+ *   SPT_SSH_USER                The name of the user which should be used for ssh to nodes
+ *   SPT_FLOATING_NETWORK        The name of the external(floating) network
+ *   SPT_IMAGE                   The name of the image for SPT tests
+ *   SPT_USER                    The name of the user for SPT image
+ *   SPT_FLAVOR                  The name of the flavor for SPT image
+ *   SPT_AVAILABILITY_ZONE       The name of availability zone
  *   TEST_K8S_API_SERVER         Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE  Path to docker image with conformance e2e tests
  *
@@ -34,7 +41,11 @@ node() {
         stage('Configure') {
             validate.installDocker(saltMaster, TARGET_NODE)
             sh "mkdir -p ${artifacts_dir}"
-            validate.runContainerConfiguration(saltMaster, TEST_IMAGE, TARGET_NODE, artifacts_dir)
+            def spt_variables = "-e spt_ssh_user=${SPT_SSH_USER} " +
+                    "-e spt_floating_network=${SPT_FLOATING_NETWORK} " +
+                    "-e spt_image=${SPT_IMAGE} -e spt_user=${SPT_USER} " +
+                    "-e spt_flavor=${SPT_FLAVOR} -e spt_availability_zone=${SPT_AVAILABILITY_ZONE} "
+            validate.runContainerConfiguration(saltMaster, TEST_IMAGE, TARGET_NODE, artifacts_dir, spt_variables)
         }
 
         stage('Run Tempest tests') {
@@ -50,6 +61,14 @@ node() {
                 validate.runRallyTests(saltMaster, TARGET_NODE, artifacts_dir)
             } else {
                 common.infoMsg("Skipping Rally tests")
+            }
+        }
+
+        stage('Run SPT tests') {
+            if (RUN_SPT_TESTS.toBoolean() == true) {
+                validate.runSptTests(saltMaster, TARGET_NODE, artifacts_dir)
+            } else {
+                common.infoMsg("Skipping SPT tests")
             }
         }
 
