@@ -20,7 +20,7 @@ def parallelGroupSize
 try {
   parallelGroupSize = Integer.valueOf(PARALLEL_GROUP_SIZE)
 } catch (MissingPropertyException e) {
-  parallelGroupSize = 4
+  parallelGroupSize = 8
 }
 
 def defaultGitRef, defaultGitUrl
