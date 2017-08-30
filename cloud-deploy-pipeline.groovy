@@ -70,6 +70,9 @@ def ipRegex = "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"
 
 if (STACK_TYPE == 'aws') {
     def aws_env_vars
+} else if (STACK_TYPE == 'heat') {
+    def envParams
+    def openstackCloud
 }
 
 node("python") {
@@ -86,7 +89,10 @@ node("python") {
 
             if (STACK_TYPE == 'heat') {
                 // value defaults
-                def openstackCloud
+                envParams = [
+                    'cluster_zone': HEAT_STACK_ZONE,
+                    'cluster_public_net': HEAT_STACK_PUBLIC_NET
+                ]
 
                 if (STACK_REUSE.toBoolean() == true && STACK_NAME == '') {
                     error("If you want to reuse existing stack you need to provide it's name")
@@ -118,13 +124,14 @@ node("python") {
                     OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,
                     OPENSTACK_API_VERSION)
                 openstack.getKeystoneToken(openstackCloud, venv)
+
                 //
                 // Verify possibility of create stack for given user and stack type
                 //
                 wrap([$class: 'BuildUser']) {
                     if (env.BUILD_USER_ID && !env.BUILD_USER_ID.equals("jenkins") && !STACK_REUSE.toBoolean()) {
                         def existingStacks = openstack.getStacksForNameContains(openstackCloud, "${env.BUILD_USER_ID}-${JOB_NAME}", venv)
-                        if(existingStacks.size() >= _MAX_PERMITTED_STACKS){
+                        if (existingStacks.size() >= _MAX_PERMITTED_STACKS) {
                             STACK_DELETE = "false"
                             throw new Exception("You cannot create new stack, you already have ${_MAX_PERMITTED_STACKS} stacks of this type (${JOB_NAME}). \nStack names: ${existingStacks}")
                         }
@@ -132,10 +139,6 @@ node("python") {
                 }
                 // launch stack
                 if (STACK_REUSE.toBoolean() == false) {
-                    envParams = [
-                        'cluster_zone': HEAT_STACK_ZONE,
-                        'cluster_public_net': HEAT_STACK_PUBLIC_NET
-                    ]
 
                     // set reclass repo in heat env
                     try {
@@ -315,6 +318,12 @@ node("python") {
 
                         // wait for computes to boot up
                         aws.waitForAutoscalingInstances(venv, aws_env_vars, scaling_group)
+                        sleep(60)
+
+                    } else if (STACK_TYPE == 'heat') {
+                        envParams.put('cluster_node_count', STACK_COMPUTE_COUNT)
+
+                        openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, "update")
                         sleep(60)
                     }
 
