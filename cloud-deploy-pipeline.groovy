@@ -411,6 +411,7 @@ node("python") {
 
         if (common.checkContains('STACK_TEST', 'ceph')) {
             stage('Run infra tests') {
+                sleep(120)
                 def cmd = "apt-get install -y python-pip && pip install -r /usr/share/salt-formulas/env/ceph/files/testinfra/requirements.txt && python -m pytest --junitxml=/root/report.xml /usr/share/salt-formulas/env/ceph/files/testinfra/"
                 salt.cmdRun(saltMaster, 'I@salt:master', cmd, false)
                 writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, 'I@salt:master', '/root/report.xml'))
