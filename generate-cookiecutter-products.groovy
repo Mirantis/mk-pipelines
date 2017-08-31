@@ -162,22 +162,25 @@ parameters:
 
             // create config-drive
             sh "./create-config-drive --user-data user_data.sh --hostname cfg --model ${modelEnv} cfg.${clusterDomain}-config.iso"
-
+            sh("mkdir output-${clusterName} && mv cfg.${clusterDomain}-config.iso output-${clusterName}/")
             // save iso to artifacts
-            archiveArtifacts artifacts: "cfg.${clusterDomain}-config.iso"
+            archiveArtifacts artifacts: "output-${clusterName}/cfg.${clusterDomain}-config.iso"
         }
 
         stage ('Save changes reclass model') {
 
-            sh(returnStatus: true, script: "tar -zcf ${clusterName}.tar.gz -C ${modelEnv} .")
-            archiveArtifacts artifacts: "${clusterName}.tar.gz"
+            sh(returnStatus: true, script: "tar -zcf output-${clusterName}/${clusterName}.tar.gz -C ${modelEnv} .")
+            archiveArtifacts artifacts: "output-${clusterName}/${clusterName}.tar.gz"
 
 
             if (EMAIL_ADDRESS != null && EMAIL_ADDRESS != "") {
                  emailext(to: EMAIL_ADDRESS,
-                          attachmentsPattern: "${clusterName}.tar.gz",
+                          attachmentsPattern: "output-${clusterName}/*",
                           body: "Mirantis Jenkins\n\nRequested reclass model ${clusterName} has been created and attached to this email.\nEnjoy!\n\nMirantis",
                           subject: "Your Salt model ${clusterName}")
+            }
+            dir("output-${clusterName}"){
+                deleteDir()
             }
         }
 
