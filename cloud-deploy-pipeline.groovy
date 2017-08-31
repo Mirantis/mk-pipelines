@@ -289,8 +289,11 @@ node("python") {
             }
 
             stage('Install Kubernetes control') {
-
                 orchestrate.installKubernetesControl(saltMaster)
+
+                // collect artifacts (kubeconfig)
+                writeFile(file: 'kubeconfig', text: salt.getFileContent(saltMaster, 'I@kubernetes:master', '/etc/kubernetes/admin-kube-config'))
+                archiveArtifacts(artifacts: 'kubeconfig')
             }
 
             stage('Scale Kubernetes computes') {
