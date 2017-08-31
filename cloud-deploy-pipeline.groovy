@@ -292,7 +292,7 @@ node("python") {
                 orchestrate.installKubernetesControl(saltMaster)
 
                 // collect artifacts (kubeconfig)
-                writeFile(file: 'kubeconfig', text: salt.getFileContent(saltMaster, 'I@kubernetes:master', '/etc/kubernetes/admin-kube-config'))
+                writeFile(file: 'kubeconfig', text: salt.getFileContent(saltMaster, 'I@kubernetes:master and *01*', '/etc/kubernetes/admin-kube-config'))
                 archiveArtifacts(artifacts: 'kubeconfig')
             }
 
