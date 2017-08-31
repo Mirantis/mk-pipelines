@@ -204,13 +204,14 @@ node("python") {
 
                 // get outputs
                 saltMasterHost = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'SaltMasterIP')
+                awsLoadBalancer = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ControlLoadBalancer')
                 // check that saltMasterHost is valid
                 if (!saltMasterHost || !saltMasterHost.matches(ipRegex)) {
                     common.errorMsg("saltMasterHost is not a valid ip, value is: ${saltMasterHost}")
                     throw new Exception("saltMasterHost is not a valid ip")
                 }
 
-                currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
+                currentBuild.description = "Stack name: ${STACK_NAME}, Salt API: http://${saltMasterHost}:6969, k8s API: https://${awsLoadBalancer}"
                 SALT_MASTER_URL = "http://${saltMasterHost}:6969"
 
             } else if (STACK_TYPE != 'physical') {
