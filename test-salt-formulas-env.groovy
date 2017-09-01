@@ -28,10 +28,9 @@ node("python") {
         throw new Exception("Cannot checkout gerrit patchset, DEFAULT_GIT_REF is null")
       }
     }
-    stage("test") {
+    stage("cleanup") {
       if (checkouted) {
         sh("make clean")
-        sh("[ $SALT_VERSION != 'latest' ] || export SALT_VERSION=''; make test")
       }
     }
     stage("kitchen") {
