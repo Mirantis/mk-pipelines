@@ -62,10 +62,14 @@ node("python") {
           common.infoMsg("Running part of kitchen test")
           if (KITCHEN_ENV != null && !KITCHEN_ENV.isEmpty() && KITCHEN_ENV != "") {
             def cleanEnv = KITCHEN_ENV.replaceAll("\\s?SUITE=[^\\s]*", "")
-            def suite = ruby.getSuiteName(KITCHEN_ENV)
-            if (suite && suite != "") {
+            def suitePattern = java.util.regex.Pattern.compile("\\s?SUITE=([^\\s]*)")
+            def suiteMatcher = suitePattern.matcher(KITCHEN_ENV)
+            if (suiteMatcher.find()) {
+              def suite = suiteMatcher.group(1)
+              suiteMatcher = null
+              def cleanSuite = suite.replaceAll("_", "-")
               common.infoMsg("Running kitchen test with environment:" + KITCHEN_ENV.trim())
-              ruby.runKitchenTests(cleanEnv, suite)
+              ruby.runKitchenTests(cleanEnv, cleanSuite)
             } else {
               common.warningMsg("No SUITE was found. Running with all suites.")
               ruby.runKitchenTests(cleanEnv, "")
