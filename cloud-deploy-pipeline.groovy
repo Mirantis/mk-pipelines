@@ -64,6 +64,7 @@ overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 // Define global variables
 def saltMaster
 def venv
+def outputs = [:]
 
 def ipRegex = "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"
 
@@ -80,6 +81,8 @@ node("python") {
         // Prepare machines
         //
         stage ('Create infrastructure') {
+
+            outputs.put('stack_type', STACK_TYPE)
 
             if (STACK_TYPE == 'heat') {
                 // value defaults
@@ -204,19 +207,21 @@ node("python") {
 
                 // get outputs
                 saltMasterHost = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'SaltMasterIP')
-                awsLoadBalancer = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ControlLoadBalancer')
+
                 // check that saltMasterHost is valid
                 if (!saltMasterHost || !saltMasterHost.matches(ipRegex)) {
                     common.errorMsg("saltMasterHost is not a valid ip, value is: ${saltMasterHost}")
                     throw new Exception("saltMasterHost is not a valid ip")
                 }
 
-                currentBuild.description = "Stack name: ${STACK_NAME}, Salt API: http://${saltMasterHost}:6969, k8s API: https://${awsLoadBalancer}"
+                currentBuild.description = "${STACK_NAME} ${saltMasterHost}"
                 SALT_MASTER_URL = "http://${saltMasterHost}:6969"
 
             } else if (STACK_TYPE != 'physical') {
                 throw new Exception("STACK_TYPE ${STACK_TYPE} is not supported")
             }
+
+            outputs.put('salt_api', SALT_MASTER_URL)
 
             // Connect to Salt master
             saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
@@ -269,9 +274,11 @@ node("python") {
             stage('Install Kubernetes infra') {
                 if (STACK_TYPE == 'aws') {
                     // configure kubernetes_control_address - save loadbalancer
-                    def kubernetes_control_address = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ControlLoadBalancer')
-                    print(kubernetes_control_address)
-                    salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', kubernetes_control_address], null, true)
+                    def awsOutputs = aws.getOutputs(venv, aws_env_vars, STACK_NAME)
+                    if (awsOutputs.containsKey('ControlLoadBalancer')) {
+                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', awsOutputs['ControlLoadBalancer']], null, true)
+                        outputs.put('kubernetes_apiserver', 'https://' + awsOutputs['ControlLoadBalancer'])
+                    }
                 }
 
                 // ensure certificates are generated properly
@@ -424,10 +431,15 @@ node("python") {
         }
 
 
-        if (common.checkContains('STACK_INSTALL', 'finalize')) {
-            stage('Finalize') {
+        stage('Finalize') {
+            if (common.checkContains('STACK_INSTALL', 'finalize')) {
                 salt.runSaltProcessStep(saltMaster, '*', 'state.apply', [], null, true)
             }
+
+            outputsPretty = common.prettify(outputs)
+            print(outputsPretty)
+            writeFile(file: 'outputs.json', text: outputsPretty)
+            archiveArtifacts(artifacts: 'outputs.json')
         }
 
     } catch (Throwable e) {
