@@ -275,6 +275,7 @@ node("python") {
                 if (STACK_TYPE == 'aws') {
                     // configure kubernetes_control_address - save loadbalancer
                     def awsOutputs = aws.getOutputs(venv, aws_env_vars, STACK_NAME)
+                    print(awsOutputs)
                     if (awsOutputs.containsKey('ControlLoadBalancer')) {
                         salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', awsOutputs['ControlLoadBalancer']], null, true)
                         outputs.put('kubernetes_apiserver', 'https://' + awsOutputs['ControlLoadBalancer'])
