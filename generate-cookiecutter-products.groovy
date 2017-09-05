@@ -140,15 +140,18 @@ parameters:
             // apt package genisoimage is required for this stage
 
             // download create-config-drive
-            def config_drive_script_url = "https://raw.githubusercontent.com/pupapaik/virt-utils/master/create-config-drive"
-            def user_data_script_url = "https://raw.githubusercontent.com/mceloud/scripts/master/master_config.sh"
-
+            def config_drive_script_url = "https://raw.githubusercontent.com/jiribroulik/scripts/master/create_config_drive.sh"
             sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
+            def user_data_script_url = "https://raw.githubusercontent.com/mceloud/scripts/master/master_config.sh"
             sh "wget -O user_data.sh ${user_data_script_url}"
+
+            sh "git clone https://github.com/Mirantis/mk-pipelines.git"
+            sh "git clone https://github.com/Mirantis/pipeline-library.git"
+            args = "--user-data user_data.sh --hostname cfg01 --model ${modelEnv} --mk-pipelines ${env.WORKSPACE}/mk-pipelines/ --pipeline-library ${env.WORKSPACE}/pipeline-library/ cfg01.${clusterDomain}-config.iso"
 
             // load data from model
             def smc = [:]
-            smc['SALT_MASTER_MINION_ID'] = "cfg.${clusterDomain}"
+            smc['SALT_MASTER_MINION_ID'] = "cfg01.${clusterDomain}"
             smc['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
             smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
             smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
@@ -161,7 +164,7 @@ parameters:
             }
 
             // create config-drive
-            sh "./create-config-drive --user-data user_data.sh --hostname cfg --model ${modelEnv} cfg.${clusterDomain}-config.iso"
+            sh "./create-config-drive ${args}"
             sh("mkdir output-${clusterName} && mv cfg.${clusterDomain}-config.iso output-${clusterName}/")
             // save iso to artifacts
             archiveArtifacts artifacts: "output-${clusterName}/cfg.${clusterDomain}-config.iso"
