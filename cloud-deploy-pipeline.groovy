@@ -110,6 +110,9 @@ node("python") {
                     }
                 }
 
+                // no underscore in STACK_NAME
+                STACK_NAME = STACK_NAME.replaceAll('_', '-')
+
                 // set description
                 currentBuild.description = "${STACK_NAME}"
 
