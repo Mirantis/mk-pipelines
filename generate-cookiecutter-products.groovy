@@ -165,9 +165,9 @@ parameters:
 
             // create config-drive
             sh "./create-config-drive ${args}"
-            sh("mkdir output-${clusterName} && mv cfg.${clusterDomain}-config.iso output-${clusterName}/")
+            sh("mkdir output-${clusterName} && mv cfg01.${clusterDomain}-config.iso output-${clusterName}/")
             // save iso to artifacts
-            archiveArtifacts artifacts: "output-${clusterName}/cfg.${clusterDomain}-config.iso"
+            archiveArtifacts artifacts: "output-${clusterName}/cfg01.${clusterDomain}-config.iso"
         }
 
         stage ('Save changes reclass model') {
