@@ -376,6 +376,12 @@ node("python") {
 
         }
 
+        if (common.checkContains('STACK_INSTALL', 'cicd')) {
+            stage('Install Cicd') {
+                orchestrate.installDockerSwarm(saltMaster)
+                orchestrate.installCicd(saltMaster)
+            }
+        }
 
         if (common.checkContains('STACK_INSTALL', 'sl-legacy')) {
             stage('Install StackLight v1') {
