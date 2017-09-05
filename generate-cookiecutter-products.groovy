@@ -22,6 +22,7 @@ node("python&&docker") {
     def templateEnv = "${env.WORKSPACE}/template"
     def modelEnv = "${env.WORKSPACE}/model"
     def testEnv = "${env.WORKSPACE}/test"
+    def pipelineEnv = "${env.WORKSPACE}/pipelines"
 
     try {
         def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
@@ -145,9 +146,9 @@ parameters:
             def user_data_script_url = "https://raw.githubusercontent.com/mceloud/scripts/master/master_config.sh"
             sh "wget -O user_data.sh ${user_data_script_url}"
 
-            sh "git clone https://github.com/Mirantis/mk-pipelines.git"
-            sh "git clone https://github.com/Mirantis/pipeline-library.git"
-            args = "--user-data user_data.sh --hostname cfg01 --model ${modelEnv} --mk-pipelines ${env.WORKSPACE}/mk-pipelines/ --pipeline-library ${env.WORKSPACE}/pipeline-library/ cfg01.${clusterDomain}-config.iso"
+            sh "git clone https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
+            sh "git clone https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
+            args = "--user-data user_data.sh --hostname cfg01 --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ cfg01.${clusterDomain}-config.iso"
 
             // load data from model
             def smc = [:]
@@ -196,6 +197,7 @@ parameters:
         stage ('Clean workspace directories') {
             sh(returnStatus: true, script: "rm -rf ${templateEnv}")
             sh(returnStatus: true, script: "rm -rf ${modelEnv}")
+            sh(returnStatus: true, script: "rm -rf ${pipelineEnv}")
         }
          // common.sendNotification(currentBuild.result,"",["slack"])
     }
