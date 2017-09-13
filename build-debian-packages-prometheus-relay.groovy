@@ -35,6 +35,17 @@ node('docker') {
             def imgName = "${OS}-${DIST}-${ARCH}"
             def img
 
+            stage("build image") {
+                img = docker.build(
+                    "${imgName}:${timestamp}",
+                    [
+                        "--build-arg uid=${jenkinsUID}",
+                        "--build-arg timestamp=${timestamp}",
+                        "-f ${workingDir}/prometheus-relay/docker/${OS}-${DIST}-${ARCH}.Dockerfile",
+                        "."
+                    ].join(' ')
+                )
+            }
             stage("build package") {
                 img.inside{
                     sh("""wget https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz &&
