@@ -82,6 +82,9 @@ node('docker') {
                         aptly.publish(APTLY_URL)
                     }
 
+                    stage("rebuild docker images")
+                        build job: "docker-build-images-prometheus", parameters: []
+                    }
                 }
             }
 
