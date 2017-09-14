@@ -51,8 +51,8 @@ node('docker') {
                     sh("""wget https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz &&
                         tar xf go1.8.1.linux-amd64.tar.gz &&
                         export GOROOT=\$PWD/go &&
-                        export PATH=\$PATH:\$GOROOT/bin &&
                         export GOPATH=\$PWD &&
+                        export PATH=\$PATH:\$GOPATH/bin:\$GOROOT/bin &&
                         cd src/gerrit.mcp.mirantis.net/debian/prometheus-relay &&
                         make""")
                 }
