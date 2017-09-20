@@ -28,6 +28,7 @@ node("python&&docker") {
         def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
         def clusterDomain = templateContext.default_context.cluster_domain
         def clusterName = templateContext.default_context.cluster_name
+        def saltMaster = templateContext.default_context.salt_master_hostname
         def cutterEnv = "${env.WORKSPACE}/cutter"
         def jinjaEnv = "${env.WORKSPACE}/jinja"
         def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
@@ -112,7 +113,7 @@ node("python&&docker") {
         }
 
         stage('Generate new SaltMaster node') {
-            def nodeFile = "${modelEnv}/nodes/cfg01.${clusterDomain}.yml"
+            def nodeFile = "${modelEnv}/nodes/${saltMaster}.${clusterDomain}.yml"
             def nodeString = """classes:
 - cluster.${clusterName}.infra.config
 parameters:
@@ -121,7 +122,7 @@ parameters:
     reclass_data_revision: master
   linux:
     system:
-      name: cfg01
+      name: ${saltMaster}
       domain: ${clusterDomain}
 """
             sh "mkdir -p ${modelEnv}/nodes/"
@@ -133,7 +134,7 @@ parameters:
         stage("Test") {
             if (SHARED_RECLASS_URL != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
                 sh("cp -r ${modelEnv} ${testEnv}")
-                saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", "", testEnv)
+                saltModelTesting.setupAndTestNode("${saltMaster}.${clusterDomain}", "", testEnv)
             }
         }
 
@@ -148,11 +149,11 @@ parameters:
 
             sh "git clone https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
             sh "git clone https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
-            args = "--user-data user_data.sh --hostname cfg01 --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ cfg01.${clusterDomain}-config.iso"
+            args = "--user-data user_data.sh --hostname ${saltMaster} --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ ${saltMaster}.${clusterDomain}-config.iso"
 
             // load data from model
             def smc = [:]
-            smc['SALT_MASTER_MINION_ID'] = "cfg01.${clusterDomain}"
+            smc['SALT_MASTER_MINION_ID'] = "${saltMaster}.${clusterDomain}"
             smc['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
             smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
             smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
@@ -164,9 +165,9 @@ parameters:
 
             // create config-drive
             sh "./create-config-drive ${args}"
-            sh("mkdir output-${clusterName} && mv cfg01.${clusterDomain}-config.iso output-${clusterName}/")
+            sh("mkdir output-${clusterName} && mv ${saltMaster}.${clusterDomain}-config.iso output-${clusterName}/")
             // save iso to artifacts
-            archiveArtifacts artifacts: "output-${clusterName}/cfg01.${clusterDomain}-config.iso"
+            archiveArtifacts artifacts: "output-${clusterName}/${saltMaster}.${clusterDomain}-config.iso"
         }
 
         stage ('Save changes reclass model') {
