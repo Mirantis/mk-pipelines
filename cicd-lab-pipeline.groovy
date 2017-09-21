@@ -225,7 +225,7 @@ node {
             // Postgres client - initialize OSS services databases
             timeout(300){
                 println "Waiting for postgresql database to come up.."
-                salt.cmdRun(saltMaster, 'I@postgresql:client', 'while true; do if docker service logs postgresql_db | grep "ready to accept"; then break; else sleep 5; fi; done')
+                salt.cmdRun(saltMaster, 'I@postgresql:client', 'while true; do if docker service logs postgresql_postgresql-db | grep "ready to accept"; then break; else sleep 5; fi; done')
             }
             // XXX: first run usually fails on some inserts, but we need to create databases at first 
             salt.enforceState(saltMaster, 'I@postgresql:client', 'postgresql.client', true, false)
