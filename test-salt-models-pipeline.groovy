@@ -80,12 +80,24 @@ node("python") {
 
     stage("test-nodes") {
       if(checkouted) {
-        def nodes = sh(script: "find ./nodes -type f -name '${config_node_name_pattern}*.yml'", returnStdout: true).tokenize()
+        def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
         def branches = [:]
         def acc = 0
-        for (int i = 0; i < nodes.size(); i++) {
-          def testTarget = sh(script: "basename ${nodes[i]} .yml", returnStdout: true).trim()
-          def clusterName = testTarget.substring(testTarget.indexOf(".") + 1, testTarget.lastIndexOf("."))
+        for (int i = 0; i < infraYMLs.size(); i++) {
+          def infraYMLConfig = readYaml(file: infraYMLs[i])
+          if(!infraYMLConfig["parameters"].containsKey("_param")){
+              common.warningMsg("ERROR: Cannot find soft params (_param) in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
+              continue
+          }
+          def infraParams = infraYMLConfig["parameters"]["_param"];
+          if(!infraParams.containsKey("infra_config_hostname") || !infraParams.containsKey("cluster_name") || !infraParams.containsKey("cluster_domain")){
+              common.warningMsg("ERROR: Cannot find _param:infra_config_hostname or _param:cluster_name or _param:cluster_domain  in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
+              continue
+          }
+          def clusterName = infraParams["cluster_name"]
+          def clusterDomain = infraParams["cluster_domain"]
+          def configHostname = infraParams["infra_config_hostname"]
+          def testTarget = String.format("%s.%s", configHostname, clusterDomain)
           if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
             parallel branches
             branches = [:]
