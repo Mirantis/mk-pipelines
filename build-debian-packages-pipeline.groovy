@@ -28,6 +28,13 @@ try {
   uploadPpa = null
 }
 
+def lintianCheck
+try {
+  lintianCheck = LINTIAN_CHECK.toBoolean()
+} catch (MissingPropertyException e) {
+  lintianCheck = true
+}
+
 def uploadAptly
 try {
   uploadAptly = UPLOAD_APTLY.toBoolean()
@@ -73,13 +80,16 @@ node("docker") {
       )
       archiveArtifacts artifacts: "build-area/*.deb"
     }
-    stage("lintian") {
-      changes = sh script: "ls build-area/*_"+ARCH+".changes", returnStdout: true
-      try {
-        debian.runLintian(changes.trim(), OS, OS+":"+DIST)
-      } catch (Exception e) {
-        println "[WARN] Lintian returned non-zero exit status"
-        currentBuild.result = 'UNSTABLE'
+
+    if (lintianCheck) {
+      stage("lintian") {
+        changes = sh script: "ls build-area/*_"+ARCH+".changes", returnStdout: true
+        try {
+          debian.runLintian(changes.trim(), OS, OS+":"+DIST)
+        } catch (Exception e) {
+          println "[WARN] Lintian returned non-zero exit status"
+          currentBuild.result = 'UNSTABLE'
+        }
       }
     }
 
