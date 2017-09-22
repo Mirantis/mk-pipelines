@@ -82,6 +82,7 @@ node("python") {
       if(checkouted) {
         def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
         def branches = [:]
+        def acc = 0
         for (int i = 0; i < infraYMLs.size(); i++) {
           def infraYMLConfig = readYaml(file: infraYMLs[i])
           if(!infraYMLConfig["parameters"].containsKey("_param")){
@@ -97,6 +98,11 @@ node("python") {
           def clusterDomain = infraParams["cluster_domain"]
           def configHostname = infraParams["infra_config_hostname"]
           def testTarget = String.format("%s.%s", configHostname, clusterDomain)
+          if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
+            parallel branches
+            branches = [:]
+            acc = 0
+          }
 
           branches[testTarget] = {
             build job: "test-salt-model-node", parameters: [
@@ -112,8 +118,11 @@ node("python") {
               [$class: 'StringParameterValue', name: 'MAX_CPU_PER_JOB', value: MAX_CPU_PER_JOB],
               [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF]
             ]}
+          acc++;
         }
-        parallel branches
+        if (acc != 0) {
+          parallel branches
+        }
       }
     }
   } catch (Throwable e) {
