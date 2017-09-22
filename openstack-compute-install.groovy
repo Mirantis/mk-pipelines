@@ -37,6 +37,17 @@ node() {
             common.infoMsg("Selected nodes: ${targetLiveAll}")
         }
 
+        stage("Trusty workaround") {
+            if(salt.getGrain(saltMaster, minions[0], "oscodename")['return'][0].values()[0]["oscodename"] == "trusty") {
+                common.infoMsg("First node %nodename% has trusty")
+                common.infoMsg("Assuming trusty on all cluster, running extra network states...")
+                common.infoMsg("Network iteration #1. Bonding")
+                salt.enforceState(saltMaster, targetLiveAll, 'linux.network', true)
+                common.infoMsg("Network iteration #2. Vlan tagging and bridging")
+                salt.enforceState(saltMaster, targetLiveAll, 'linux.network', true)
+            }
+        }
+
         stage("Setup repositories") {
             salt.enforceState(saltMaster, targetLiveAll, 'linux.system.repo', true)
         }
