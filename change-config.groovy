@@ -9,6 +9,7 @@
  *   TARGET_SUBSET_TEST         Number of nodes to test config changes, empty string means all targetted nodes.
  *   TARGET_SUBSET_LIVE         Number of selected noded to live apply selected config changes.
  *   TARGET_BATCH_LIVE          Batch size for the complete live config changes on all nodes, empty string means apply to all targetted nodes.
+ *   PULL_MODEL                 Pull the latest cluster model using reclass.storage.data state
  *
 **/
 
@@ -35,6 +36,14 @@ node() {
 
         stage('Connect to Salt master') {
             saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        }
+
+        if (common.validInputParam("PULL_MODEL") && PULL_MODEL.toBoolean() == true) {
+            stage('Update the reclass cluster model') {
+                def saltMasterTarget = ['expression': 'I@salt:master', 'type': 'compound']
+                result = salt.runSaltCommand(saltMaster, 'local', saltMasterTarget, 'state.apply', null, "reclass.storage.data")
+                salt.checkResult(result)
+            }
         }
 
         stage('List target servers') {
