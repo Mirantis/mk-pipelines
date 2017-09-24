@@ -112,6 +112,7 @@ node("python") {
 
                 // no underscore in STACK_NAME
                 STACK_NAME = STACK_NAME.replaceAll('_', '-')
+                outputs.put('stack_name', STACK_NAME)
 
                 // set description
                 currentBuild.description = "${STACK_NAME}"
@@ -194,6 +195,7 @@ node("python") {
 
                 // set description
                 currentBuild.description = STACK_NAME
+                outputs.put('stack_name', STACK_NAME)
 
                 if (STACK_REUSE.toBoolean() == false) {
                     // get templates
