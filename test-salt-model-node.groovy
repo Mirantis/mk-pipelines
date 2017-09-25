@@ -56,6 +56,7 @@ throttle(['test-model']) {
       stage("test node") {
         if (checkouted) {
           def workspace = common.getWorkspace()
+          common.infoMsg("Running salt model test for node ${NODE_TARGET} in cluster ${CLUSTER_NAME}")
           saltModelTesting.setupAndTestNode(NODE_TARGET, CLUSTER_NAME, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION, MAX_CPU_PER_JOB.toInteger())
         }
       }
