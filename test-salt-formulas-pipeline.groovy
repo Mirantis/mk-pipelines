@@ -3,6 +3,7 @@
  *  DEFAULT_GIT_REF
  *  DEFAULT_GIT_URL
  *  CREDENTIALS_ID
+ *  KITCHEN_TESTS_PARALLEL
  */
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
@@ -13,6 +14,13 @@ try {
   gerritRef = GERRIT_REFSPEC
 } catch (MissingPropertyException e) {
   gerritRef = null
+}
+
+def parallelGroupSize
+try {
+  parallelGroupSize = Integer.valueOf(PARALLEL_GROUP_SIZE)
+} catch (MissingPropertyException e) {
+  parallelGroupSize = 8
 }
 
 def defaultGitRef, defaultGitUrl
@@ -84,9 +92,15 @@ node("python") {
             common.infoMsg("CUSTOM_KITCHEN_ENVS not empty. Running with custom enviroments: ${kitchenEnvs}")
           }
           if (kitchenEnvs != null && kitchenEnvs != '') {
+            def acc = 0
             def kitchenTestRuns = [:]
             common.infoMsg("Found " + kitchenEnvs.size() + " environment(s)")
             for (int i = 0; i < kitchenEnvs.size(); i++) {
+              if (acc >= parallelGroupSize) {
+                parallel kitchenTestRuns
+                kitchenTestRuns = [:]
+                acc = 0
+              }
               def testEnv = kitchenEnvs[i]
               kitchenTestRuns[testEnv] = {
                 build job: "test-salt-formulas-env", parameters: [
@@ -98,8 +112,11 @@ node("python") {
                   [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION]
                 ]
               }
+              acc++;
             }
-            parallel kitchenTestRuns
+            if (acc != 0) {
+              parallel kitchenTestRuns
+            }
           } else {
             common.warningMsg(".kitchen.yml file not found, no kitchen tests triggered.")
           }
