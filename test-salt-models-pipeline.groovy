@@ -91,7 +91,7 @@ node("python") {
         }
 
         def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
-        def clusterDirectories = sh(script: "ls ./classes/cluster", returnStdout: true).tokenize()
+        def clusterDirectories = sh(script: "ls -d ./classes/cluster/*/", returnStdout: true).tokenize()
 
         // create a list of cluster names present in cluster folder
         def infraList = []
@@ -130,13 +130,13 @@ node("python") {
           def configHostname = infraParams["infra_config_hostname"]
           def testTarget = String.format("%s.%s", configHostname, clusterDomain)
           if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
-            common.infoMsg("Running testing of salt model clusters - test group ${i}")
             parallel branches
             branches = [:]
             acc = 0
           }
 
           branches[testTarget] = {
+            common.infoMsg("Running testing of salt model clusters - test group ${i}")
             build job: "test-salt-model-node", parameters: [
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
@@ -153,7 +153,6 @@ node("python") {
           acc++;
         }
         if (acc != 0) {
-          common.infoMsg("Running testing of salt model clusters - last test group")
           parallel branches
         }
       }
