@@ -152,6 +152,12 @@ node("python") {
                         common.infoMsg("Property STACK_RECLASS_BRANCH or STACK_RECLASS_ADDRESS not found! Using default values from template.")
                     }
 
+                    // put formulas revision - stable, testing or nightly
+                    if (common.validInputParam('FORMULA_PKG_REVISION')) {
+                        common.infoMsg("Setting formulas revision to ${FORMULA_PKG_REVISION}")
+                        envParams.put('cfg_formula_pkg_revision', FORMULA_PKG_REVISION)
+                    }
+
                     openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv)
                 }
 
