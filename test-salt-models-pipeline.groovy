@@ -83,6 +83,15 @@ node("python") {
         def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
         def branches = [:]
         def acc = 0
+
+        def modifiedClusters = null
+        if (gerritRef) {
+          checkChange = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v classes/cluster", returnStatus: true)
+          if (checkChange == 1) {
+            modifiedClusters = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep classes/cluster/ | awk -F/ '{print \$3}' | uniq", returnStdout: true).tokenize()
+          }
+        }
+
         for (int i = 0; i < infraYMLs.size(); i++) {
           def infraYMLConfig = readYaml(file: infraYMLs[i])
           if(!infraYMLConfig["parameters"].containsKey("_param")){
@@ -102,6 +111,10 @@ node("python") {
             parallel branches
             branches = [:]
             acc = 0
+          }
+
+          if (gerritRef && modifiedClusters && !modifiedClusters.contains(clusterName)) {
+            continue
           }
 
           branches[testTarget] = {
@@ -134,3 +147,4 @@ node("python") {
   }
 }
 
+x
