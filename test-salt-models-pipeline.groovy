@@ -91,6 +91,18 @@ node("python") {
         }
 
         def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
+        def clusterDirectories = sh(script: "ls ./classes/cluster", returnStdout: true).tokenize()
+
+        def infraList = []
+        for (elt in infraYMLs) {
+          infraList << elt.tokenize('/')[3]
+        }
+
+        def commonList = infraList.intersect(clusterDirectories)
+        def differenceList = infraList.plus(clusterDirectories)
+        differenceList.removeAll(commonList)
+        commom.warningMsg("The following clusters are not valid : ${differenceList}")
+
         if (modifiedClusters) {
           infraYMLs.removeAll { !modifiedClusters.contains(it.tokenize('/')[3]) }
           common.infoMsg("Testing only modified clusters: ${infraYMLs}")
