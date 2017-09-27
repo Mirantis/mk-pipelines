@@ -146,5 +146,3 @@ node("python") {
      common.sendNotification(currentBuild.result,"",["slack"])
   }
 }
-
-x
