@@ -93,16 +93,19 @@ node("python") {
         def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
         def clusterDirectories = sh(script: "ls ./classes/cluster", returnStdout: true).tokenize()
 
+        // create a list of cluster names present in cluster folder
         def infraList = []
         for (elt in infraYMLs) {
           infraList << elt.tokenize('/')[3]
         }
 
+        // verify we have all valid clusters loaded
         def commonList = infraList.intersect(clusterDirectories)
         def differenceList = infraList.plus(clusterDirectories)
         differenceList.removeAll(commonList)
-        common.warningMsg("The following clusters are not valid : ${differenceList}")
-
+        if(!differenceList.isEmpty()){
+          common.warningMsg("The following clusters are not valid : ${differenceList} - That means we cannot found cluster_name in init.yml or infra/init.yml")
+        }
         if (modifiedClusters) {
           infraYMLs.removeAll { !modifiedClusters.contains(it.tokenize('/')[3]) }
           common.infoMsg("Testing only modified clusters: ${infraYMLs}")
@@ -127,6 +130,7 @@ node("python") {
           def configHostname = infraParams["infra_config_hostname"]
           def testTarget = String.format("%s.%s", configHostname, clusterDomain)
           if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
+            common.infoMsg("Running testing of salt model clusters - test group ${i}")
             parallel branches
             branches = [:]
             acc = 0
@@ -149,6 +153,7 @@ node("python") {
           acc++;
         }
         if (acc != 0) {
+          common.infoMsg("Running testing of salt model clusters - last test group")
           parallel branches
         }
       }
