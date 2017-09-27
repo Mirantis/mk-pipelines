@@ -101,7 +101,7 @@ node("python") {
         def commonList = infraList.intersect(clusterDirectories)
         def differenceList = infraList.plus(clusterDirectories)
         differenceList.removeAll(commonList)
-        commom.warningMsg("The following clusters are not valid : ${differenceList}")
+        common.warningMsg("The following clusters are not valid : ${differenceList}")
 
         if (modifiedClusters) {
           infraYMLs.removeAll { !modifiedClusters.contains(it.tokenize('/')[3]) }
