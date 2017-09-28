@@ -416,7 +416,7 @@ node("python") {
                 def output_file = image.replaceAll('/', '-') + '.output'
 
                 // run image
-                test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
+                test.runConformanceTests(saltMaster, 'ctl01*', TEST_K8S_API_SERVER, image)
 
                 // collect output
                 sh "mkdir -p ${artifacts_dir}"

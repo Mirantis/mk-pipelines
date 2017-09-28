@@ -89,11 +89,11 @@ node {
     if (RUN_TESTS == "1") {
         sleep(30)
         stage('Run k8s bootstrap tests') {
-            test.runConformanceTests(saltMaster, K8S_API_SERVER, 'tomkukral/k8s-scripts')
+            test.runConformanceTests(saltMaster, 'ctl01*', K8S_API_SERVER, 'tomkukral/k8s-scripts')
         }
 
         stage("Run k8s conformance e2e tests") {
-            test.runConformanceTests(saltMaster, K8S_API_SERVER, CONFORMANCE_IMAGE)
+            test.runConformanceTests(saltMaster, 'ctl01*', K8S_API_SERVER, CONFORMANCE_IMAGE)
         }
 
         stage("Copy k8s e2e test output to config node ") {

@@ -295,7 +295,7 @@ node {
                 def output_file = image.replaceAll('/', '-') + '.output'
 
                 // run image
-                test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
+                test.runConformanceTests(saltMaster, 'ctl01*', TEST_K8S_API_SERVER, image)
 
                 // collect output
                 sh "mkdir -p ${artifacts_dir}"
@@ -308,13 +308,13 @@ node {
             }
 
             stage('Run k8s conformance e2e tests') {
-                //test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, TEST_K8S_CONFORMANCE_IMAGE)
+                //test.runConformanceTests(saltMaster, 'ctl01*', TEST_K8S_API_SERVER, TEST_K8S_CONFORMANCE_IMAGE)
 
                 def image = TEST_K8S_CONFORMANCE_IMAGE
                 def output_file = image.replaceAll('/', '-') + '.output'
 
                 // run image
-                test.runConformanceTests(saltMaster, TEST_K8S_API_SERVER, image)
+                test.runConformanceTests(saltMaster, 'ctl01*', TEST_K8S_API_SERVER, image)
 
                 // collect output
                 sh "mkdir -p ${artifacts_dir}"
