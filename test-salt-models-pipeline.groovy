@@ -135,7 +135,7 @@ node("python") {
             acc = 0
           }
 
-          branches[testTarget] = {
+          branches[clusterName] = {
             common.infoMsg("Running testing of salt model clusters - test group ${i}")
             build job: "test-salt-model-node", parameters: [
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
