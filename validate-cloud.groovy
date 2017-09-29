@@ -14,11 +14,13 @@
  *   RUN_K8S_TESTS               If not false, run Kubernetes tests
  *   RUN_SPT_TESTS               If not false, run SPT tests
  *   SPT_SSH_USER                The name of the user which should be used for ssh to nodes
- *   SPT_FLOATING_NETWORK        The name of the external(floating) network
  *   SPT_IMAGE                   The name of the image for SPT tests
- *   SPT_USER                    The name of the user for SPT image
+ *   SPT_IMAGE_USER              The name of the user for SPT image
  *   SPT_FLAVOR                  The name of the flavor for SPT image
- *   SPT_AVAILABILITY_ZONE       The name of availability zone
+ *   AVAILABILITY_ZONE           The name of availability zone
+ *   FLOATING_NETWORK            The name of the external(floating) network
+ *   RALLY_IMAGE                 The name of the image for Rally tests
+ *   RALLY_FLAVOR                The name of the flavor for Rally image
  *   TEST_K8S_API_SERVER         Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE  Path to docker image with conformance e2e tests
  *   TEST_K8S_NODE               Kubernetes node to run tests from
@@ -48,11 +50,13 @@ node() {
                 sh "rm -r ${artifacts_dir}"
             }
             sh "mkdir -p ${artifacts_dir}"
-            def spt_variables = "-e spt_ssh_user=${SPT_SSH_USER} " +
-                    "-e spt_floating_network=${SPT_FLOATING_NETWORK} " +
-                    "-e spt_image=${SPT_IMAGE} -e spt_user=${SPT_USER} " +
-                    "-e spt_flavor=${SPT_FLAVOR} -e spt_availability_zone=${SPT_AVAILABILITY_ZONE} "
-            validate.runContainerConfiguration(pepperEnv, TEST_IMAGE, TARGET_NODE, artifacts_dir, spt_variables)
+            def ext_variables = "-e spt_ssh_user=${SPT_SSH_USER} " +
+                    "-e spt_floating_network=${FLOATING_NETWORK} " +
+                    "-e spt_image=${SPT_IMAGE} -e spt_user=${SPT_IMAGE_USER} " +
+                    "-e spt_flavor=${SPT_FLAVOR} -e spt_availability_zone=${AVAILABILITY_ZONE} " +
+                    "-e floating_network=${FLOATING_NETWORK} -e rally_image=${RALLY_IMAGE} " +
+                    "-e rally_flavor=${RALLY_FLAVOR} -e availability_zone=${AVAILABILITY_ZONE} "
+            validate.runContainerConfiguration(pepperEnv, TEST_IMAGE, TARGET_NODE, artifacts_dir, ext_variables)
         }
 
         stage('Run Tempest tests') {
