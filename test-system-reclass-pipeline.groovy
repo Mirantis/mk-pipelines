@@ -26,9 +26,9 @@ try {
 def checkouted = false
 def merged = false
 def systemRefspec = "HEAD"
-try {
-  stage("Checkout") {
-    node() {
+node() {
+  try {
+    stage("Checkout") {
       if (gerritRef) {
         // job is triggered by Gerrit
         // test if change aren't already merged
@@ -46,38 +46,44 @@ try {
           checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", gerritCredentials)
       }
     }
-  }
 
-  stage("Test") {
-    if(merged){
-      common.successMsg("Gerrit change is already merged, no need to test them")
-    }else{
-      if(checkouted){
-        def branches = [:]
-        def testModels = TEST_MODELS.split(',')
-          for (int i = 0; i < testModels.size(); i++) {
-            def cluster = testModels[i]
-            def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
-            branches["${cluster}"] = {
-              build job: "test-salt-model-${cluster}", parameters: [
-                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
-                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
-                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
-                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
-              ]
-            }
-          }
-        parallel branches
+    stage("Test") {
+      if(merged){
+        common.successMsg("Gerrit change is already merged, no need to test them")
       }else{
-         throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
+        if(checkouted){
+
+          def documentationOnly = false
+          if (gerritRef) {
+            documentationOnly = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v .releasenotes", returnStatus: true) == 1
+          }
+
+          def branches = [:]
+          def testModels = documentationOnly ? [] : TEST_MODELS.split(',')
+            for (int i = 0; i < testModels.size(); i++) {
+              def cluster = testModels[i]
+              def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
+              branches["${cluster}"] = {
+                build job: "test-salt-model-${cluster}", parameters: [
+                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
+                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
+                  [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
+                  [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
+                ]
+              }
+            }
+          parallel branches
+        }else{
+           throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
+        }
       }
     }
+  } catch (Throwable e) {
+      // If there was an error or exception thrown, the build failed
+      currentBuild.result = "FAILURE"
+      currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+      throw e
+  } finally {
+      common.sendNotification(currentBuild.result,"",["slack"])
   }
-} catch (Throwable e) {
-    // If there was an error or exception thrown, the build failed
-    currentBuild.result = "FAILURE"
-    currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-    throw e
-} finally {
-    common.sendNotification(currentBuild.result,"",["slack"])
 }
