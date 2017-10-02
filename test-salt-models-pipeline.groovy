@@ -114,7 +114,6 @@ node("python") {
 
         def branches = [:]
         def acc = 0
-        def group = 1
 
         for (int i = 0; i < infraYMLs.size(); i++) {
           def infraYMLConfig = readYaml(file: infraYMLs[i])
@@ -135,11 +134,9 @@ node("python") {
             parallel branches
             branches = [:]
             acc = 0
-            group++
           }
 
           branches[clusterName] = {
-            common.infoMsg("Running testing of salt model clusters - test group ${group}")
             build job: "test-salt-model-node", parameters: [
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
               [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
