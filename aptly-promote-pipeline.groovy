@@ -20,7 +20,7 @@ node() {
   try{
     stage("promote") {
       lock("aptly-api") {
-        aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY)
+        aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY, '-d --timeout 600', DUMP_PUBLISH.toBoolean())
       }
     }
   } catch (Throwable e) {
