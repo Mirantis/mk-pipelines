@@ -62,8 +62,8 @@ _MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
 
 // Define global variables
-def saltMaster
 def venv
+def venvPepper
 def outputs = [:]
 
 def ipRegex = "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"
@@ -79,6 +79,7 @@ node("python") {
     try {
         // Set build-specific variables
         venv = "${env.WORKSPACE}/venv"
+        venvPepper = "${env.WORKSPACE}/venvPepper"
 
         //
         // Prepare machines
@@ -237,15 +238,15 @@ node("python") {
 
             outputs.put('salt_api', SALT_MASTER_URL)
 
-            // Connect to Salt master
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            // Setup virtualenv for pepper
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
 
         // Set up override params
         if (common.validInputParam('SALT_OVERRIDES')) {
             stage('Set Salt overrides') {
-                salt.setSaltOverrides(saltMaster,  SALT_OVERRIDES)
+                salt.setSaltOverrides(venvPepper,  SALT_OVERRIDES)
             }
         }
 
@@ -255,30 +256,30 @@ node("python") {
 
         if (common.checkContains('STACK_INSTALL', 'core')) {
             stage('Install core infrastructure') {
-                orchestrate.installFoundationInfra(saltMaster)
+                orchestrate.installFoundationInfra(venvPepper)
 
                 if (common.checkContains('STACK_INSTALL', 'kvm')) {
-                    orchestrate.installInfraKvm(saltMaster)
-                    orchestrate.installFoundationInfra(saltMaster)
+                    orchestrate.installInfraKvm(venvPepper)
+                    orchestrate.installFoundationInfra(venvPepper)
                 }
 
-                orchestrate.validateFoundationInfra(saltMaster)
+                orchestrate.validateFoundationInfra(venvPepper)
             }
         }
 
         // install ceph
         if (common.checkContains('STACK_INSTALL', 'ceph')) {
             stage('Install Ceph MONs') {
-                orchestrate.installCephMon(saltMaster)
+                orchestrate.installCephMon(venvPepper)
             }
 
             stage('Install Ceph OSDs') {
-                orchestrate.installCephOsd(saltMaster)
+                orchestrate.installCephOsd(venvPepper)
             }
 
 
             stage('Install Ceph clients') {
-                orchestrate.installCephClient(saltMaster)
+                orchestrate.installCephClient(venvPepper)
             }
 
             stage('Connect Ceph') {
@@ -295,30 +296,30 @@ node("python") {
                     def awsOutputs = aws.getOutputs(venv, aws_env_vars, STACK_NAME)
                     common.prettyPrint(awsOutputs)
                     if (awsOutputs.containsKey('ControlLoadBalancer')) {
-                        salt.runSaltProcessStep(saltMaster, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', awsOutputs['ControlLoadBalancer']], null, true)
+                        salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', awsOutputs['ControlLoadBalancer']], null, true)
                         outputs.put('kubernetes_apiserver', 'https://' + awsOutputs['ControlLoadBalancer'])
                     }
                 }
 
                 // ensure certificates are generated properly
-                salt.runSaltProcessStep(saltMaster, '*', 'saltutil.refresh_pillar', [], null, true)
-                salt.enforceState(saltMaster, '*', ['salt.minion.cert'], true)
+                salt.runSaltProcessStep(venvPepper, '*', 'saltutil.refresh_pillar', [], null, true)
+                salt.enforceState(venvPepper, '*', ['salt.minion.cert'], true)
 
-                orchestrate.installKubernetesInfra(saltMaster)
+                orchestrate.installKubernetesInfra(venvPepper)
             }
 
             if (common.checkContains('STACK_INSTALL', 'contrail')) {
                 stage('Install Contrail for Kubernetes') {
-                    orchestrate.installContrailNetwork(saltMaster)
-                    orchestrate.installContrailCompute(saltMaster)
+                    orchestrate.installContrailNetwork(venvPepper)
+                    orchestrate.installContrailCompute(venvPepper)
                 }
             }
 
             stage('Install Kubernetes control') {
-                orchestrate.installKubernetesControl(saltMaster)
+                orchestrate.installKubernetesControl(venvPepper)
 
                 // collect artifacts (kubeconfig)
-                writeFile(file: 'kubeconfig', text: salt.getFileContent(saltMaster, 'I@kubernetes:master and *01*', '/etc/kubernetes/admin-kube-config'))
+                writeFile(file: 'kubeconfig', text: salt.getFileContent(venvPepper, 'I@kubernetes:master and *01*', '/etc/kubernetes/admin-kube-config'))
                 archiveArtifacts(artifacts: 'kubeconfig')
             }
 
@@ -342,7 +343,7 @@ node("python") {
                         sleep(60)
                     }
 
-                    orchestrate.installKubernetesCompute(saltMaster)
+                    orchestrate.installKubernetesCompute(venvPepper)
                 }
             }
         }
@@ -352,37 +353,37 @@ node("python") {
             // install Infra and control, tests, ...
 
             stage('Install OpenStack infra') {
-                orchestrate.installOpenstackInfra(saltMaster)
+                orchestrate.installOpenstackInfra(venvPepper)
             }
 
             stage('Install OpenStack control') {
-                orchestrate.installOpenstackControl(saltMaster)
+                orchestrate.installOpenstackControl(venvPepper)
             }
 
             stage('Install OpenStack network') {
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
-                    orchestrate.installContrailNetwork(saltMaster)
+                    orchestrate.installContrailNetwork(venvPepper)
                 } else if (common.checkContains('STACK_INSTALL', 'ovs')) {
-                    orchestrate.installOpenstackNetwork(saltMaster)
+                    orchestrate.installOpenstackNetwork(venvPepper)
                 }
 
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
+                salt.runSaltProcessStep(venvPepper, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
+                salt.runSaltProcessStep(venvPepper, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
             }
 
-            if (salt.testTarget(saltMaster, 'I@ironic:conductor')){
+            if (salt.testTarget(venvPepper, 'I@ironic:conductor')){
                 stage('Install OpenStack Ironic conductor') {
-                    orchestrate.installIronicConductor(saltMaster)
+                    orchestrate.installIronicConductor(venvPepper)
                 }
             }
 
 
             stage('Install OpenStack compute') {
-                orchestrate.installOpenstackCompute(saltMaster)
+                orchestrate.installOpenstackCompute(venvPepper)
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
-                    orchestrate.installContrailCompute(saltMaster)
+                    orchestrate.installContrailCompute(venvPepper)
                 }
             }
 
@@ -390,22 +391,22 @@ node("python") {
 
         if (common.checkContains('STACK_INSTALL', 'cicd')) {
             stage('Install Cicd') {
-                orchestrate.installDockerSwarm(saltMaster)
-                orchestrate.installCicd(saltMaster)
+                orchestrate.installDockerSwarm(venvPepper)
+                orchestrate.installCicd(venvPepper)
             }
         }
 
         if (common.checkContains('STACK_INSTALL', 'sl-legacy')) {
             stage('Install StackLight v1') {
-                orchestrate.installStacklightv1Control(saltMaster)
-                orchestrate.installStacklightv1Client(saltMaster)
+                orchestrate.installStacklightv1Control(venvPepper)
+                orchestrate.installStacklightv1Client(venvPepper)
             }
         }
 
         if (common.checkContains('STACK_INSTALL', 'stacklight')) {
             stage('Install StackLight') {
-                orchestrate.installDockerSwarm(saltMaster)
-                orchestrate.installStacklight(saltMaster)
+                orchestrate.installDockerSwarm(venvPepper)
+                orchestrate.installStacklight(venvPepper)
             }
         }
 
@@ -420,11 +421,11 @@ node("python") {
                 def output_file = image.replaceAll('/', '-') + '.output'
 
                 // run image
-                test.runConformanceTests(saltMaster, 'ctl01*', TEST_K8S_API_SERVER, image)
+                test.runConformanceTests(venvPepper, 'ctl01*', TEST_K8S_API_SERVER, image)
 
                 // collect output
                 sh "mkdir -p ${artifacts_dir}"
-                file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/' + output_file)
+                file_content = salt.getFileContent(venvPepper, 'ctl01*', '/tmp/' + output_file)
                 writeFile file: "${artifacts_dir}${output_file}", text: file_content
                 sh "cat ${artifacts_dir}${output_file}"
 
@@ -435,18 +436,18 @@ node("python") {
 
         if (common.checkContains('STACK_TEST', 'openstack')) {
             if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
-                test.install_docker(saltMaster, TEST_TEMPEST_TARGET)
+                test.install_docker(venvPepper, TEST_TEMPEST_TARGET)
             }
             stage('Run OpenStack tests') {
-                test.runTempestTests(saltMaster, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
+                test.runTempestTests(venvPepper, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
             }
 
             stage('Copy Tempest results to config node') {
-                test.copyTempestResults(saltMaster, TEST_TEMPEST_TARGET)
+                test.copyTempestResults(venvPepper, TEST_TEMPEST_TARGET)
             }
 
             stage('Archive rally artifacts') {
-                test.archiveRallyArtifacts(saltMaster, TEST_TEMPEST_TARGET)
+                test.archiveRallyArtifacts(venvPepper, TEST_TEMPEST_TARGET)
             }
         }
 
@@ -455,8 +456,8 @@ node("python") {
             stage('Run infra tests') {
                 sleep(120)
                 def cmd = "apt-get install -y python-pip && pip install -r /usr/share/salt-formulas/env/ceph/files/testinfra/requirements.txt && python -m pytest --junitxml=/root/report.xml /usr/share/salt-formulas/env/ceph/files/testinfra/"
-                salt.cmdRun(saltMaster, 'I@salt:master', cmd, false)
-                writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, 'I@salt:master', '/root/report.xml'))
+                salt.cmdRun(venvPepper, 'I@salt:master', cmd, false)
+                writeFile(file: 'report.xml', text: salt.getFileContent(venvPepper, 'I@salt:master', '/root/report.xml'))
                 junit(keepLongStdio: true, testResults: 'report.xml')
             }
         }
@@ -464,7 +465,7 @@ node("python") {
 
         stage('Finalize') {
             if (common.checkContains('STACK_INSTALL', 'finalize')) {
-                salt.runSaltProcessStep(saltMaster, '*', 'state.apply', [], null, true)
+                salt.runSaltProcessStep(venvPepper, '*', 'state.apply', [], null, true)
             }
 
             outputsPretty = common.prettify(outputs)
