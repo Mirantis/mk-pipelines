@@ -280,6 +280,10 @@ node("python") {
             stage('Install Ceph clients') {
                 orchestrate.installCephClient(saltMaster)
             }
+
+            stage('Connect Ceph') {
+                orchestrate.connectCeph(saltMaster)
+            }
         }
 
         // install k8s
