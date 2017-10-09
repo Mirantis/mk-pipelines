@@ -55,6 +55,7 @@ git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 aws = new com.mirantis.mk.Aws()
 orchestrate = new com.mirantis.mk.Orchestrate()
+python = new com.mirantis.mk.Python()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 
