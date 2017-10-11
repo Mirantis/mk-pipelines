@@ -12,8 +12,9 @@
 
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-def saltMaster
+def pepperEnv = "pepperEnv"
 def targetTestSubset
 def targetLiveSubset
 def targetLiveAll
@@ -27,12 +28,12 @@ def probe = 1
 node() {
     try {
 
-        stage('Connect to Salt master') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         stage('List target servers') {
-            minions = salt.getMinions(saltMaster, TARGET_SERVERS)
+            minions = salt.getMinions(pepperEnv, TARGET_SERVERS)
 
             if (minions.isEmpty()) {
                 throw new Exception("No minion was targeted")
@@ -55,11 +56,11 @@ node() {
 
 
         stage("Add new repos on test nodes") {
-            salt.enforceState(saltMaster, targetTestSubset, 'linux.system.repo')
+            salt.enforceState(pepperEnv, targetTestSubset, 'linux.system.repo')
         }
 
         stage("List package upgrades") {
-            salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.list_upgrades', [], null, true)
+            salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.list_upgrades', [], null, true)
         }
 
         stage('Confirm upgrade on sample nodes') {
@@ -67,14 +68,14 @@ node() {
         }
 
         stage("Add new repos on sample nodes") {
-            salt.enforceState(saltMaster, targetLiveSubset, 'linux.system.repo')
+            salt.enforceState(pepperEnv, targetLiveSubset, 'linux.system.repo')
         }
 
         args = "apt-get -y -s -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade"
 
         stage('Test upgrade on sample') {
             try {
-                salt.cmdRun(saltMaster, targetLiveSubset, args)
+                salt.cmdRun(pepperEnv, targetLiveSubset, args)
             } catch (Exception er) {
                 print(er)
             }
@@ -88,23 +89,23 @@ node() {
         args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade;'
 
         stage('Apply package upgrades on sample') {
-            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
             salt.printSaltCommandResult(out)
         }
 
         args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
 
         stage('Start ovs on sample nodes') {
-            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
             salt.printSaltCommandResult(out)
         }
         stage("Run Neutron state on sample nodes") {
-            salt.enforceState(saltMaster, targetLiveSubset, ['neutron'])
+            salt.enforceState(pepperEnv, targetLiveSubset, ['neutron'])
         }
 
         stage("Run Highstate on sample nodes") {
             try {
-                salt.enforceHighstate(saltMaster, targetLiveSubset)
+                salt.enforceHighstate(pepperEnv, targetLiveSubset)
             } catch (Exception er) {
                 common.errorMsg("Highstate was executed on ${targetLiveSubset} but something failed. Please check it and fix it accordingly.")
             }
@@ -117,29 +118,29 @@ node() {
         }
 
         stage("Add new repos on all targeted nodes") {
-            salt.enforceState(saltMaster, targetLiveAll, 'linux.system.repo')
+            salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo')
         }
 
         args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade;'
 
         stage('Apply package upgrades on all targeted nodes') {
-            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
             salt.printSaltCommandResult(out)
         }
 
         args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
 
         stage('Start ovs on all targeted nodes') {
-            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
             salt.printSaltCommandResult(out)
         }
         stage("Run Neutron state on all targeted nodes") {
-            salt.enforceState(saltMaster, targetLiveAll, ['neutron'])
+            salt.enforceState(pepperEnv, targetLiveAll, ['neutron'])
         }
 
         stage("Run Highstate on all targeted nodes") {
             try {
-                salt.enforceHighstate(saltMaster, targetLiveAll)
+                salt.enforceHighstate(pepperEnv, targetLiveAll)
             } catch (Exception er) {
                 common.errorMsg("Highstate was executed ${targetLiveAll} but something failed. Please check it and fix it accordingly.")
             }

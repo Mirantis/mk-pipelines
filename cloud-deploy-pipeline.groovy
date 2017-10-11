@@ -284,7 +284,7 @@ node("python") {
             }
 
             stage('Connect Ceph') {
-                orchestrate.connectCeph(saltMaster)
+                orchestrate.connectCeph(venvPepper)
             }
         }
 

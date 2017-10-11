@@ -9,14 +9,14 @@
 
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-
-def saltMaster
+def pepperEnv = "pepperEnv"
 
 node() {
 
-    stage('Connect to Salt API') {
-        saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+    stage('Setup virtualenv for Pepper') {
+        python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
     }
 
     stage('Start restore') {
@@ -27,54 +27,54 @@ node() {
         }
         // Cassandra restore section
         try {
-            salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.stop', ['supervisor-database'], null, true)
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['supervisor-database'], null, true)
         } catch (Exception er) {
             common.warningMsg('Supervisor-database service already stopped')
         }
         try {
-            salt.cmdRun(saltMaster, 'I@opencontrail:control', "mkdir -p /root/cassandra/cassandra.bak")
+            salt.cmdRun(pepperEnv, 'I@opencontrail:control', "mkdir -p /root/cassandra/cassandra.bak")
         } catch (Exception er) {
             common.warningMsg('Directory already exists')
         }
 
         try {
-            salt.cmdRun(saltMaster, 'I@opencontrail:control', "mv /var/lib/cassandra/* /root/cassandra/cassandra.bak")
+            salt.cmdRun(pepperEnv, 'I@opencontrail:control', "mv /var/lib/cassandra/* /root/cassandra/cassandra.bak")
         } catch (Exception er) {
             common.warningMsg('Files were already moved')
         }
         try {
-            salt.cmdRun(saltMaster, 'I@opencontrail:control', "rm -rf /var/lib/cassandra/*")
+            salt.cmdRun(pepperEnv, 'I@opencontrail:control', "rm -rf /var/lib/cassandra/*")
         } catch (Exception er) {
             common.warningMsg('Directory already empty')
         }
 
-        _pillar = salt.getPillar(saltMaster, "I@cassandra:backup:client", 'cassandra:backup:backup_dir')
+        _pillar = salt.getPillar(pepperEnv, "I@cassandra:backup:client", 'cassandra:backup:backup_dir')
         backup_dir = _pillar['return'][0].values()[0]
         if(backup_dir == null || backup_dir.isEmpty()) { backup_dir='/var/backups/cassandra' }
         print(backup_dir)
-        salt.runSaltProcessStep(saltMaster, 'I@cassandra:backup:client', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
+        salt.runSaltProcessStep(pepperEnv, 'I@cassandra:backup:client', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
 
-        salt.runSaltProcessStep(saltMaster, 'I@cassandra:backup:client', 'service.start', ['supervisor-database'], null, true)
+        salt.runSaltProcessStep(pepperEnv, 'I@cassandra:backup:client', 'service.start', ['supervisor-database'], null, true)
 
         // wait until supervisor-database service is up
-        salt.commandStatus(saltMaster, 'I@cassandra:backup:client', 'service supervisor-database status', 'running')
+        salt.commandStatus(pepperEnv, 'I@cassandra:backup:client', 'service supervisor-database status', 'running')
         sleep(5)
         // performs restore
-        salt.cmdRun(saltMaster, 'I@cassandra:backup:client', "su root -c 'salt-call state.sls cassandra'")
-        salt.runSaltProcessStep(saltMaster, 'I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
-        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control and not I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
+        salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', "su root -c 'salt-call state.sls cassandra'")
+        salt.runSaltProcessStep(pepperEnv, 'I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
+        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and not I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
 
         // wait until supervisor-database service is up
-        salt.commandStatus(saltMaster, 'I@cassandra:backup:client', 'service supervisor-database status', 'running')
-        salt.commandStatus(saltMaster, 'I@opencontrail:control and not I@cassandra:backup:client', 'service supervisor-database status', 'running')
+        salt.commandStatus(pepperEnv, 'I@cassandra:backup:client', 'service supervisor-database status', 'running')
+        salt.commandStatus(pepperEnv, 'I@opencontrail:control and not I@cassandra:backup:client', 'service supervisor-database status', 'running')
         sleep(5)
 
-        salt.runSaltProcessStep(saltMaster, 'I@opencontrail:control', 'service.restart', ['supervisor-database'], null, true)
+        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.restart', ['supervisor-database'], null, true)
 
         // wait until contrail-status is up
-        salt.commandStatus(saltMaster, 'I@opencontrail:control', "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)
+        salt.commandStatus(pepperEnv, 'I@opencontrail:control', "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)
         
-        salt.cmdRun(saltMaster, 'I@opencontrail:control', "nodetool status")
-        salt.cmdRun(saltMaster, 'I@opencontrail:control', "contrail-status")
+        salt.cmdRun(pepperEnv, 'I@opencontrail:control', "nodetool status")
+        salt.cmdRun(pepperEnv, 'I@opencontrail:control', "contrail-status")
     }
 }

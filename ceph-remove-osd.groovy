@@ -15,9 +15,9 @@
 
 common = new com.mirantis.mk.Common()
 salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-// configure global variables
-def saltMaster
+def pepperEnv = "pepperEnv"
 def flags = CLUSTER_FLAGS.tokenize(',')
 def osds = OSD.tokenize(',')
 
@@ -28,19 +28,19 @@ def runCephCommand(master, cmd) {
 node("python") {
 
     // create connection to salt master
-    saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+    python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
     if (flags.size() > 0) {
         stage('Set cluster flags') {
             for (flag in flags) {
-                runCephCommand(saltMaster, 'ceph osd set ' + flag)
+                runCephCommand(pepperEnv, 'ceph osd set ' + flag)
             }
         }
     }
 
     // get list of disk at the osd
-    def pillar_disks = salt.getPillar(saltMaster, HOST, 'ceph:osd:disk')['return'][0].values()[0]
-    def hostname_id = salt.getPillar(saltMaster, HOST, 'ceph:osd:host_id')['return'][0].values()[0]
+    def pillar_disks = salt.getPillar(pepperEnv, HOST, 'ceph:osd:disk')['return'][0].values()[0]
+    def hostname_id = salt.getPillar(pepperEnv, HOST, 'ceph:osd:host_id')['return'][0].values()[0]
     def osd_ids = []
 
     print("host_id is ${hostname_id}")
@@ -60,14 +60,14 @@ node("python") {
 
     // `ceph osd out <id> <id>`
     stage('Set OSDs out') {
-            runCephCommand(saltMaster, 'ceph osd out ' + osd_ids.join(' '))
+            runCephCommand(pepperEnv, 'ceph osd out ' + osd_ids.join(' '))
     }
 
     // wait for healthy cluster
     if (common.validInputParam('WAIT_FOR_HEALTHY') && WAIT_FOR_HEALTHY.toBoolean()) {
         stage('Waiting for healthy cluster') {
             while (true) {
-                def health = runCephCommand(saltMaster, 'ceph health')['return'][0].values()[0]
+                def health = runCephCommand(pepperEnv, 'ceph health')['return'][0].values()[0]
                 if (health.contains('HEALTH OK')) {
                     common.infoMsg('Cluster is healthy')
                     break;
@@ -80,28 +80,28 @@ node("python") {
     // stop osd daemons
     stage('Stop OSD daemons') {
         for (i in osd_ids) {
-            salt.runSaltProcessStep(saltMaster, HOST, 'service.stop', ['ceph-osd@' + i.replaceAll('osd.', '')],  null, true)
+            salt.runSaltProcessStep(pepperEnv, HOST, 'service.stop', ['ceph-osd@' + i.replaceAll('osd.', '')],  null, true)
         }
     }
 
     // `ceph osd crush remove osd.2`
     stage('Remove OSDs from CRUSH') {
         for (i in osd_ids) {
-            runCephCommand(saltMaster, 'ceph osd crush remove ' + i)
+            runCephCommand(pepperEnv, 'ceph osd crush remove ' + i)
         }
     }
 
     // remove keyring `ceph auth del osd.3`
     stage('Remove OSD keyrings from auth') {
         for (i in osd_ids) {
-            runCephCommand(saltMaster, 'ceph auth del ' + i)
+            runCephCommand(pepperEnv, 'ceph auth del ' + i)
         }
     }
 
     // remove osd `ceph osd rm osd.3`
     stage('Remove OSDs') {
         for (i in osd_ids) {
-            runCephCommand(saltMaster, 'ceph osd rm ' + i)
+            runCephCommand(pepperEnv, 'ceph osd rm ' + i)
         }
     }
 
@@ -110,7 +110,7 @@ node("python") {
         stage('Unset cluster flags') {
             for (flag in flags) {
                 common.infoMsg('Removing flag ' + flag)
-                runCephCommand(saltMaster, 'ceph osd unset ' + flag)
+                runCephCommand(pepperEnv, 'ceph osd unset ' + flag)
             }
         }
     }

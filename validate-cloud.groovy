@@ -31,18 +31,19 @@ common = new com.mirantis.mk.Common()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 validate = new com.mirantis.mcp.Validate()
+def python = new com.mirantis.mk.Python()
 
-def saltMaster
+def pepperEnv = "pepperEnv"
 def artifacts_dir = 'validation_artifacts/'
 
 node() {
     try{
-        stage('Initialization') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         stage('Configure') {
-            validate.installDocker(saltMaster, TARGET_NODE)
+            validate.installDocker(pepperEnv, TARGET_NODE)
             if (ACCUMULATE_RESULTS.toBoolean() == false) {
                 sh "rm -r ${artifacts_dir}"
             }
@@ -51,12 +52,12 @@ node() {
                     "-e spt_floating_network=${SPT_FLOATING_NETWORK} " +
                     "-e spt_image=${SPT_IMAGE} -e spt_user=${SPT_USER} " +
                     "-e spt_flavor=${SPT_FLAVOR} -e spt_availability_zone=${SPT_AVAILABILITY_ZONE} "
-            validate.runContainerConfiguration(saltMaster, TEST_IMAGE, TARGET_NODE, artifacts_dir, spt_variables)
+            validate.runContainerConfiguration(pepperEnv, TEST_IMAGE, TARGET_NODE, artifacts_dir, spt_variables)
         }
 
         stage('Run Tempest tests') {
             if (RUN_TEMPEST_TESTS.toBoolean() == true) {
-                validate.runTempestTests(saltMaster, TARGET_NODE, artifacts_dir, TEMPEST_TEST_SET)
+                validate.runTempestTests(pepperEnv, TARGET_NODE, artifacts_dir, TEMPEST_TEST_SET)
             } else {
                 common.infoMsg("Skipping Tempest tests")
             }
@@ -64,7 +65,7 @@ node() {
 
         stage('Run Rally tests') {
             if (RUN_RALLY_TESTS.toBoolean() == true) {
-                validate.runRallyTests(saltMaster, TARGET_NODE, artifacts_dir)
+                validate.runRallyTests(pepperEnv, TARGET_NODE, artifacts_dir)
             } else {
                 common.infoMsg("Skipping Rally tests")
             }
@@ -72,7 +73,7 @@ node() {
 
         stage('Run SPT tests') {
             if (RUN_SPT_TESTS.toBoolean() == true) {
-                validate.runSptTests(saltMaster, TARGET_NODE, artifacts_dir)
+                validate.runSptTests(pepperEnv, TARGET_NODE, artifacts_dir)
             } else {
                 common.infoMsg("Skipping SPT tests")
             }
@@ -84,9 +85,9 @@ node() {
                 def output_file = 'k8s-bootstrap-tests.txt'
                 def containerName = 'conformance_tests'
                 def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
-                test.runConformanceTests(saltMaster, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
+                test.runConformanceTests(pepperEnv, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
 
-                def file_content = validate.getFileContent(saltMaster, TEST_K8S_NODE, outfile)
+                def file_content = validate.getFileContent(pepperEnv, TEST_K8S_NODE, outfile)
                 writeFile file: "${artifacts_dir}${output_file}", text: file_content
             } else {
                 common.infoMsg("Skipping k8s bootstrap tests")
@@ -99,9 +100,9 @@ node() {
                 def output_file = 'report-k8s-e2e-tests.txt'
                 def containerName = 'conformance_tests'
                 def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
-                test.runConformanceTests(saltMaster, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
+                test.runConformanceTests(pepperEnv, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
 
-                def file_content = validate.getFileContent(saltMaster, TEST_K8S_NODE, outfile)
+                def file_content = validate.getFileContent(pepperEnv, TEST_K8S_NODE, outfile)
                 writeFile file: "${artifacts_dir}${output_file}", text: file_content
             } else {
                 common.infoMsg("Skipping k8s conformance e2e tests")
@@ -110,7 +111,7 @@ node() {
         stage('Generate report') {
             if (GENERATE_REPORT.toBoolean() == true) {
                 print("Generating html test report ...")
-                validate.generateTestReport(saltMaster, TARGET_NODE, artifacts_dir)
+                validate.generateTestReport(pepperEnv, TARGET_NODE, artifacts_dir)
             } else {
                 common.infoMsg("Skipping report generation")
             }
@@ -124,6 +125,6 @@ node() {
         currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
         throw e
     } finally {
-        validate.runCleanup(saltMaster, TARGET_NODE, artifacts_dir)
+        validate.runCleanup(pepperEnv, TARGET_NODE, artifacts_dir)
     }
 }

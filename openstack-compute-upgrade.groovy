@@ -12,8 +12,9 @@
 
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-def saltMaster
+def pepperEnv = "pepperEnv"
 def targetTestSubset
 def targetLiveSubset
 def targetLiveAll
@@ -27,12 +28,12 @@ def probe = 1
 node() {
     try {
 
-        stage('Connect to Salt master') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         stage('List target servers') {
-            minions = salt.getMinions(saltMaster, TARGET_SERVERS)
+            minions = salt.getMinions(pepperEnv, TARGET_SERVERS)
 
             if (minions.isEmpty()) {
                 throw new Exception("No minion was targeted")
@@ -55,14 +56,14 @@ node() {
 
 
         stage("Add new repos on test nodes") {
-            salt.enforceState(saltMaster, targetTestSubset, 'linux.system.repo')
+            salt.enforceState(pepperEnv, targetTestSubset, 'linux.system.repo')
         }
 
 
         opencontrail = null
 
         try {
-            opencontrail = salt.cmdRun(saltMaster, targetTestSubsetProbe, "salt-call grains.item roles | grep opencontrail.compute")
+            opencontrail = salt.cmdRun(pepperEnv, targetTestSubsetProbe, "salt-call grains.item roles | grep opencontrail.compute")
             print(opencontrail)
         } catch (Exception er) {
             common.infoMsg("opencontrail is not used")
@@ -70,13 +71,13 @@ node() {
 
         if(opencontrail != null) {
             stage('Remove OC component from repos on test nodes') {
-                salt.cmdRun(saltMaster, targetTestSubset, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.refresh_db', [], null, true)
+                salt.cmdRun(pepperEnv, targetTestSubset, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
+                salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.refresh_db', [], null, true)
             }
         }
 
         stage("List package upgrades") {
-            salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.list_upgrades', [], null, true)
+            salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.list_upgrades', [], null, true)
         }
 
         stage('Confirm upgrade on sample nodes') {
@@ -84,13 +85,13 @@ node() {
         }
 
         stage("Add new repos on sample nodes") {
-            salt.enforceState(saltMaster, targetLiveSubset, 'linux.system.repo')
+            salt.enforceState(pepperEnv, targetLiveSubset, 'linux.system.repo')
         }
 
         if(opencontrail != null) {
             stage('Remove OC component from repos on sample nodes') {
-                salt.cmdRun(saltMaster, targetLiveSubset, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(saltMaster, targetLiveSubset, 'pkg.refresh_db', [], null, true)
+                salt.cmdRun(pepperEnv, targetLiveSubset, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
+                salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'pkg.refresh_db', [], null, true)
             }
         }
 
@@ -98,7 +99,7 @@ node() {
 
         stage('Test upgrade on sample') {
             try {
-                salt.cmdRun(saltMaster, targetLiveSubset, args)
+                salt.cmdRun(pepperEnv, targetLiveSubset, args)
             } catch (Exception er) {
                 print(er)
             }
@@ -112,14 +113,14 @@ node() {
         args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade;'
 
         stage('Apply package upgrades on sample') {
-            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
             salt.printSaltCommandResult(out)
         }
 
         openvswitch = null
 
         try {
-            openvswitch = salt.cmdRun(saltMaster, targetLiveSubsetProbe, "salt-call grains.item roles | grep neutron.compute")
+            openvswitch = salt.cmdRun(pepperEnv, targetLiveSubsetProbe, "salt-call grains.item roles | grep neutron.compute")
         } catch (Exception er) {
             common.infoMsg("openvswitch is not used")
         }
@@ -128,21 +129,21 @@ node() {
             args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
 
             stage('Start ovs on sample nodes') {
-                out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, commandKwargs)
                 salt.printSaltCommandResult(out)
             }
             stage("Run salt states on sample nodes") {
-                salt.enforceState(saltMaster, targetLiveSubset, ['nova', 'neutron'])
+                salt.enforceState(pepperEnv, targetLiveSubset, ['nova', 'neutron'])
             }
         } else {
             stage("Run salt states on sample nodes") {
-                salt.enforceState(saltMaster, targetLiveSubset, ['nova', 'linux.system.repo'])
+                salt.enforceState(pepperEnv, targetLiveSubset, ['nova', 'linux.system.repo'])
             }
         }
 
         stage("Run Highstate on sample nodes") {
             try {
-                salt.enforceHighstate(saltMaster, targetLiveSubset)
+                salt.enforceHighstate(pepperEnv, targetLiveSubset)
             } catch (Exception er) {
                 common.errorMsg("Highstate was executed on ${targetLiveSubset} but something failed. Please check it and fix it accordingly.")
             }
@@ -155,20 +156,20 @@ node() {
         }
 
         stage("Add new repos on all targeted nodes") {
-            salt.enforceState(saltMaster, targetLiveAll, 'linux.system.repo')
+            salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo')
         }
 
         if(opencontrail != null) { 
             stage('Remove OC component from repos on all targeted nodes') {
-                salt.cmdRun(saltMaster, targetLiveAll, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(saltMaster, targetLiveAll, 'pkg.refresh_db', [], null, true)
+                salt.cmdRun(pepperEnv, targetLiveAll, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
+                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.refresh_db', [], null, true)
             }
         }
 
         args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" dist-upgrade;'
 
         stage('Apply package upgrades on all targeted nodes') {
-            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
             salt.printSaltCommandResult(out)
         }
 
@@ -176,21 +177,21 @@ node() {
             args = "sudo /usr/share/openvswitch/scripts/ovs-ctl start"
 
             stage('Start ovs on all targeted nodes') {
-                out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, commandKwargs)
                 salt.printSaltCommandResult(out)
             }
             stage("Run salt states on all targeted nodes") {
-                salt.enforceState(saltMaster, targetLiveAll, ['nova', 'neutron'])
+                salt.enforceState(pepperEnv, targetLiveAll, ['nova', 'neutron'])
             }
         } else {
             stage("Run salt states on all targeted nodes") {
-                salt.enforceState(saltMaster, targetLiveAll, ['nova', 'linux.system.repo'])
+                salt.enforceState(pepperEnv, targetLiveAll, ['nova', 'linux.system.repo'])
             }
         }
 
         stage("Run Highstate on all targeted nodes") {
             try {
-                salt.enforceHighstate(saltMaster, targetLiveAll)
+                salt.enforceHighstate(pepperEnv, targetLiveAll)
             } catch (Exception er) {
                 common.errorMsg("Highstate was executed ${targetLiveAll} but something failed. Please check it and fix it accordingly.")
             }

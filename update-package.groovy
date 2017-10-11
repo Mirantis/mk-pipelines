@@ -14,8 +14,9 @@
 
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-def saltMaster
+def pepperEnv = "pepperEnv"
 def targetTestSubset
 def targetLiveSubset
 def targetLiveAll
@@ -28,12 +29,12 @@ def commandKwargs
 node() {
     try {
 
-        stage('Connect to Salt master') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         stage('List target servers') {
-            minions = salt.getMinions(saltMaster, TARGET_SERVERS)
+            minions = salt.getMinions(pepperEnv, TARGET_SERVERS)
 
             if (minions.isEmpty()) {
                 throw new Exception("No minion was targeted")
@@ -54,7 +55,7 @@ node() {
 
         stage("List package upgrades") {
             common.infoMsg("Listing all the packages that have a new update available on test nodes: ${targetTestSubset}")
-            salt.runSaltProcessStep(saltMaster, targetTestSubset, 'pkg.list_upgrades', [], null, true)
+            salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.list_upgrades', [], null, true)
             if(TARGET_PACKAGES != "" && TARGET_PACKAGES != "*"){
                 common.infoMsg("Note that only the ${TARGET_PACKAGES} would be installed from the above list of available updates on the ${targetTestSubset}")
             }
@@ -88,7 +89,7 @@ node() {
         }
 
         stage('Apply package upgrades on sample') {
-            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, packages, commandKwargs)
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, packages, commandKwargs)
             salt.printSaltCommandResult(out)
         }
 
@@ -99,7 +100,7 @@ node() {
         }
 
         stage('Apply package upgrades on all nodes') {
-            out = salt.runSaltCommand(saltMaster, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, packages, commandKwargs)
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, packages, commandKwargs)
             salt.printSaltCommandResult(out)
         }
 

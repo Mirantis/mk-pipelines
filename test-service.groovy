@@ -20,19 +20,15 @@ common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
+def python = new com.mirantis.mk.Python()
 
-// Define global variables
-def saltMaster
+def pepperEnv = "pepperEnv"
 
 node("python") {
     try {
 
-        //
-        // Prepare connection
-        //
-        stage ('Connect to salt master') {
-            // Connect to Salt master
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         //
@@ -46,11 +42,11 @@ node("python") {
                 def output_file = image.replaceAll('/', '-') + '.output'
 
                 // run image
-                test.runConformanceTests(saltMaster, 'ctl01*', TEST_K8S_API_SERVER, image)
+                test.runConformanceTests(pepperEnv, 'ctl01*', TEST_K8S_API_SERVER, image)
 
                 // collect output
                 sh "mkdir -p ${artifacts_dir}"
-                file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/' + output_file)
+                file_content = salt.getFileContent(pepperEnv, 'ctl01*', '/tmp/' + output_file)
                 writeFile file: "${artifacts_dir}${output_file}", text: file_content
                 sh "cat ${artifacts_dir}${output_file}"
 
@@ -63,11 +59,11 @@ node("python") {
                 def output_file = image.replaceAll('/', '-') + '.output'
 
                 // run image
-                test.runConformanceTests(saltMaster, 'ctl01*', TEST_K8S_API_SERVER, image)
+                test.runConformanceTests(pepperEnv, 'ctl01*', TEST_K8S_API_SERVER, image)
 
                 // collect output
                 sh "mkdir -p ${artifacts_dir}"
-                file_content = salt.getFileContent(saltMaster, 'ctl01*', '/tmp/' + output_file)
+                file_content = salt.getFileContent(pepperEnv, 'ctl01*', '/tmp/' + output_file)
                 writeFile file: "${artifacts_dir}${output_file}", text: file_content
                 sh "cat ${artifacts_dir}${output_file}"
 
@@ -78,14 +74,14 @@ node("python") {
 
         if (common.checkContains('TEST_SERVICE', 'openstack')) {
             if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
-                test.install_docker(saltMaster, TEST_TEMPEST_TARGET)
+                test.install_docker(pepperEnv, TEST_TEMPEST_TARGET)
             }
 
             stage('Run OpenStack tests') {
-                test.runTempestTests(saltMaster, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
+                test.runTempestTests(pepperEnv, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
             }
 
-            writeFile(file: 'report.xml', text: salt.getFileContent(saltMaster, TEST_TEMPEST_TARGET, '/root/report.xml'))
+            writeFile(file: 'report.xml', text: salt.getFileContent(pepperEnv, TEST_TEMPEST_TARGET, '/root/report.xml'))
             junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor:  Double.parseDouble(TEST_JUNIT_RATIO))
             def testResults = test.collectJUnitResults(currentBuild.rawBuild.getAction(hudson.tasks.test.AbstractTestResultAction.class))
             if(testResults){

@@ -10,20 +10,21 @@
 
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-def saltMaster
+def pepperEnv = "pepperEnv"
 def target = ['expression': TARGET_SERVERS, 'type': 'compound']
 def result
 
 node("python") {
     try {
 
-        stage('Connect to Salt master') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         stage('Update Jenkins jobs') {
-            result = salt.runSaltCommand(saltMaster, 'local', target, 'state.apply', null, 'jenkins.client')
+            result = salt.runSaltCommand(pepperEnv, 'local', target, 'state.apply', null, 'jenkins.client')
             salt.checkResult(result)
         }
 

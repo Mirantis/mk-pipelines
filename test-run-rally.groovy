@@ -17,9 +17,9 @@
 common = new com.mirantis.mk.Common()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
+def python = new com.mirantis.mk.Python()
 
-// Define global variables
-def saltMaster
+def pepperEnv = "pepperEnv"
 
 node("python") {
     try {
@@ -27,9 +27,8 @@ node("python") {
         //
         // Prepare connection
         //
-        stage ('Connect to salt master') {
-            // Connect to Salt master
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         //
@@ -37,14 +36,14 @@ node("python") {
         //
 
         stage('Run OpenStack Rally scenario') {
-            test.runRallyScenarios(saltMaster, IMAGE_LINK, TEST_TARGET, RALLY_SCENARIO, "/home/rally/rally_reports/",
+            test.runRallyScenarios(pepperEnv, IMAGE_LINK, TEST_TARGET, RALLY_SCENARIO, "/home/rally/rally_reports/",
                     DO_CLEANUP_RESOURCES)
         }
         stage('Copy test reports') {
-            test.copyTempestResults(saltMaster, TEST_TARGET)
+            test.copyTempestResults(pepperEnv, TEST_TARGET)
         }
         stage('Archiving test artifacts') {
-            test.archiveRallyArtifacts(saltMaster, TEST_TARGET)
+            test.archiveRallyArtifacts(pepperEnv, TEST_TARGET)
         }
     } catch (Throwable e) {
         currentBuild.result = 'FAILURE'
@@ -52,8 +51,8 @@ node("python") {
     } finally {
         if (CLEANUP_REPORTS_AND_CONTAINER.toBoolean()) {
             stage('Cleanup reports and container') {
-                test.removeReports(saltMaster, TEST_TARGET, "rally_reports", 'rally_reports.tar')
-                test.removeDockerContainer(saltMaster, TEST_TARGET, IMAGE_LINK)
+                test.removeReports(pepperEnv, TEST_TARGET, "rally_reports", 'rally_reports.tar')
+                test.removeDockerContainer(pepperEnv, TEST_TARGET, IMAGE_LINK)
             }
         }
     }

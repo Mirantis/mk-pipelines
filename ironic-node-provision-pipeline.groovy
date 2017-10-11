@@ -38,20 +38,20 @@ aws = new com.mirantis.mk.Aws()
 orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
+def python = new com.mirantis.mk.Python()
 
-// Define global variables
-def saltMaster
+def pepperEnv = "pepperEnv"
 def venv
 def outputs = [:]
 
 def ipRegex = "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"
 
-def waitIronicDeployment(master, node_names, target, auth_profile, deploy_timeout=60) {
+def waitIronicDeployment(pepperEnv, node_names, target, auth_profile, deploy_timeout=60) {
     def failed_nodes = []
     timeout (time:  deploy_timeout.toInteger(), unit: 'MINUTES'){
         while (node_names.size() != 0) {
             common.infoMsg("Waiting for nodes: " + node_names.join(", ") + " to be deployed.")
-            res = salt.runSaltProcessStep(master, target, 'ironicng.list_nodes', ["profile=${auth_profile}"], null, false)
+            res = salt.runSaltProcessStep(pepperEnv, target, 'ironicng.list_nodes', ["profile=${auth_profile}"], null, false)
             for (n in res['return'][0].values()[0]['nodes']){
                 if (n['name'] in node_names) {
                     if (n['provision_state'] == 'active'){
@@ -151,8 +151,8 @@ node("python") {
 
         outputs.put('salt_api', SALT_MASTER_URL)
 
-        // Connect to Salt master
-        saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+
 
 
         def nodes_to_deploy=[]
@@ -160,10 +160,10 @@ node("python") {
         stage('Trigger deployment on nodes') {
             if (IRONIC_DEPLOY_PARTITION_PROFILE == '' && IRONIC_DEPLOY_PROFILE == '' && IRONIC_DEPLOY_NODES == 'all'){
                 common.infoMsg("Trigger ironic.deploy")
-                salt.enforceState(saltMaster, RUN_TARGET, ['ironic.deploy'], true)
+                salt.enforceState(pepperEnv, RUN_TARGET, ['ironic.deploy'], true)
             } else {
                 if (IRONIC_DEPLOY_NODES == 'all'){
-                     res = salt.runSaltProcessStep(saltMaster, RUN_TARGET, 'ironicng.list_nodes', ["profile=${IRONIC_AUTHORIZATION_PROFILE}"], null, true)
+                     res = salt.runSaltProcessStep(pepperEnv, RUN_TARGET, 'ironicng.list_nodes', ["profile=${IRONIC_AUTHORIZATION_PROFILE}"], null, true)
                      // We trigger deployment on single salt minion
                      for (n in res['return'][0].values()[0]['nodes']){
                         nodes_to_deploy.add(n['name'])
@@ -180,13 +180,13 @@ node("python") {
 
                 for (n in nodes_to_deploy){
                     common.infoMsg("Trigger deployment of ${n}")
-                  salt.runSaltProcessStep(saltMaster, RUN_TARGET, 'ironicng.deploy_node', ["${n}"] + cmd_params, null, true)
+                  salt.runSaltProcessStep(pepperEnv, RUN_TARGET, 'ironicng.deploy_node', ["${n}"] + cmd_params, null, true)
                 }
             }
         }
 
         stage('Waiting for deployment is done.') {
-            def failed_nodes = waitIronicDeployment(saltMaster, nodes_to_deploy, RUN_TARGET, IRONIC_AUTHORIZATION_PROFILE, IRONIC_DEPLOY_TIMEOUT)
+            def failed_nodes = waitIronicDeployment(pepperEnv, nodes_to_deploy, RUN_TARGET, IRONIC_AUTHORIZATION_PROFILE, IRONIC_DEPLOY_TIMEOUT)
             if (failed_nodes){
                 common.errorMsg("Some nodes: " + failed_nodes.join(", ") + " are failed to deploy")
                 currentBuild.result = 'FAILURE'

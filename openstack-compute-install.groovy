@@ -10,8 +10,9 @@
 
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-def saltMaster
+def pepperEnv = "pepperEnv"
 def minions
 def result
 def command
@@ -21,12 +22,12 @@ def commandKwargs
 node() {
     try {
 
-        stage('Connect to Salt master') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         stage('List target servers') {
-            minions = salt.getMinions(saltMaster, TARGET_SERVERS)
+            minions = salt.getMinions(pepperEnv, TARGET_SERVERS)
 
             if (minions.isEmpty()) {
                 throw new Exception("No minion was targeted")
@@ -38,49 +39,49 @@ node() {
         }
 
         stage("Setup repositories") {
-            salt.enforceState(saltMaster, targetLiveAll, 'linux.system.repo', true)
+            salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo', true)
         }
 
         stage("Upgrade packages") {
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'pkg.upgrade', [], null, true)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.upgrade', [], null, true)
         }
 
         stage("Setup networking") {
             // Sync all of the modules from the salt master.
-            salt.syncAll(saltMaster, targetLiveAll)
+            salt.syncAll(pepperEnv, targetLiveAll)
 
             // Apply state 'salt' to install python-psutil for network configuration without restarting salt-minion to avoid losing connection.
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'state.apply',  ['salt', 'exclude=[{\'id\': \'salt_minion_service\'}, {\'id\': \'salt_minion_service_restart\'}, {\'id\': \'salt_minion_sync_all\'}]'], null, true)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'state.apply',  ['salt', 'exclude=[{\'id\': \'salt_minion_service\'}, {\'id\': \'salt_minion_service_restart\'}, {\'id\': \'salt_minion_sync_all\'}]'], null, true)
 
             // Restart salt-minion to take effect.
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'service.restart', ['salt-minion'], null, true, 10)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'service.restart', ['salt-minion'], null, true, 10)
 
             // Configure networking excluding vhost0 interface.
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'state.apply',  ['linux.network', 'exclude=[{\'id\': \'linux_interface_vhost0\'}]'], null, true)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'state.apply',  ['linux.network', 'exclude=[{\'id\': \'linux_interface_vhost0\'}]'], null, true)
 
             // Kill unnecessary processes ifup/ifdown which is stuck from previous state linux.network.
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'ps.pkill', ['ifup'], null, false)
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'ps.pkill', ['ifdown'], null, false)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'ps.pkill', ['ifup'], null, false)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'ps.pkill', ['ifdown'], null, false)
 
             // Restart networking to bring UP all interfaces.
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'service.restart', ['networking'], null, true, 300)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'service.restart', ['networking'], null, true, 300)
         }
 
         stage("Highstate compute") {
             // Execute highstate without state opencontrail.client.
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'state.highstate', ['exclude=opencontrail.client'], null, true)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'state.highstate', ['exclude=opencontrail.client'], null, true)
 
             // Apply nova state to remove libvirt default bridge virbr0.
-            salt.enforceState(saltMaster, targetLiveAll, 'nova', true)
+            salt.enforceState(pepperEnv, targetLiveAll, 'nova', true)
 
             // Execute highstate.
-            salt.enforceHighstate(saltMaster, targetLiveAll, true)
+            salt.enforceHighstate(pepperEnv, targetLiveAll, true)
 
             // Restart supervisor-vrouter.
-            salt.runSaltProcessStep(saltMaster, targetLiveAll, 'service.restart', ['supervisor-vrouter'], null, true, 300)
+            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'service.restart', ['supervisor-vrouter'], null, true, 300)
 
             // Apply salt,collectd to update information about current network interfaces.
-            salt.enforceState(saltMaster, targetLiveAll, 'salt,collectd', true)
+            salt.enforceState(pepperEnv, targetLiveAll, 'salt,collectd', true)
         }
 
     } catch (Throwable e) {

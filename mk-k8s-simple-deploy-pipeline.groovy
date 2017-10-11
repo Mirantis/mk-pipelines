@@ -29,13 +29,15 @@ openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
 orchestrate = new com.mirantis.mk.Orchestrate()
 test = new com.mirantis.mk.Test()
+def python = new com.mirantis.mk.Python()
+
+def pepperEnv = "pepperEnv"
 artifacts_dir = "_artifacts"
 
 node {
 
     // connection objects
     def openstackCloud
-    def saltMaster
 
     // value defaults
     def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
@@ -70,34 +72,34 @@ node {
     stage("Connect to Salt master") {
         saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
         saltMasterUrl = "http://${saltMasterHost}:8088"
-        saltMaster = salt.connection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
+        python.setupPepperVirtualenv(venvPepper, saltMasterUrl, SALT_MASTER_CREDENTIALS)
     }
 
     stage("Install core infra") {
-        orchestrate.installFoundationInfra(saltMaster)
-        orchestrate.validateFoundationInfra(saltMaster)
+        orchestrate.installFoundationInfra(pepperEnv)
+        orchestrate.validateFoundationInfra(pepperEnv)
     }
 
     stage("Install Kubernetes infra") {
-        orchestrate.installOpenstackMcpInfra(saltMaster)
+        orchestrate.installOpenstackMcpInfra(pepperEnv)
     }
 
     stage("Install Kubernetes control") {
-        orchestrate.installOpenstackMcpControl(saltMaster)
+        orchestrate.installOpenstackMcpControl(pepperEnv)
     }
 
     if (RUN_TESTS == "1") {
         sleep(30)
         stage('Run k8s bootstrap tests') {
-            test.runConformanceTests(saltMaster, 'ctl01*', K8S_API_SERVER, 'tomkukral/k8s-scripts')
+            test.runConformanceTests(pepperEnv, 'ctl01*', K8S_API_SERVER, 'tomkukral/k8s-scripts')
         }
 
         stage("Run k8s conformance e2e tests") {
-            test.runConformanceTests(saltMaster, 'ctl01*', K8S_API_SERVER, CONFORMANCE_IMAGE)
+            test.runConformanceTests(pepperEnv, 'ctl01*', K8S_API_SERVER, CONFORMANCE_IMAGE)
         }
 
         stage("Copy k8s e2e test output to config node ") {
-            test.copyTestsOutput(saltMaster,CONFORMANCE_IMAGE)
+            test.copyTestsOutput(pepperEnv,CONFORMANCE_IMAGE)
         }
 
         stage("Copy k8s e2e test output to host ") {
@@ -105,7 +107,7 @@ node {
                 mkdir ${env.WORKSPACE}/${artifacts_dir}
                '''
             try {
-                test.catTestsOutput(saltMaster,CONFORMANCE_IMAGE) >> ${env.WORKSPACE}/${artifacts_dir}/$CONFORMANCE_IMAGE
+                test.catTestsOutput(pepperEnv,CONFORMANCE_IMAGE) >> ${env.WORKSPACE}/${artifacts_dir}/$CONFORMANCE_IMAGE
             } catch (InterruptedException x) {
                 echo "The job was aborted"
             } finally {

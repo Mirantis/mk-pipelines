@@ -12,9 +12,9 @@
 
 common = new com.mirantis.mk.Common()
 salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-// configure global variables
-def saltMaster
+def pepperEnv = "pepperEnv"
 
 def runCephCommand(master, cmd) {
     return salt.cmdRun(master, ADMIN_HOST, cmd)
@@ -25,11 +25,10 @@ def grains
 node("python") {
 
     stage('Load cluster information') {
-        // create connection to salt master
-        saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
         // get list of disk from grains
-        grains = salt.getGrain(saltMaster, 'I@ceph:osd')['return'][0]
+        grains = salt.getGrain(pepperEnv, 'I@ceph:osd')['return'][0]
         common.prettyPrint(grains)
 
     }
@@ -52,7 +51,7 @@ node("python") {
                 print(disk.value)
                 print(disk.key)
                 def cmd = "ceph osd crush set ${osd_id} ${disk.value.weight} host=${hostname}"
-                print(runCephCommand(saltMaster, cmd))
+                print(runCephCommand(pepperEnv, cmd))
             }
         }
 

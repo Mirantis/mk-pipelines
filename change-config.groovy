@@ -15,8 +15,9 @@
 
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
 
-def saltMaster
+def pepperEnv = "pepperEnv"
 def targetTestSubset
 def targetLiveSubset
 def targetLiveAll
@@ -34,20 +35,20 @@ node() {
             states = null
         }
 
-        stage('Connect to Salt master') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         if (common.validInputParam("PULL_MODEL") && PULL_MODEL.toBoolean() == true) {
             stage('Update the reclass cluster model') {
                 def saltMasterTarget = ['expression': 'I@salt:master', 'type': 'compound']
-                result = salt.runSaltCommand(saltMaster, 'local', saltMasterTarget, 'state.apply', null, "reclass.storage.data")
+                result = salt.runSaltCommand(pepperEnv, 'local', saltMasterTarget, 'state.apply', null, "reclass.storage.data")
                 salt.checkResult(result)
             }
         }
 
         stage('List target servers') {
-            minions = salt.getMinions(saltMaster, TARGET_SERVERS)
+            minions = salt.getMinions(pepperEnv, TARGET_SERVERS)
             if (minions.isEmpty()) {
                 throw new Exception("No minion was targeted")
             }
@@ -68,7 +69,7 @@ node() {
             def kwargs = [
                 'test': true
             ]
-            result = salt.runSaltCommand(saltMaster, 'local', targetTestSubset, 'state.apply', null, states, kwargs)
+            result = salt.runSaltCommand(pepperEnv, 'local', targetTestSubset, 'state.apply', null, states, kwargs)
             salt.checkResult(result)
         }
 
@@ -79,7 +80,7 @@ node() {
         }
 
         stage('Apply config changes on sample') {
-            result = salt.runSaltCommand(saltMaster, 'local', targetLiveSubset, 'state.apply', null, states)
+            result = salt.runSaltCommand(pepperEnv, 'local', targetLiveSubset, 'state.apply', null, states)
             salt.checkResult(result)
         }
 
@@ -90,7 +91,7 @@ node() {
         }
 
         stage('Apply config changes on all nodes') {
-            result = salt.runSaltCommand(saltMaster, 'local', targetLiveAll, 'state.apply', null, states)
+            result = salt.runSaltCommand(pepperEnv, 'local', targetLiveAll, 'state.apply', null, states)
             salt.checkResult(result)
         }
 
