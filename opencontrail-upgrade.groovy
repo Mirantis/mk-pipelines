@@ -54,7 +54,7 @@ def void runCommonCommands(target, command, args, check, salt, pepperEnv, common
 node() {
 
     stage('Setup virtualenv for Pepper') {
-        python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
     }
 
     if (STAGE_CONTROLLERS_UPGRADE.toBoolean() == true && !errorOccured) {

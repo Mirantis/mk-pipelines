@@ -28,7 +28,7 @@ def runCephCommand(master, cmd) {
 node("python") {
 
     // create connection to salt master
-    python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+    python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
     if (flags.size() > 0) {
         stage('Set cluster flags') {

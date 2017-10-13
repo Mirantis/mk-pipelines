@@ -151,7 +151,7 @@ node("python") {
 
         outputs.put('salt_api', SALT_MASTER_URL)
 
-        python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
 
 

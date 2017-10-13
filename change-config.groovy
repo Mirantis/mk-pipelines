@@ -36,7 +36,7 @@ node() {
         }
 
         stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         if (common.validInputParam("PULL_MODEL") && PULL_MODEL.toBoolean() == true) {

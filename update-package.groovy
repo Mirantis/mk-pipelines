@@ -30,7 +30,7 @@ node() {
     try {
 
         stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         stage('List target servers') {

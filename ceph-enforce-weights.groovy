@@ -25,7 +25,7 @@ def grains
 node("python") {
 
     stage('Load cluster information') {
-        python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
         // get list of disk from grains
         grains = salt.getGrain(pepperEnv, 'I@ceph:osd')['return'][0]

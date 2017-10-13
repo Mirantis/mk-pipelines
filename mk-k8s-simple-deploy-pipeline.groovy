@@ -72,7 +72,7 @@ node {
     stage("Connect to Salt master") {
         saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
         saltMasterUrl = "http://${saltMasterHost}:8088"
-        python.setupPepperVirtualenv(venvPepper, saltMasterUrl, SALT_MASTER_CREDENTIALS)
+        python.setupPepperVirtualenv(pepperEnv, saltMasterUrl, SALT_MASTER_CREDENTIALS)
     }
 
     stage("Install core infra") {

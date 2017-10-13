@@ -6,7 +6,7 @@ def pepperEnv = "pepperEnv"
 targetExpression = TARGET_MINIONS ? TARGET_MINIONS : "E@kvm01.*"
 
 node() {
-    python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+    python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
     common.infoMsg("Enforcing kubernetes state..")
     stage("Update k8s control") {

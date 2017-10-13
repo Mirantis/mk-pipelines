@@ -16,7 +16,7 @@ def pepperEnv = "pepperEnv"
 node{
   def saltMaster;
   stage('Setup virtualenv for Pepper') {
-    python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+    python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
   }
   stage("Clean old containers"){
     salt.cmdRun(pepperEnv, 'I@jenkins:slave', """

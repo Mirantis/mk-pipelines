@@ -19,7 +19,7 @@ def pepperEnv = "pepperEnv"
 node() {
 
     stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
     }
 
     if (STAGE_TEST_UPGRADE.toBoolean() == true) {

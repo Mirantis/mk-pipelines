@@ -117,7 +117,7 @@ node {
             saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
             currentBuild.description = "${HEAT_STACK_NAME}: ${saltMasterHost}"
             saltMasterUrl = "http://${saltMasterHost}:${saltMasterPort}"
-            python.setupPepperVirtualenv(venvPepper, saltMasterUrl, SALT_MASTER_CREDENTIALS)
+            python.setupPepperVirtualenv(pepperEnv, saltMasterUrl, SALT_MASTER_CREDENTIALS)
         }
 
         //

@@ -28,7 +28,7 @@ node("python") {
         // Prepare connection
         //
         stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
         //
