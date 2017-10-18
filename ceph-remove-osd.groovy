@@ -38,18 +38,17 @@ node("python") {
         }
     }
 
-    // get list of disk at the osd
-    def pillar_disks = salt.getPillar(pepperEnv, HOST, 'ceph:osd:disk')['return'][0].values()[0]
-    def hostname_id = salt.getPillar(pepperEnv, HOST, 'ceph:osd:host_id')['return'][0].values()[0]
     def osd_ids = []
 
-    print("host_id is ${hostname_id}")
     print("osds:")
     print(osds)
 
-    for (i in pillar_disks) {
-        def osd_id = (hostname_id + i.key).toInteger().toString()
-        print("Evaluating ${osd_id}")
+    // get list of osd disks of the host
+    def ceph_disks = salt.getGrain(pepperEnv, HOST, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
+    common.prettyPrint(ceph_disks)
+
+    for (i in ceph_disks) {
+        def osd_id = i.getKey().toString()
         if (osd_id in osds || OSD == '*') {
             osd_ids.add('osd.' + osd_id)
             print("Will delete " + osd_id)
@@ -114,5 +113,4 @@ node("python") {
             }
         }
     }
-
 }
