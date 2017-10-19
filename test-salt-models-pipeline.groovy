@@ -181,20 +181,20 @@ node("python") {
           acc = 0
           retryNodes = failedNodes
           failedNodes = []
-          for (retryNode in retryNodes) {
+          for (int i = 0; i < retryNodes.size(); i++) {
             if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
               parallel branches
               branches = [:]
               acc = 0
             }
 
-            common.infoMsg("Test of ${retryNode[2]} failed, retrigger it to make sure")
-            branches[retryNode[2]] = {
+            common.infoMsg("Test of ${retryNodes[i][2]} failed, retrigger it to make sure")
+            branches[retryNodes[i][2]] = {
               try {
-                  triggerTestNodeJob(retryNode[0], retryNode[1], retryNode[2], retryNode[3], retryNode[4])
+                  triggerTestNodeJob(retryNodes[i][0], retryNodes[i][1], retryNodes[i][2], retryNodes[i][3], retryNodes[i][4])
               } catch (Exception e) {
-                failedNodes << retryNode
-                common.warningMsg("Test of ${retryNode[2]} failed :  ${e}")
+                failedNodes << retryNodes[i]
+                common.warningMsg("Test of ${retryNodes[i][2]} failed :  ${e}")
               }
             }
             acc++
