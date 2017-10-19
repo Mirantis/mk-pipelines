@@ -165,7 +165,7 @@ node("python") {
                 triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource)
             } catch (Exception e) {
               failedNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
-              common.warningMsg("Test of ${retryNode[2]} failed :  ${e}")
+              common.warningMsg("Test of ${clusterName} failed :  ${e}")
             }
           }
           acc++;
@@ -174,8 +174,9 @@ node("python") {
           parallel branches
         }
 
-        def nbRetry = 2
-        for (int i = 0; i < nbRetry && failedNodes; ++i) {
+        def nbRetry = 1
+        def maxNbRetry = infraYMLs.size() > 10 ? infraYMLs.size() / 2 : 10
+        for (int i = 0; i < nbRetry && failedNodes && failedNodes.size() <= maxNbRetry; ++i) {
           branches = [:]
           acc = 0
           retryNodes = failedNodes
@@ -201,6 +202,9 @@ node("python") {
           if (acc != 0) {
             parallel branches
           }
+        }
+        if (failedNodes) {
+          currentBuild.result = "FAILURE"
         }
       }
     }
