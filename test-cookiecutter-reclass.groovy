@@ -41,7 +41,7 @@ def generateModel(modelFile, cutterEnv) {
 
     common.infoMsg("Generating model from context ${modelFile}")
 
-    def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight"]
+    def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "stacklight", "ceph"]
     for (product in productList) {
 
         // get templateOutputDir and productDir
