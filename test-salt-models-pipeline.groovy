@@ -47,6 +47,28 @@ try {
     defaultGitUrl = null
 }
 def checkouted = false
+
+
+
+def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource) {
+  build job: "test-salt-model-node", parameters: [
+    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
+    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
+    [$class: 'StringParameterValue', name: 'CLUSTER_NAME', value: clusterName],
+    [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
+    [$class: 'StringParameterValue', name: 'FORMULAS_SOURCE', value: formulasSource],
+    [$class: 'StringParameterValue', name: 'EXTRA_FORMULAS', value: EXTRA_FORMULAS],
+    [$class: 'StringParameterValue', name: 'FORMULAS_REVISION', value: FORMULAS_REVISION],
+    [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
+    [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
+    [$class: 'StringParameterValue', name: 'MAX_CPU_PER_JOB', value: MAX_CPU_PER_JOB],
+    [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF],
+    [$class: 'BooleanParameterValue', name: 'LEGACY_TEST_MODE', value: LEGACY_TEST_MODE.toBoolean()],
+    [$class: 'BooleanParameterValue', name: 'RECLASS_IGNORE_CLASS_NOTFOUND', value: RECLASS_IGNORE_CLASS_NOTFOUND.toBoolean()]
+  ]
+}
+
+
 node("python") {
   try{
     stage("checkout") {
@@ -114,6 +136,7 @@ node("python") {
         }
 
         def branches = [:]
+        def failedNodes = []
         def acc = 0
 
         for (int i = 0; i < infraYMLs.size(); i++) {
@@ -138,25 +161,46 @@ node("python") {
           }
 
           branches[clusterName] = {
-            build job: "test-salt-model-node", parameters: [
-              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
-              [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
-              [$class: 'StringParameterValue', name: 'CLUSTER_NAME', value: clusterName],
-              [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
-              [$class: 'StringParameterValue', name: 'FORMULAS_SOURCE', value: formulasSource],
-              [$class: 'StringParameterValue', name: 'EXTRA_FORMULAS', value: EXTRA_FORMULAS],
-              [$class: 'StringParameterValue', name: 'FORMULAS_REVISION', value: FORMULAS_REVISION],
-              [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
-              [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
-              [$class: 'StringParameterValue', name: 'MAX_CPU_PER_JOB', value: MAX_CPU_PER_JOB],
-              [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF],
-              [$class: 'BooleanParameterValue', name: 'LEGACY_TEST_MODE', value: LEGACY_TEST_MODE.toBoolean()],
-              [$class: 'BooleanParameterValue', name: 'RECLASS_IGNORE_CLASS_NOTFOUND', value: RECLASS_IGNORE_CLASS_NOTFOUND.toBoolean()]
-            ]}
+            try {
+                triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource)
+            } catch (Exception e) {
+              failedNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
+              common.warningMsg("Test of ${retryNode[2]} failed :  ${e}")
+            }
+          }
           acc++;
         }
         if (acc != 0) {
           parallel branches
+        }
+
+        def nbRetry = 2
+        for (int i = 0; i < nbRetry && failedNodes; ++i) {
+          branches = [:]
+          acc = 0
+          retryNodes = failedNodes
+          failedNodes = []
+          for (retryNode in retryNodes) {
+            if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
+              parallel branches
+              branches = [:]
+              acc = 0
+            }
+
+            common.infoMsg("Test of ${retryNode[2]} failed, retrigger it to make sure")
+            branches[retryNode[2]] = {
+              try {
+                  triggerTestNodeJob(retryNode[0], retryNode[1], retryNode[2], retryNode[3], retryNode[4])
+              } catch (Exception e) {
+                failedNodes << retryNode
+                common.warningMsg("Test of ${retryNode[2]} failed :  ${e}")
+              }
+            }
+            acc++
+          }
+          if (acc != 0) {
+            parallel branches
+          }
         }
       }
     }
