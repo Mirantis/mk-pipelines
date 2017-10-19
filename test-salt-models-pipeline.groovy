@@ -174,7 +174,7 @@ node("python") {
           parallel branches
         }
 
-        def nbRetry = 1
+        def nbRetry = 2
         def maxNbRetry = infraYMLs.size() > 10 ? infraYMLs.size() / 2 : 10
         for (int i = 0; i < nbRetry && failedNodes && failedNodes.size() <= maxNbRetry; ++i) {
           branches = [:]
@@ -188,13 +188,16 @@ node("python") {
               acc = 0
             }
 
-            common.infoMsg("Test of ${retryNodes[j][2]} failed, retrigger it to make sure")
-            branches[retryNodes[j][2]] = {
+            def currentNode = retryNodes[j]
+
+            common.infoMsg("Test of ${currentNode[2]} failed, retrigger it to make sure")
+            branches[currentNode[2]] = {
               try {
-                  triggerTestNodeJob(retryNodes[j][0], retryNodes[j][1], retryNodes[j][2], retryNodes[j][3], retryNodes[j][4])
+
+                  triggerTestNodeJob(currentNode[0], currentNode[1], currentNode[2], currentNode[3], currentNode[4])
               } catch (Exception e) {
-                failedNodes << retryNodes[j]
-                common.warningMsg("Test of ${retryNodes[j][2]} failed :  ${e}")
+                failedNodes << currentNode
+                common.warningMsg("Test of ${currentNode[2]} failed :  ${e}")
               }
             }
             acc++
