@@ -138,7 +138,7 @@ parameters:
             }
         }
 
-        stage("Generate config drive") {
+        stage("Generate config drives") {
             // apt package genisoimage is required for this stage
 
             // download create-config-drive
@@ -163,15 +163,38 @@ parameters:
                 sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" user_data.sh"
             }
 
-            // create config-drive
+            // create cfg config-drive
             sh "./create-config-drive ${args}"
             sh("mkdir output-${clusterName} && mv ${saltMaster}.${clusterDomain}-config.iso output-${clusterName}/")
-            // save iso to artifacts
+
+            // save cfg iso to artifacts
             archiveArtifacts artifacts: "output-${clusterName}/${saltMaster}.${clusterDomain}-config.iso"
+
+            if (templateContext.default_context.offline_deployment && templateContext.default_context.offline_deployment == 'True'){
+                def aptlyServerHostname = templateContext.default_context.aptly_server_hostname
+                def user_data_script_apt_url = "https://raw.githubusercontent.com/richardfelkl/scripts/master/mirror_config.sh"
+                sh "wget -O mirror_config.sh ${user_data_script_apt_url}"
+
+                def smc_apt = [:]
+                smc_apt['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
+                smc_apt['APTLY_DEPLOY_IP'] = templateContext['default_context']['aptly_server_address']
+                smc_apt['APTLY_DEPLOY_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
+                smc_apt['APTLY_MINION_ID'] = "${aptlyServerHostname}.${clusterDomain}"
+
+                for (i in common.entries(smc_apt)) {
+                    sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" mirror_config.sh"
+                }
+
+                // create apt config-drive
+                sh "./create-config-drive --user-data mirror_config.sh --hostname ${aptlyServerHostname} ${aptlyServerHostname}.${clusterDomain}-config.iso"
+                sh("mv ${aptlyServerHostname}.${clusterDomain}-config.iso output-${clusterName}/")
+
+                // save apt iso to artifacts
+                archiveArtifacts artifacts: "output-${clusterName}/${aptlyServerHostname}.${clusterDomain}-config.iso"
+            }
         }
 
         stage ('Save changes reclass model') {
-
             sh(returnStatus: true, script: "tar -zcf output-${clusterName}/${clusterName}.tar.gz -C ${modelEnv} .")
             archiveArtifacts artifacts: "output-${clusterName}/${clusterName}.tar.gz"
 
