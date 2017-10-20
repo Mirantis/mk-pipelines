@@ -30,7 +30,6 @@
  */
 
 common = new com.mirantis.mk.Common()
-salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 validate = new com.mirantis.mcp.Validate()
 def python = new com.mirantis.mk.Python()
@@ -50,18 +49,11 @@ node() {
                 sh "rm -r ${artifacts_dir}"
             }
             sh "mkdir -p ${artifacts_dir}"
-            def ext_variables = "-e spt_ssh_user=${SPT_SSH_USER} " +
-                    "-e spt_floating_network=${FLOATING_NETWORK} " +
-                    "-e spt_image=${SPT_IMAGE} -e spt_user=${SPT_IMAGE_USER} " +
-                    "-e spt_flavor=${SPT_FLAVOR} -e spt_availability_zone=${AVAILABILITY_ZONE} " +
-                    "-e floating_network=${FLOATING_NETWORK} -e rally_image=${RALLY_IMAGE} " +
-                    "-e rally_flavor=${RALLY_FLAVOR} -e availability_zone=${AVAILABILITY_ZONE} "
-            validate.runContainerConfiguration(pepperEnv, TEST_IMAGE, TARGET_NODE, artifacts_dir, ext_variables)
         }
 
         stage('Run Tempest tests') {
             if (RUN_TEMPEST_TESTS.toBoolean() == true) {
-                validate.runTempestTests(pepperEnv, TARGET_NODE, artifacts_dir, TEMPEST_TEST_SET)
+                validate.runTempestTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, TEMPEST_TEST_SET)
             } else {
                 common.infoMsg("Skipping Tempest tests")
             }
@@ -69,7 +61,11 @@ node() {
 
         stage('Run Rally tests') {
             if (RUN_RALLY_TESTS.toBoolean() == true) {
-                validate.runRallyTests(pepperEnv, TARGET_NODE, artifacts_dir)
+                def rally_variables = ["floating_network=${FLOATING_NETWORK}",
+                                       "rally_image=${RALLY_IMAGE}",
+                                       "rally_flavor=${RALLY_FLAVOR}",
+                                       "availability_zone=${AVAILABILITY_ZONE}"]
+                validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, rally_variables)
             } else {
                 common.infoMsg("Skipping Rally tests")
             }
@@ -77,7 +73,13 @@ node() {
 
         stage('Run SPT tests') {
             if (RUN_SPT_TESTS.toBoolean() == true) {
-                validate.runSptTests(pepperEnv, TARGET_NODE, artifacts_dir)
+                def spt_variables = ["spt_ssh_user=${SPT_SSH_USER}",
+                                     "spt_floating_network=${FLOATING_NETWORK}",
+                                     "spt_image=${SPT_IMAGE}",
+                                     "spt_user=${SPT_IMAGE_USER}",
+                                     "spt_flavor=${SPT_FLAVOR}",
+                                     "spt_availability_zone=${AVAILABILITY_ZONE}"]
+                validate.runSptTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, spt_variables)
             } else {
                 common.infoMsg("Skipping SPT tests")
             }
@@ -87,7 +89,6 @@ node() {
             if (RUN_K8S_TESTS.toBoolean() == true) {
                 def image = 'tomkukral/k8s-scripts'
                 def output_file = 'k8s-bootstrap-tests.txt'
-                def containerName = 'conformance_tests'
                 def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
                 test.runConformanceTests(pepperEnv, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
 
@@ -102,7 +103,6 @@ node() {
             if (RUN_K8S_TESTS.toBoolean() == true) {
                 def image = TEST_K8S_CONFORMANCE_IMAGE
                 def output_file = 'report-k8s-e2e-tests.txt'
-                def containerName = 'conformance_tests'
                 def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
                 test.runConformanceTests(pepperEnv, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
 
@@ -114,8 +114,8 @@ node() {
         }
         stage('Generate report') {
             if (GENERATE_REPORT.toBoolean() == true) {
-                print("Generating html test report ...")
-                validate.generateTestReport(pepperEnv, TARGET_NODE, artifacts_dir)
+                common.infoMsg("Generating html test report ...")
+                validate.generateTestReport(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir)
             } else {
                 common.infoMsg("Skipping report generation")
             }
@@ -128,7 +128,5 @@ node() {
         currentBuild.result = "FAILURE"
         currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
         throw e
-    } finally {
-        validate.runCleanup(pepperEnv, TARGET_NODE, artifacts_dir)
     }
 }
