@@ -5,7 +5,7 @@
  *  CREDENTIALS_ID
  *  KITCHEN_TESTS_PARALLEL
  */
-def common = new com.mirantis.mk.Common()
+common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ruby = new com.mirantis.mk.Ruby()
 
@@ -14,13 +14,6 @@ try {
   gerritRef = GERRIT_REFSPEC
 } catch (MissingPropertyException e) {
   gerritRef = null
-}
-
-def parallelGroupSize
-try {
-  parallelGroupSize = Integer.valueOf(PARALLEL_GROUP_SIZE)
-} catch (MissingPropertyException e) {
-  parallelGroupSize = 8
 }
 
 def defaultGitRef, defaultGitUrl
@@ -33,6 +26,43 @@ try {
 }
 
 def checkouted = false
+
+futureFormulas = []
+failedFormulas = []
+
+def setupRunner(defaultGitRef, defaultGitUrl) {
+  def branches = [:]
+  for (int i = 0; i < PARALLEL_GROUP_SIZE.toInteger() && i < futureFormulas.size(); i++) {
+    branches["Runner ${i}"] = {
+      while (futureFormulas && !failedFormulas) {
+        def currentFormula = futureFormulas[0] ? futureFormulas[0] : null
+        if (!currentFormula) {
+          continue
+        }
+        futureFormulas.remove(currentFormula)
+        try {
+          triggerTestFormulaJob(currentFormula, defaultGitRef, defaultGitUrl)
+        } catch (Exception e) {
+          failedFormulas << currentFormula
+          common.warningMsg("Test of ${currentFormula} failed :  ${e}")
+        }
+      }
+    }
+  }
+  parallel branches
+}
+
+def triggerTestFormulaJob(testEnv, defaultGitRef, defaultGitUrl) {
+  common.infoMsg("Test of ${testEnv} starts")
+  build job: "test-salt-formulas-env", parameters: [
+    [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
+    [$class: 'StringParameterValue', name: 'KITCHEN_ENV', value: testEnv],
+    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
+    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
+    [$class: 'StringParameterValue', name: 'SALT_OPTS', value: SALT_OPTS],
+    [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION]
+  ]
+}
 
 node("python") {
   try {
@@ -93,35 +123,20 @@ node("python") {
           }
           if (kitchenEnvs != null && kitchenEnvs != '') {
             def acc = 0
-            def kitchenTestRuns = [:]
             common.infoMsg("Found " + kitchenEnvs.size() + " environment(s)")
             for (int i = 0; i < kitchenEnvs.size(); i++) {
-              if (acc >= parallelGroupSize) {
-                parallel kitchenTestRuns
-                kitchenTestRuns = [:]
-                acc = 0
-              }
-              def testEnv = kitchenEnvs[i]
-              kitchenTestRuns[testEnv] = {
-                build job: "test-salt-formulas-env", parameters: [
-                  [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
-                  [$class: 'StringParameterValue', name: 'KITCHEN_ENV', value: testEnv],
-                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
-                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
-                  [$class: 'StringParameterValue', name: 'SALT_OPTS', value: SALT_OPTS],
-                  [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION]
-                ]
-              }
-              acc++;
+              futureFormulas << kitchenEnvs[i]
             }
-            if (acc != 0) {
-              parallel kitchenTestRuns
-            }
+            setupRunner(defaultGitRef, defaultGitUrl)
           } else {
             common.warningMsg(".kitchen.yml file not found, no kitchen tests triggered.")
           }
         }
       }
+    }
+    if (failedFormulas) {
+      currentBuild.result = "FAILURE"
+      common.warningMsg("The following tests failed: ${failedFormulas}")
     }
   } catch (Throwable e) {
     // If there was an error or exception thrown, the build failed
