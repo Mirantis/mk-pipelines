@@ -13,6 +13,8 @@
  *  MAX_CPU_PER_JOB
  *  LEGACY_TEST_MODE
  *  RECLASS_IGNORE_CLASS_NOTFOUND
+ *  APT_REPOSITORY
+ *  APT_REPOSITORY_GPG
  */
 
 def common = new com.mirantis.mk.Common()
@@ -59,7 +61,7 @@ throttle(['test-model']) {
         if (checkouted) {
           def workspace = common.getWorkspace()
           common.infoMsg("Running salt model test for node ${NODE_TARGET} in cluster ${CLUSTER_NAME}")
-          saltModelTesting.setupAndTestNode(NODE_TARGET, CLUSTER_NAME, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION, MAX_CPU_PER_JOB.toInteger(), RECLASS_IGNORE_CLASS_NOTFOUND, LEGACY_TEST_MODE)
+          saltModelTesting.setupAndTestNode(NODE_TARGET, CLUSTER_NAME, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION, MAX_CPU_PER_JOB.toInteger(), RECLASS_IGNORE_CLASS_NOTFOUND, LEGACY_TEST_MODE, APT_REPOSITORY, APT_REPOSITORY_GPG)
         }
       }
     } catch (Throwable e) {

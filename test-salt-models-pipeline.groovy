@@ -10,6 +10,8 @@
  *  MAX_CPU_PER_JOB
  *  LEGACY_TEST_MODE
  *  RECLASS_IGNORE_CLASS_NOTFOUND
+ *  APT_REPOSITORY
+ *  APT_REPOSITORY_GPG
  */
 
 def gerrit = new com.mirantis.mk.Gerrit()
@@ -94,7 +96,9 @@ def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, fo
     [$class: 'StringParameterValue', name: 'MAX_CPU_PER_JOB', value: MAX_CPU_PER_JOB],
     [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF],
     [$class: 'BooleanParameterValue', name: 'LEGACY_TEST_MODE', value: LEGACY_TEST_MODE.toBoolean()],
-    [$class: 'BooleanParameterValue', name: 'RECLASS_IGNORE_CLASS_NOTFOUND', value: RECLASS_IGNORE_CLASS_NOTFOUND.toBoolean()]
+    [$class: 'BooleanParameterValue', name: 'RECLASS_IGNORE_CLASS_NOTFOUND', value: RECLASS_IGNORE_CLASS_NOTFOUND.toBoolean()],
+    [$class: 'StringParameterValue', name: 'APT_REPOSITORY', value: APT_REPOSITORY],
+    [$class: 'StringParameterValue', name: 'APT_REPOSITORY_GPG', value: APT_REPOSITORY_GPG]
   ]
 }
 
