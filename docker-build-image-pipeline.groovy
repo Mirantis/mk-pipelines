@@ -31,6 +31,23 @@ node("docker") {
       stage("checkout") {
          git.checkoutGitRepository('.', IMAGE_GIT_URL, IMAGE_BRANCH, IMAGE_CREDENTIALS_ID)
       }
+
+      if (IMAGE_BRANCH == "master") {
+        try {
+          def tag = sh(script: "git describe --tags --abbrev=0", returnStdout: true).trim()
+          def revision = sh(script: "git describe --tags --abbrev=4 | grep -oP \"^${tag}-\\K.*\" | awk -F\\- '{print \$1}'", returnStdout: true).trim()
+          imageTagsList << tag
+          if (revision != "") {
+            imageTagsList << "${tag}-${revision}"
+          }
+          if (!imageTagsList.contains("latest")) {
+            imageTagsList << "latest"
+          }
+        } catch (Exception e) {
+          common.infoMsg("Impossible to find any tag")
+        }
+      }
+
       stage("build") {
         common.infoMsg("Building docker image ${IMAGE_NAME}")
         dockerApp = dockerLib.buildDockerImage(IMAGE_NAME, "", "${workspace}/${DOCKERFILE_PATH}", imageTagsList[0], buildArgs)
