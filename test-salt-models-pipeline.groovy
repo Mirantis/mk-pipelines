@@ -187,7 +187,7 @@ node("python") {
         setupRunner()
 
         def maxNodes = infraYMLs.size() > 10 ? infraYMLs.size() / 2 : 5
-        if (failedNodes.size() <= maxNodes) {
+        if (failedNodes && failedNodes.size() <= maxNodes) {
           common.infoMsg("Some tests failed. They will be retriggered to make sure the failure is correct")
           for (int retry = 0; retry < 2 && failedNodes; retry++) {
             futureNodes = failedNodes
