@@ -12,7 +12,6 @@
  *  RECLASS_IGNORE_CLASS_NOTFOUND
  */
 
-def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
 def git = new com.mirantis.mk.Git()
@@ -46,11 +45,42 @@ try {
     defaultGitRef = null
     defaultGitUrl = null
 }
+
 def checkouted = false
+futureNodes = []
+failedNodes = []
+common = new com.mirantis.mk.Common()
 
+def setupRunner() {
 
+  def branches = [:]
+  for (int i = 0; i < PARALLEL_NODE_GROUP_SIZE.toInteger() && i < futureNodes.size(); i++) {
+    branches["Runner ${i}"] = {
+      while (futureNodes) {
+        def currentNode = futureNodes[0] ? futureNodes[0] : null
+        if (!currentNode) {
+          continue
+        }
+
+        def clusterName = currentNode[2]
+        futureNodes.remove(currentNode)
+        try {
+            triggerTestNodeJob(currentNode[0], currentNode[1], currentNode[2], currentNode[3], currentNode[4])
+        } catch (Exception e) {
+          failedNodes << currentNode
+          common.warningMsg("Test of ${clusterName} failed :  ${e}")
+        }
+      }
+    }
+  }
+  failedNodes = []
+  if (branches) {
+    parallel branches
+  }
+}
 
 def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource) {
+  common.infoMsg("Test of ${clusterName} starts")
   build job: "test-salt-model-node", parameters: [
     [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
     [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
@@ -135,10 +165,6 @@ node("python") {
           common.infoMsg("Testing only modified clusters: ${infraYMLs}")
         }
 
-        def branches = [:]
-        def failedNodes = []
-        def acc = 0
-
         for (int i = 0; i < infraYMLs.size(); i++) {
           def infraYMLConfig = readYaml(file: infraYMLs[i])
           if(!infraYMLConfig["parameters"].containsKey("_param")){
@@ -154,58 +180,22 @@ node("python") {
           def clusterDomain = infraParams["cluster_domain"]
           def configHostname = infraParams["infra_config_hostname"]
           def testTarget = String.format("%s.%s", configHostname, clusterDomain)
-          if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
-            parallel branches
-            branches = [:]
-            acc = 0
-          }
 
-          branches[clusterName] = {
-            try {
-                triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource)
-            } catch (Exception e) {
-              failedNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
-              common.warningMsg("Test of ${clusterName} failed :  ${e}")
-            }
-          }
-          acc++;
-        }
-        if (acc != 0) {
-          parallel branches
+          futureNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
         }
 
-        def nbRetry = 2
-        def maxNbRetry = infraYMLs.size() > 10 ? infraYMLs.size() / 2 : 10
-        for (int i = 0; i < nbRetry && failedNodes && failedNodes.size() <= maxNbRetry; ++i) {
-          branches = [:]
-          acc = 0
-          retryNodes = failedNodes
-          failedNodes = []
-          for (int j = 0; j < retryNodes.size(); j++) {
-            if (acc >= PARALLEL_NODE_GROUP_SIZE.toInteger()) {
-              parallel branches
-              branches = [:]
-              acc = 0
-            }
+        setupRunner()
 
-            def currentNode = retryNodes[j]
-
-            common.infoMsg("Test of ${currentNode[2]} failed, retrigger it to make sure")
-            branches[currentNode[2]] = {
-              try {
-
-                  triggerTestNodeJob(currentNode[0], currentNode[1], currentNode[2], currentNode[3], currentNode[4])
-              } catch (Exception e) {
-                failedNodes << currentNode
-                common.warningMsg("Test of ${currentNode[2]} failed :  ${e}")
-              }
-            }
-            acc++
-          }
-          if (acc != 0) {
-            parallel branches
+        def maxNodes = infraYMLs.size() > 10 ? infraYMLs.size() / 2 : 5
+        if (failedNodes.size() <= maxNodes) {
+          common.infoMsg("Some tests failed. They will be retriggered to make sure the failure is correct")
+          for (int retry = 0; retry < 2 && failedNodes; retry++) {
+            futureNodes = failedNodes
+            failedNodes = []
+            setupRunner()
           }
         }
+
         if (failedNodes) {
           currentBuild.result = "FAILURE"
         }
