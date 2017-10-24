@@ -31,6 +31,7 @@
  *   OPENSTACK_API_PROJECT      OpenStack project to connect to
  *   OPENSTACK_API_CLIENT       Versions of OpenStack python clients
  *   OPENSTACK_API_VERSION      Version of the OpenStack API (2/3)
+ *   SLAVE_NODE                 Lable or node name where the job will be run
 
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
  *  required for STACK_TYPE=physical
@@ -76,7 +77,13 @@ if (STACK_TYPE == 'aws') {
     def openstackCloud
 }
 
-node("python") {
+def slave_node = 'python'
+
+if (common.validInputParam(SLAVE_NODE)) {
+    slave_node = SLAVE_NODE
+}
+
+node(slave_node) {
     try {
         // Set build-specific variables
         venv = "${env.WORKSPACE}/venv"
