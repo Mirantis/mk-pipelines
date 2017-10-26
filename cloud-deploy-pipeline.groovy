@@ -79,7 +79,7 @@ if (STACK_TYPE == 'aws') {
 
 def slave_node = 'python'
 
-if (common.validInputParam(SLAVE_NODE)) {
+if (common.validInputParam('SLAVE_NODE')) {
     slave_node = SLAVE_NODE
 }
 
