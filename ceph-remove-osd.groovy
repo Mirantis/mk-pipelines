@@ -7,6 +7,7 @@
  *  SALT_MASTER_CREDENTIALS     Credentials to the Salt API
  *
  *  HOST                        Host (minion id) to be removed
+ *  OSD                         Comma separated list of osd ids to be removed
  *  ADMIN_HOST                  Host (minion id) with admin keyring
  *  CLUSTER_FLAGS               Comma separated list of tags to apply to cluster
  *  WAIT_FOR_HEALTHY            Wait for cluster rebalance before stoping daemons
