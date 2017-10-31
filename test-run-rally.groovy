@@ -9,6 +9,7 @@
  *   IMAGE_LINK                      Link to docker image with Rally
  *   RALLY_SCENARIO                  Rally test scenario
  *   TEST_TARGET                     Salt target for Rally node
+ *   CONTAINER_NAME                  Name of the Docker container which runs Rally
  *   CLEANUP_REPORTS_AND_CONTAINER   Cleanup reports from rally,tempest container, remove all containers started the IMAGE_LINK
  *   DO_CLEANUP_RESOURCES            If "true": runs clean-up script for removing Rally and Tempest resources
  */
@@ -52,7 +53,7 @@ node("python") {
         if (CLEANUP_REPORTS_AND_CONTAINER.toBoolean()) {
             stage('Cleanup reports and container') {
                 test.removeReports(pepperEnv, TEST_TARGET, "rally_reports", 'rally_reports.tar')
-                test.removeDockerContainer(pepperEnv, TEST_TARGET, IMAGE_LINK)
+                test.removeDockerContainer(pepperEnv, TEST_TARGET, CONTAINER_NAME)
             }
         }
     }

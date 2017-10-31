@@ -9,7 +9,9 @@
  *   IMAGE_LINK                      Link to docker image with Rally and Tempest
  *   TEST_TEMPEST_PATTERN            If not false, run tests matched to pattern only
  *   TEST_TARGET                     Salt target for tempest node
- *   CLEANUP_REPORTS_AND_CONTAINER   Cleanup reports from rally,tempest container, remove all containers started the IMAGE_LINK
+ *   CLEANUP_REPORTS                 Cleanup reports from rally,tempest container, remove all containers started the IMAGE_LINK
+ *   SET                             Predefined set for tempest tests
+ *   CONCURRENCY                     How many processes to use to run Tempest tests
  *   DO_CLEANUP_RESOURCES            If "true": runs clean-up script for removing Rally and Tempest resources
  */
 
@@ -34,7 +36,8 @@ node("python") {
 
         stage('Run OpenStack Tempest tests') {
             test.runTempestTests(pepperEnv, IMAGE_LINK, TEST_TARGET, TEST_TEMPEST_PATTERN, "/home/rally/rally_reports/",
-                    DO_CLEANUP_RESOURCES)
+                    "/home/rally/keystonercv3", SET, CONCURRENCY, "mcp.conf", "mcp_skip.list", "/root/keystonercv3",
+                    "/root/rally_reports", DO_CLEANUP_RESOURCES)
         }
         stage('Copy test reports') {
             test.copyTempestResults(pepperEnv, TEST_TARGET)
@@ -46,10 +49,9 @@ node("python") {
         currentBuild.result = 'FAILURE'
         throw e
     } finally {
-        if (CLEANUP_REPORTS_AND_CONTAINER.toBoolean()) {
-            stage('Cleanup reports and container') {
+        if (CLEANUP_REPORTS.toBoolean()) {
+            stage('Cleanup reports') {
                 test.removeReports(pepperEnv, TEST_TARGET, "rally_reports", 'rally_reports.tar')
-                test.removeDockerContainer(pepperEnv, TEST_TARGET, IMAGE_LINK)
             }
         }
     }
