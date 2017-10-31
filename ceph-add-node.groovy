@@ -31,7 +31,7 @@ node("python") {
     }
 
     if (!found) {
-            common.errorMsg("No such HOST_TYPE was found. Please insert one of these types: mon/osd/rgw")
+            common.errorMsg("No such HOST_TYPE was found. Please insert one of the following types: mon/osd/rgw")
         break
     }
 

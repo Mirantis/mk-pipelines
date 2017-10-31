@@ -64,15 +64,15 @@ node("python") {
     }
 
     // wait for healthy cluster
-    if (common.validInputParam('WAIT_FOR_HEALTHY') && WAIT_FOR_HEALTHY.toBoolean()) {
+    if (WAIT_FOR_HEALTHY.toBoolean() == true) {
         stage('Waiting for healthy cluster') {
             while (true) {
                 def health = runCephCommand(pepperEnv, 'ceph health')['return'][0].values()[0]
-                if (health.contains('HEALTH OK')) {
+                if (health.contains('HEALTH_OK')) {
                     common.infoMsg('Cluster is healthy')
                     break;
                 }
-                sleep(60)
+                sleep(10)
             }
         }
     }
