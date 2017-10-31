@@ -37,9 +37,9 @@ node("docker") {
           def tag = sh(script: "git describe --tags --abbrev=0", returnStdout: true).trim()
           def revision = sh(script: "git describe --tags --abbrev=4 | grep -oP \"^${tag}-\\K.*\" | awk -F\\- '{print \$1}'", returnStdout: true).trim()
           imageTagsList << tag
-          if (revision != "") {
-            imageTagsList << "${tag}-${revision}"
-          }
+          revision = revision ? revision : "0"
+          imageTagsList << "${tag}-${revision}"
+
           if (!imageTagsList.contains("latest")) {
             imageTagsList << "latest"
           }
