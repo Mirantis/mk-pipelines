@@ -19,28 +19,28 @@ node() {
 
         stage('Update Aptly packages'){
             common.infoMsg("Updating Aptly packages.")
-            salt.enforceState(venvPepper, 'I@aptly:server', ['aptly'], true)
-            salt.runSaltProcessStep(venvPepper, 'I@aptly:server', 'cmd.run', ['/srv/scripts/aptly-update.sh'], null, true)
+            salt.enforceState(venvPepper, 'apt*', ['aptly'], true)
+            salt.runSaltProcessStep(venvPepper, 'apt*', 'cmd.run', ['/srv/scripts/aptly-update.sh'], null, true)
         }
 
         stage('Update Docker images'){
             common.infoMsg("Updating Docker images.")
-            salt.enforceState(venvPepper, 'I@aptly:server', ['docker.client.registry'], true)
+            salt.enforceState(venvPepper, 'apt*', ['docker.client.registry'], true)
         }
 
         stage('Update PyPi packages'){
             common.infoMsg("Updating PyPi packages.")
-            salt.runSaltProcessStep(venvPepper, 'I@aptly:server', 'cmd.run', ['pip2pi /srv/pypi_mirror/packages/ -r /srv/pypi_mirror/requirements.txt'], null, true)
+            salt.runSaltProcessStep(venvPepper, 'apt*', 'cmd.run', ['pip2pi /srv/pypi_mirror/packages/ -r /srv/pypi_mirror/requirements.txt'], null, true)
         }
 
         stage('Update Git repositories'){
             common.infoMsg("Updating Git repositories.")
-            salt.enforceState(venvPepper, 'I@aptly:server', ['git.server'], true)
+            salt.enforceState(venvPepper, 'apt*', ['git.server'], true)
         }
 
         stage('Update VM images'){
             common.infoMsg("Updating VM images.")
-            salt.runSaltProcessStep(venvPepper, 'I@aptly:server', 'cmd.run', ['/srv/scripts/update-images.sh'], null, true)
+            salt.runSaltProcessStep(venvPepper, 'apt*', 'cmd.run', ['/srv/scripts/update-images.sh'], null, true)
         }
 
     } catch (Throwable e) {
