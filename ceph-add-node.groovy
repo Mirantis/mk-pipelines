@@ -37,7 +37,7 @@ node("python") {
 
     if (HOST_TYPE.toLowerCase() != 'osd') {
 
-        // enforce crushmap `crushtool -c /etc/ceph/crushmap -o /etc/ceph/crushmap.compiled; ceph osd setcrushmap -i /etc/ceph/crushmap.compiled`
+        // launch VMs
         stage('Launch VMs') {
             salt.enforceState(pepperEnv, 'I@salt:control', 'salt.control', true)
 

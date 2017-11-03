@@ -11,8 +11,6 @@
  *  OSD                             Failed OSD ids to be replaced (comma-separated list - 1,2,3)
  *  DEVICE                          Comma separated list of failed devices that will be replaced at HOST (/dev/sdb,/dev/sdc)
  *  JOURNAL_OR_BLOCKDB_PARTITION    Comma separated list of partitions where journal or block_db for the failed devices on this HOST were stored (/dev/sdh2,/dev/sdh3)
- *  ENFORCE_CRUSHMAP                Set to true if the prepared crush map should be enforced
- *  WAIT_FOR_PG_REBALANCE           Wait for PGs to rebalance after osd is removed from crush map
  *  CLUSTER_FLAGS                   Comma separated list of tags to apply to cluster
  *  WAIT_FOR_HEALTHY                Wait for cluster rebalance before stoping daemons
  *
@@ -67,12 +65,13 @@ node("python") {
 
     // `ceph osd out <id> <id>`
     stage('Set OSDs out') {
-            runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd out ' + osd_ids.join(' '))
+        runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd out ' + osd_ids.join(' '))
     }
 
     // wait for healthy cluster
     if (WAIT_FOR_HEALTHY.toBoolean() == true) {
         stage('Waiting for healthy cluster') {
+            sleep(5)
             while (true) {
                 def health = runCephCommand(pepperEnv, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
                 if (health.contains('HEALTH_OK')) {
@@ -90,7 +89,7 @@ node("python") {
             salt.runSaltProcessStep(pepperEnv, HOST, 'service.stop', ['ceph-osd@' + i.replaceAll('osd.', '')],  null, true)
         }
     }
-
+    /*
     // `ceph osd crush remove osd.2`
     stage('Remove OSDs from CRUSH') {
         for (i in osd_ids) {
@@ -111,7 +110,7 @@ node("python") {
             }
         }
     }
-
+    */
     // remove keyring `ceph auth del osd.3`
     stage('Remove OSD keyrings from auth') {
         for (i in osd_ids) {
@@ -123,16 +122,6 @@ node("python") {
     stage('Remove OSDs') {
         for (i in osd_ids) {
             runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd rm ' + i)
-        }
-    }
-
-    // remove cluster flags
-    if (flags.size() > 0) {
-        stage('Unset cluster flags') {
-            for (flag in flags) {
-                common.infoMsg('Removing flag ' + flag)
-                runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd unset ' + flag)
-            }
         }
     }
 
@@ -168,7 +157,17 @@ node("python") {
         salt.enforceState(pepperEnv, HOST, 'ceph.osd', true)
     }
 
+    // remove cluster flags
+    if (flags.size() > 0) {
+        stage('Unset cluster flags') {
+            for (flag in flags) {
+                common.infoMsg('Removing flag ' + flag)
+                runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd unset ' + flag)
+            }
+        }
+    }
 
+    /*
     if (ENFORCE_CRUSHMAP.toBoolean() == true) {
 
         // enforce crushmap `crushtool -c /etc/ceph/crushmap -o /etc/ceph/crushmap.compiled; ceph osd setcrushmap -i /etc/ceph/crushmap.compiled`
@@ -181,4 +180,5 @@ node("python") {
             runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd setcrushmap -i /etc/ceph/crushmap.compiled')
         }
     }
+    */
 }

@@ -60,12 +60,13 @@ node("python") {
 
     // `ceph osd out <id> <id>`
     stage('Set OSDs out') {
-            runCephCommand(pepperEnv, 'ceph osd out ' + osd_ids.join(' '))
+        runCephCommand(pepperEnv, 'ceph osd out ' + osd_ids.join(' '))
     }
 
     // wait for healthy cluster
     if (WAIT_FOR_HEALTHY.toBoolean() == true) {
         stage('Waiting for healthy cluster') {
+            sleep(5)
             while (true) {
                 def health = runCephCommand(pepperEnv, 'ceph health')['return'][0].values()[0]
                 if (health.contains('HEALTH_OK')) {
