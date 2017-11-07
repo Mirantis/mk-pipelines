@@ -82,15 +82,7 @@ def testModel(modelFile, testEnv) {
     def templateContext = readYaml text: content
     def clusterName = templateContext.default_context.cluster_name
     def clusterDomain = templateContext.default_context.cluster_domain
-    if (SYSTEM_GIT_URL != "") {
-        dir("${testEnv}/classes/system") {
-            gerrit.gerritPatchsetCheckout(SYSTEM_GIT_URL, SYSTEM_GIT_REF, "HEAD", CREDENTIALS_ID)
-            common.errorMsg("Failed to obtain system reclass with url: ${SYSTEM_GIT_URL} and ${SYSTEM_GIT_REF}")
-        }
-    } else {
-            git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
-    }
-
+    git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
     saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", clusterName, EXTRA_FORMULAS, testEnv)
 }
 
@@ -179,5 +171,8 @@ node("python&&docker") {
          currentBuild.result = "FAILURE"
          currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
          throw e
+    } finally {
+         def dummy = "dummy"
+         //FAILING common.sendNotification(currentBuild.result,"",["slack"])
     }
 }
