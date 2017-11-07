@@ -60,6 +60,15 @@ node() {
 
           def branches = [:]
           def testModels = documentationOnly ? [] : TEST_MODELS.split(',')
+
+          if (!documentationOnly) {
+            branches["cookiecutter"] = {
+              build job: "test-mk-cookiecutter-templates", parameters: [
+                  [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
+                  [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
+                ]
+            }
+          }
             for (int i = 0; i < testModels.size(); i++) {
               def cluster = testModels[i]
               def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
