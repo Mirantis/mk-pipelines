@@ -31,6 +31,19 @@ def runCephCommand(master, target, cmd) {
     return salt.cmdRun(master, target, cmd)
 }
 
+def waitForHealthy(master, count=0, attempts=300) {
+    // wait for healthy cluster
+    while (count<attempts) {
+        def health = runCephCommand(master, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
+        if (health.contains('HEALTH_OK')) {
+            common.infoMsg('Cluster is healthy')
+            break;
+        }
+        count++
+        sleep(10)
+    }
+}
+
 node("python") {
 
     // create connection to salt master
@@ -70,17 +83,8 @@ node("python") {
 
     // wait for healthy cluster
     if (WAIT_FOR_HEALTHY.toBoolean() == true) {
-        stage('Waiting for healthy cluster') {
-            sleep(5)
-            while (true) {
-                def health = runCephCommand(pepperEnv, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
-                if (health.contains('HEALTH_OK')) {
-                    common.infoMsg('Cluster is healthy')
-                    break;
-                }
-                sleep(10)
-            }
-        }
+        sleep(5)
+        waitForHealthy(pepperEnv)
     }
 
     // stop osd daemons

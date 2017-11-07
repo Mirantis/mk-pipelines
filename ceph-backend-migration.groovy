@@ -12,6 +12,8 @@
  *  CLUSTER_FLAGS                   Comma separated list of tags to apply to cluster
  *  WAIT_FOR_HEALTHY                Wait for cluster rebalance before stoping daemons
  *  ORIGIN_BACKEND                  Ceph backend before upgrade
+ *  PER_OSD_CONTROL                 Set to true if Ceph status verification after every osd disk migration is desired
+ *  PER_OSD_HOST_CONTROL            Set to true if Ceph status verificaton after whole OSD host migration is desired
  *
  */
 
@@ -28,6 +30,19 @@ def osds = OSD.tokenize(',')
 
 def runCephCommand(master, target, cmd) {
     return salt.cmdRun(master, target, cmd)
+}
+
+def waitForHealthy(master, count=0, attempts=300) {
+    // wait for healthy cluster
+    while (count<attempts) {
+        def health = runCephCommand(master, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
+        if (health.contains('HEALTH_OK')) {
+            common.infoMsg('Cluster is healthy')
+            break;
+        }
+        count++
+        sleep(10)
+    }
 }
 
 node("python") {
@@ -72,16 +87,7 @@ node("python") {
 
                     // wait for healthy cluster before manipulating with osds
                     if (WAIT_FOR_HEALTHY.toBoolean() == true) {
-                        stage('Waiting for healthy cluster') {
-                            while (true) {
-                                def health = runCephCommand(pepperEnv, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
-                                if (health.contains('HEALTH_OK')) {
-                                    common.infoMsg('Cluster is healthy')
-                                    break;
-                                }
-                                sleep(5)
-                            }
-                        }
+                        waitForHealthy(pepperEnv)
                     }
 
                     // `ceph osd out <id> <id>`
@@ -89,19 +95,9 @@ node("python") {
                             runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd out ${osd_id}")
                     }
 
-                    // wait for healthy cluster
                     if (WAIT_FOR_HEALTHY.toBoolean() == true) {
-                        stage('Waiting for healthy cluster') {
-                            sleep(5)
-                            while (true) {
-                                def health = runCephCommand(pepperEnv, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
-                                if (health.contains('HEALTH_OK')) {
-                                    common.infoMsg('Cluster is healthy')
-                                    break;
-                                }
-                                sleep(10)
-                            }
-                        }
+                        sleep(5)
+                        waitForHealthy(pepperEnv)
                     }
 
                     // stop osd daemons
@@ -182,8 +178,32 @@ node("python") {
                         salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.refresh_pillar', [], null, true, 5)
                         salt.enforceState(pepperEnv, HOST, 'ceph.osd', true)
                     }
+
+                    if (PER_OSD_CONTROL.toBoolean() == true) {
+                        stage("Verify backend version for osd.${id}") {
+                            sleep(5)
+                            runCephCommand(pepperEnv, HOST, "ceph osd metadata ${id} | grep osd_objectstore")
+                            runCephCommand(pepperEnv, HOST, "ceph -s")
+                        }
+
+                        stage('Ask for manual confirmation') {
+                            input message: "From the verification commands above, please check the backend version of osd.${id} and ceph status. If it is correct, Do you want to continue to migrate next osd?"
+                        }
+                    }
                 }
             }
+            if (PER_OSD_HOST_CONTROL.toBoolean() == true) {
+                stage("Verify backend versions") {
+                    sleep(5)
+                    runCephCommand(pepperEnv, HOST, "ceph osd metadata | grep osd_objectstore -B2")
+                    runCephCommand(pepperEnv, HOST, "ceph -s")
+                }
+
+                stage('Ask for manual confirmation') {
+                    input message: "From the verification command above, please check the ceph status and backend version of osds on this host. If it is correct, Do you want to continue to migrate next OSD host?"
+                }
+            }
+
         }
         // remove cluster flags
         if (flags.size() > 0) {
