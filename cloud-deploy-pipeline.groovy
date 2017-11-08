@@ -331,28 +331,31 @@ node(slave_node) {
                 archiveArtifacts(artifacts: 'kubeconfig')
             }
 
-            stage('Scale Kubernetes computes') {
-                if (STACK_COMPUTE_COUNT > 0) {
-                    if (STACK_TYPE == 'aws') {
-                        // get stack info
-                        def scaling_group = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ComputesScalingGroup')
+            stage('Install Kubernetes computes') {
+                if (common.validInputParam('STACK_COMPUTE_COUNT')) {
+                    if (STACK_COMPUTE_COUNT > 0) {
+                        if (STACK_TYPE == 'aws') {
+                            // get stack info
+                            def scaling_group = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'ComputesScalingGroup')
 
-                        //update autoscaling group
-                        aws.updateAutoscalingGroup(venv, aws_env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
+                            //update autoscaling group
+                            aws.updateAutoscalingGroup(venv, aws_env_vars, scaling_group, ["--desired-capacity " + STACK_COMPUTE_COUNT])
 
-                        // wait for computes to boot up
-                        aws.waitForAutoscalingInstances(venv, aws_env_vars, scaling_group)
-                        sleep(60)
+                            // wait for computes to boot up
+                            aws.waitForAutoscalingInstances(venv, aws_env_vars, scaling_group)
+                            sleep(60)
 
-                    } else if (STACK_TYPE == 'heat') {
-                        envParams.put('cluster_node_count', STACK_COMPUTE_COUNT)
+                        } else if (STACK_TYPE == 'heat') {
+                            envParams.put('cluster_node_count', STACK_COMPUTE_COUNT)
 
-                        openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, "update")
-                        sleep(60)
+                            openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv, "update")
+                            sleep(60)
+                        }
+
                     }
-
-                    orchestrate.installKubernetesCompute(venvPepper)
                 }
+
+                orchestrate.installKubernetesCompute(venvPepper)
             }
         }
 
