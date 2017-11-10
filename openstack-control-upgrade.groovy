@@ -221,80 +221,66 @@ node() {
 
             def errorOccured = false
 
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:ctl01:provider')
-            def ctl01NodeProvider = _pillar['return'][0].values()[0]
+            def proxy_general_target = ""
+            def proxy_target_hosts = salt.getMinions(pepperEnv, 'I@horizon:server')
 
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:ctl02:provider')
-            def ctl02NodeProvider = _pillar['return'][0].values()[0]
-
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:ctl03:provider')
-            def ctl03NodeProvider = _pillar['return'][0].values()[0]
-
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:prx01:provider')
-            def prx01NodeProvider = _pillar['return'][0].values()[0]
-
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:prx02:provider')
-            def prx02NodeProvider = _pillar['return'][0].values()[0]
-
-
-            salt.runSaltProcessStep(pepperEnv, "${prx01NodeProvider}", 'virt.destroy', ["prx01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${prx02NodeProvider}", 'virt.destroy', ["prx02.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl01NodeProvider}", 'virt.destroy', ["ctl01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl02NodeProvider}", 'virt.destroy', ["ctl02.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl03NodeProvider}", 'virt.destroy', ["ctl03.${domain}"], null, true)
-
-
-            try {
-                salt.cmdRun(pepperEnv, "${prx01NodeProvider}", "[ ! -f /root/prx01.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/prx01.${domain}/system.qcow2 ./prx01.${domain}.qcow2.bak")
-            } catch (Exception e) {
-                common.warningMsg('File already exists')
+            for (t in proxy_target_hosts) {
+                def target = t.split("\\.")[0]
+                proxy_general_target = target.replaceAll("[0-9]", "")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                def nodeProvider = _pillar['return'][0].values()[0]
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
+                sleep(2)
+                try {
+                    salt.cmdRun(pepperEnv, "${nodeProvider}", "[ ! -f /root/${target}.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/${target}.${domain}/system.qcow2 ./${target}.${domain}.qcow2.bak")
+                } catch (Exception e) {
+                    common.warningMsg('File already exists')
+                }
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.undefine', ["${target}.${domain}"], null, true)
+                try {
+                    salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ${target}.${domain} -y")
+                } catch (Exception e) {
+                    common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
+                }
             }
-            try {
-                salt.cmdRun(pepperEnv, "${prx02NodeProvider}", "[ ! -f /root/prx02.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/prx02.${domain}/system.qcow2 ./prx02.${domain}.qcow2.bak")
-            } catch (Exception e) {
-                common.warningMsg('File already exists')
-            }
-            try {
-                salt.cmdRun(pepperEnv, "${ctl01NodeProvider}", "[ ! -f /root/ctl01.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/ctl01.${domain}/system.qcow2 ./ctl01.${domain}.qcow2.bak")
-            } catch (Exception e) {
-                common.warningMsg('File already exists')
-            }
-            try {
-                salt.cmdRun(pepperEnv, "${ctl02NodeProvider}", "[ ! -f /root/ctl02.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/ctl02.${domain}/system.qcow2 ./ctl02.${domain}.qcow2.bak")
-            } catch (Exception e) {
-                common.warningMsg('File already exists')
-            }
-            try {
-                salt.cmdRun(pepperEnv, "${ctl03NodeProvider}", "[ ! -f /root/ctl03.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/ctl03.${domain}/system.qcow2 ./ctl03.${domain}.qcow2.bak")
-            } catch (Exception e) {
-                common.warningMsg('File already exists')
-            }
+            def control_general_target = ""
+            def control_target_hosts = salt.getMinions(pepperEnv, 'I@keystone:server')
 
-
-            salt.runSaltProcessStep(pepperEnv, "${prx01NodeProvider}", 'virt.undefine', ["prx01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${prx02NodeProvider}", 'virt.undefine', ["prx02.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl01NodeProvider}", 'virt.undefine', ["ctl01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl02NodeProvider}", 'virt.undefine', ["ctl02.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl03NodeProvider}", 'virt.undefine', ["ctl03.${domain}"], null, true)
+            for (t in control_target_hosts) {
+                def target = t.split("\\.")[0]
+                control_general_target = target.replaceAll("[0-9]", "")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                def nodeProvider = _pillar['return'][0].values()[0]
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
+                sleep(2)
+                try {
+                    salt.cmdRun(pepperEnv, "${nodeProvider}", "[ ! -f /root/${target}.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/${target}.${domain}/system.qcow2 ./${target}.${domain}.qcow2.bak")
+                } catch (Exception e) {
+                    common.warningMsg('File already exists')
+                }
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.undefine', ["${target}.${domain}"], null, true)
+                try {
+                    salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ${target}.${domain} -y")
+                } catch (Exception e) {
+                    common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
+                }
+            }
 
             salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh'")
-
-            try {
-                salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ctl01.${domain},ctl02.${domain},ctl03.${domain},prx01.${domain},prx02.${domain} -y")
-            } catch (Exception e) {
-                common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
-            }
 
             // salt 'kvm*' state.sls salt.control
             salt.enforceState(pepperEnv, 'I@salt:control', 'salt.control')
 
-            // wait until ctl and prx nodes are registered in salt-key
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'ctl01')
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'ctl02')
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'ctl03')
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'prx01')
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'prx02')
-
+            for (t in control_target_hosts) {
+                def target = t.split("\\.")[0]
+                // wait until ctl and prx nodes are registered in salt-key
+                salt.minionPresent(pepperEnv, 'I@salt:master', '${target}')
+            }
+            for (t in proxy_target_hosts) {
+                def target = t.split("\\.")[0]
+                // wait until ctl and prx nodes are registered in salt-key
+                salt.minionPresent(pepperEnv, 'I@salt:master', '${target}')
+            }
 
             // salt '*' saltutil.refresh_pillar
             salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.refresh_pillar', [], null, true)
@@ -302,70 +288,70 @@ node() {
             salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.sync_all', [], null, true)
 
             try {
-                salt.enforceState(pepperEnv, 'ctl* or prx* or ctl*', ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
+                salt.enforceState(pepperEnv, "${proxy_general_target}* or ${control_general_target}*", ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
             } catch (Exception e) {
                 common.warningMsg('Received no response because salt-minion was restarted. We should continue to run')
             }
-            salt.enforceState(pepperEnv, 'ctl* or prx* or ctl*', ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
+            salt.enforceState(pepperEnv, "${proxy_general_target}* or ${control_general_target}*", ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
 
             // salt 'ctl*' state.sls keepalived
             // salt 'ctl*' state.sls haproxy
-            salt.enforceState(pepperEnv, 'ctl*', ['keepalived', 'haproxy'])
+            salt.enforceState(pepperEnv, "${control_general_target}*", ['keepalived', 'haproxy'])
             // salt 'ctl*' service.restart rsyslog
-            salt.runSaltProcessStep(pepperEnv, 'ctl*', 'service.restart', ['rsyslog'], null, true)
+            salt.runSaltProcessStep(pepperEnv, "${control_general_target}*", 'service.restart', ['rsyslog'], null, true)
             // salt "ctl*" state.sls memcached
             // salt "ctl*" state.sls keystone.server
             try {
                 try {
-                    salt.enforceState(pepperEnv, 'ctl*', ['memcached', 'keystone.server'])
-                    salt.runSaltProcessStep(pepperEnv, 'ctl*', 'service.restart', ['apache2'], null, true)
+                    salt.enforceState(pepperEnv, "${control_general_target}*", ['memcached', 'keystone.server'])
+                    salt.runSaltProcessStep(pepperEnv, "${control_general_target}*", 'service.restart', ['apache2'], null, true)
                 } catch (Exception e) {
                     common.warningMsg('Restarting Apache2 and enforcing keystone.server state again')
-                    salt.runSaltProcessStep(pepperEnv, 'ctl*', 'service.restart', ['apache2'], null, true)
-                    salt.enforceState(pepperEnv, 'ctl*', 'keystone.server')
+                    salt.runSaltProcessStep(pepperEnv, "${control_general_target}*", 'service.restart', ['apache2'], null, true)
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'keystone.server')
                 }
                 // salt 'ctl01*' state.sls keystone.client
                 try {
-                    salt.enforceState(pepperEnv, 'I@keystone:client and ctl*', 'keystone.client')
+                    salt.enforceState(pepperEnv, "I@keystone:client and ${control_general_target}*", 'keystone.client')
                 } catch (Exception e) {
                     common.warningMsg('running keystone.client state again')
-                    salt.enforceState(pepperEnv, 'I@keystone:client and ctl*', 'keystone.client')
+                    salt.enforceState(pepperEnv, "I@keystone:client and ${control_general_target}*", 'keystone.client')
                 }
                 try {
-                    salt.enforceState(pepperEnv, 'ctl*', 'glance')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'glance')
                 } catch (Exception e) {
                     common.warningMsg('running glance state again')
-                    salt.enforceState(pepperEnv, 'ctl*', 'glance')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'glance')
                 }                // salt 'ctl*' state.sls glusterfs.client
-                salt.enforceState(pepperEnv, 'ctl*', 'glusterfs.client')
+                salt.enforceState(pepperEnv, "${control_general_target}*", 'glusterfs.client')
                 // salt 'ctl*' state.sls keystone.server
-                salt.enforceState(pepperEnv, 'ctl*', 'keystone.server')
+                salt.enforceState(pepperEnv, "${control_general_target}*", 'keystone.server')
                 // salt 'ctl*' state.sls nova
                 try {
-                    salt.enforceState(pepperEnv, 'ctl*', 'nova')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'nova')
                 } catch (Exception e) {
                     common.warningMsg('running nova state again')
-                    salt.enforceState(pepperEnv, 'ctl*', 'nova')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'nova')
                 }
                 // salt 'ctl*' state.sls cinder
                 try {
-                    salt.enforceState(pepperEnv, 'ctl*', 'cinder')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'cinder')
                 } catch (Exception e) {
                     common.warningMsg('running cinder state again')
-                    salt.enforceState(pepperEnv, 'ctl*', 'cinder')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'cinder')
                 }
                 try {
-                    salt.enforceState(pepperEnv, 'ctl*', 'neutron')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'neutron')
                 } catch (Exception e) {
                     common.warningMsg('running neutron state again')
-                    salt.enforceState(pepperEnv, 'ctl*', 'neutron')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'neutron')
                 }
                 // salt 'ctl*' state.sls heat
                 try {
-                    salt.enforceState(pepperEnv, 'ctl*', 'heat')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'heat')
                 } catch (Exception e) {
                     common.warningMsg('running heat state again')
-                    salt.enforceState(pepperEnv, 'ctl*', 'heat')
+                    salt.enforceState(pepperEnv, "${control_general_target}*", 'heat')
                 }
 
             } catch (Exception e) {
@@ -430,7 +416,7 @@ node() {
                 ceph = null
 
                 try {
-                    ceph = salt.cmdRun(pepperEnv, 'ctl*', "salt-call grains.item roles | grep ceph.client")
+                    ceph = salt.cmdRun(pepperEnv, "${control_general_target}*", "salt-call grains.item roles | grep ceph.client")
 
                 } catch (Exception er) {
                     common.infoMsg("Ceph is not used")
@@ -438,42 +424,42 @@ node() {
 
                 if(ceph != null) {
                     try {
-                        salt.enforceState(pepperEnv, 'ctl*', 'ceph.client')
+                        salt.enforceState(pepperEnv, "${control_general_target}*", 'ceph.client')
                     } catch (Exception er) {
                         common.warningMsg("Ceph client state on controllers failed. Please fix it manually")
                     }
                 }
 
                 // salt 'cmp*' cmd.run 'service nova-compute restart'
-                salt.runSaltProcessStep(pepperEnv, 'cmp*', 'service.restart', ['nova-compute'], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'ctl*', 'service.restart', ['nova-conductor'], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'ctl*', 'service.restart', ['nova-scheduler'], null, true)
+                salt.runSaltProcessStep(pepperEnv, 'I@nova:compute', 'service.restart', ['nova-compute'], null, true)
+                salt.runSaltProcessStep(pepperEnv, "${control_general_target}*", 'service.restart', ['nova-conductor'], null, true)
+                salt.runSaltProcessStep(pepperEnv, "${control_general_target}*", 'service.restart', ['nova-scheduler'], null, true)
 
 
                 // salt 'prx*' state.sls linux,openssh,salt.minion,ntp,rsyslog
                 // salt 'ctl*' state.sls keepalived
                 // salt 'prx*' state.sls keepalived
-                salt.enforceState(pepperEnv, 'prx*', 'keepalived')
+                salt.enforceState(pepperEnv, "${proxy_general_target}*", 'keepalived')
                 // salt 'prx*' state.sls horizon
-                salt.enforceState(pepperEnv, 'prx*', 'horizon')
+                salt.enforceState(pepperEnv, "${proxy_general_target}*", 'horizon')
                 // salt 'prx*' state.sls nginx
-                salt.enforceState(pepperEnv, 'prx*', 'nginx')
+                salt.enforceState(pepperEnv, "${proxy_general_target}*", 'nginx')
                 // salt "prx*" state.sls memcached
-                salt.enforceState(pepperEnv, 'prx*', 'memcached')
+                salt.enforceState(pepperEnv, "${proxy_general_target}*", 'memcached')
 
                 try {
-                    salt.enforceHighstate(pepperEnv, 'ctl*')
+                    salt.enforceHighstate(pepperEnv, "${control_general_target}*")
                 } catch (Exception er) {
                     common.errorMsg("Highstate was executed on controller nodes but something failed. Please check it and fix it accordingly.")
                 }
 
                 try {
-                    salt.enforceHighstate(pepperEnv, 'prx*')
+                    salt.enforceHighstate(pepperEnv, "${proxy_general_target}*")
                 } catch (Exception er) {
                     common.errorMsg("Highstate was executed on proxy nodes but something failed. Please check it and fix it accordingly.")
                 }
 
-                salt.cmdRun(pepperEnv, 'ctl01*', '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
+                salt.cmdRun(pepperEnv, "${control_general_target}01*", '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
             }
         }
 
@@ -501,37 +487,39 @@ node() {
             print(_pillar)
             print(kvm01)
 
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:ctl01:provider')
-            def ctl01NodeProvider = _pillar['return'][0].values()[0]
+            def proxy_general_target = ""
+            def proxy_target_hosts = salt.getMinions(pepperEnv, 'I@horizon:server')
 
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:ctl02:provider')
-            def ctl02NodeProvider = _pillar['return'][0].values()[0]
+            for (t in proxy_target_hosts) {
+                def target = t.split("\\.")[0]
+                proxy_general_target = target.replaceAll("[0-9]", "")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                def nodeProvider = _pillar['return'][0].values()[0]
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
+                sleep(2)
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'file.copy', ["/root/${target}.${domain}.qcow2.bak", "/var/lib/libvirt/images/${target}.${domain}/system.qcow2"], null, true)
+                try {
+                    salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ${target}.${domain} -y")
+                } catch (Exception e) {
+                    common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
+                }
+            }
+            def control_general_target = ""
+            def control_target_hosts = salt.getMinions(pepperEnv, 'I@keystone:server')
 
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:ctl03:provider')
-            def ctl03NodeProvider = _pillar['return'][0].values()[0]
-
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:prx01:provider')
-            def prx01NodeProvider = _pillar['return'][0].values()[0]
-
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:prx02:provider')
-            def prx02NodeProvider = _pillar['return'][0].values()[0]
-
-            salt.runSaltProcessStep(pepperEnv, "${prx01NodeProvider}", 'virt.destroy', ["prx01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${prx02NodeProvider}", 'virt.destroy', ["prx02.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl01NodeProvider}", 'virt.destroy', ["ctl01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl02NodeProvider}", 'virt.destroy', ["ctl02.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl03NodeProvider}", 'virt.destroy', ["ctl03.${domain}"], null, true)
-
-            salt.runSaltProcessStep(pepperEnv, "${prx01NodeProvider}", 'file.copy', ["/root/prx01.${domain}.qcow2.bak", "/var/lib/libvirt/images/prx01.${domain}/system.qcow2"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${prx02NodeProvider}", 'file.copy', ["/root/prx02.${domain}.qcow2.bak", "/var/lib/libvirt/images/prx02.${domain}/system.qcow2"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl01NodeProvider}", 'file.copy', ["/root/ctl01.${domain}.qcow2.bak", "/var/lib/libvirt/images/ctl01.${domain}/system.qcow2"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl02NodeProvider}", 'file.copy', ["/root/ctl02.${domain}.qcow2.bak", "/var/lib/libvirt/images/ctl02.${domain}/system.qcow2"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl03NodeProvider}", 'file.copy', ["/root/ctl03.${domain}.qcow2.bak", "/var/lib/libvirt/images/ctl03.${domain}/system.qcow2"], null, true)
-
-            try {
-                salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ctl01.${domain},ctl02.${domain},ctl03.${domain},prx01.${domain},prx02.${domain} -y")
-            } catch (Exception e) {
-                common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
+            for (t in control_target_hosts) {
+                def target = t.split("\\.")[0]
+                control_general_target = target.replaceAll("[0-9]", "")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                def nodeProvider = _pillar['return'][0].values()[0]
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
+                sleep(2)
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'file.copy', ["/root/${target}.${domain}.qcow2.bak", "/var/lib/libvirt/images/${target}.${domain}/system.qcow2"], null, true)
+                try {
+                    salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ${target}.${domain} -y")
+                } catch (Exception e) {
+                    common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
+                }
             }
 
             // database restore section
@@ -575,26 +563,35 @@ node() {
             salt.runSaltProcessStep(pepperEnv, 'I@galera:slave', 'service.start', ['mysql'], null, true)
             //
 
-            salt.runSaltProcessStep(pepperEnv, "${prx01NodeProvider}", 'virt.start', ["prx01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${prx02NodeProvider}", 'virt.start', ["prx02.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl01NodeProvider}", 'virt.start', ["ctl01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl02NodeProvider}", 'virt.start', ["ctl02.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${ctl03NodeProvider}", 'virt.start', ["ctl03.${domain}"], null, true)
+            for (t in control_target_hosts) {
+                def target = t.split("\\.")[0]
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                def nodeProvider = _pillar['return'][0].values()[0]
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.start', ["${target}.${domain}"], null, true)
+            }
+            for (t in proxy_target_hosts) {
+                def target = t.split("\\.")[0]
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                def nodeProvider = _pillar['return'][0].values()[0]
+                salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.start', ["${target}.${domain}"], null, true)
+            }
 
             // salt 'cmp*' cmd.run 'service nova-compute restart'
-            salt.runSaltProcessStep(pepperEnv, 'cmp*', 'service.restart', ['nova-compute'], null, true)
+            salt.runSaltProcessStep(pepperEnv, 'I@nova:compute', 'service.restart', ['nova-compute'], null, true)
 
-            // wait until ctl and prx nodes are registered in salt-key
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'ctl01')
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'ctl02')
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'ctl03')
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'prx01')
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'prx02')
+            for (t in control_target_hosts) {
+                def target = t.split("\\.")[0]
+                salt.minionPresent(pepperEnv, 'I@salt:master', "${target}")
+            }
+            for (t in proxy_target_hosts) {
+                def target = t.split("\\.")[0]
+                salt.minionPresent(pepperEnv, 'I@salt:master', "${target}")
+            }
 
-            salt.runSaltProcessStep(pepperEnv, 'ctl*', 'service.restart', ['nova-conductor'], null, true)
-            salt.runSaltProcessStep(pepperEnv, 'ctl*', 'service.restart', ['nova-scheduler'], null, true)
+            salt.runSaltProcessStep(pepperEnv, "${control_general_target}*", 'service.restart', ['nova-conductor'], null, true)
+            salt.runSaltProcessStep(pepperEnv, "${control_general_target}*", 'service.restart', ['nova-scheduler'], null, true)
 
-            salt.cmdRun(pepperEnv, 'ctl01*', '. /root/keystonerc; nova service-list; glance image-list; nova flavor-list; nova hypervisor-list; nova list; neutron net-list; cinder list; heat service-list')
+            salt.cmdRun(pepperEnv, "${control_general_target}01*", '. /root/keystonerc; nova service-list; glance image-list; nova flavor-list; nova hypervisor-list; nova list; neutron net-list; cinder list; heat service-list')
         }
     }
 }
