@@ -1,6 +1,6 @@
 /**
  *
- * Launch sanity validation of the cloud
+ * Launch sanity verification of the cloud
  *
  * Expected parameters:
  *   SALT_MASTER_URL             URL of Salt master
@@ -8,6 +8,7 @@
  *
  *   SANITY_TESTS_SET            Leave empty for full run or choose a file (test), e.g. test_mtu.py
  *   SANITY_TESTS_REPO           CVP-sanity-checks repo to clone
+ *   SANITY_TESTS_SETTINGS       Additional envrionment variables for cvp-sanity-checks
  *   PROXY                       Proxy to use for cloning repo or for pip
  *
  */
@@ -24,7 +25,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Run Infra tests') {
                 sh "mkdir -p ${artifacts_dir}"
-                validate.runSanityTests(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS, SANITY_TESTS_SET, artifacts_dir)
+                validate.runSanityTests(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS, SANITY_TESTS_SET, artifacts_dir, SANITY_TESTS_SETTINGS)
             }
             stage ('Publish results') {
                 archiveArtifacts artifacts: "${artifacts_dir}/*"
