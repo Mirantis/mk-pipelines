@@ -9,6 +9,10 @@
  *   TEST_IMAGE                  Docker image link
  *   TARGET_NODE                 Salt target for tempest node
  *   TEMPEST_TEST_SET            If not false, run tests matched to pattern only
+ *   TEMPEST_CONFIG_REPO         Git repository with configuration files for Tempest
+ *   TEMPEST_CONFIG_BRANCH       Git branch which will be used during the checkout
+ *   TEMPEST_REPO                Git repository with Tempest
+ *   TEMPEST_VERSION             Version of Tempest (tag, branch or commit)
  *   RUN_TEMPEST_TESTS           If not false, run Tempest tests
  *   RUN_RALLY_TESTS             If not false, run Rally tests
  *   RUN_K8S_TESTS               If not false, run Kubernetes tests
@@ -21,6 +25,8 @@
  *   FLOATING_NETWORK            The name of the external(floating) network
  *   RALLY_IMAGE                 The name of the image for Rally tests
  *   RALLY_FLAVOR                The name of the flavor for Rally image
+ *   RALLY_CONFIG_REPO           Git repository with files for Rally
+ *   RALLY_CONFIG_BRANCH         Git branch which will be used during the checkout
  *   TEST_K8S_API_SERVER         Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE  Path to docker image with conformance e2e tests
  *   TEST_K8S_NODE               Kubernetes node to run tests from
@@ -53,7 +59,7 @@ node() {
 
         stage('Run Tempest tests') {
             if (RUN_TEMPEST_TESTS.toBoolean() == true) {
-                validate.runTempestTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, TEMPEST_TEST_SET)
+                validate.runTempestTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, TEMPEST_CONFIG_REPO, TEMPEST_CONFIG_BRANCH, TEMPEST_REPO, TEMPEST_VERSION, TEMPEST_TEST_SET)
             } else {
                 common.infoMsg("Skipping Tempest tests")
             }
@@ -65,7 +71,7 @@ node() {
                                        "rally_image=${RALLY_IMAGE}",
                                        "rally_flavor=${RALLY_FLAVOR}",
                                        "availability_zone=${AVAILABILITY_ZONE}"]
-                validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, rally_variables)
+                validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, rally_variables)
             } else {
                 common.infoMsg("Skipping Rally tests")
             }
