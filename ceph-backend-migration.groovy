@@ -155,7 +155,7 @@ node("python") {
 
                             if (partition?.trim()) {
                                 // dev = /dev/sdi
-                                def dev = partition.replaceAll("[0-9]", "")
+                                def dev = partition.replaceAll('\\d+$', "")
                                 // part_id = 2
                                 def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
                                 runCephCommand(pepperEnv, HOST, "parted ${dev} rm ${part_id}")

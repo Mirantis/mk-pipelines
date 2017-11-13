@@ -226,7 +226,7 @@ node() {
 
             for (t in proxy_target_hosts) {
                 def target = t.split("\\.")[0]
-                proxy_general_target = target.replaceAll("[0-9]", "")
+                proxy_general_target = target.replaceAll('\\d+$', "")
                 _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
@@ -248,7 +248,7 @@ node() {
 
             for (t in control_target_hosts) {
                 def target = t.split("\\.")[0]
-                control_general_target = target.replaceAll("[0-9]", "")
+                control_general_target = target.replaceAll('\\d+$', "")
                 _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
@@ -492,7 +492,7 @@ node() {
 
             for (t in proxy_target_hosts) {
                 def target = t.split("\\.")[0]
-                proxy_general_target = target.replaceAll("[0-9]", "")
+                proxy_general_target = target.replaceAll('\\d+$', "")
                 _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
@@ -509,7 +509,7 @@ node() {
 
             for (t in control_target_hosts) {
                 def target = t.split("\\.")[0]
-                control_general_target = target.replaceAll("[0-9]", "")
+                control_general_target = target.replaceAll('\\d+$', "")
                 _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
