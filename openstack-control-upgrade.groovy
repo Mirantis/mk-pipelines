@@ -84,9 +84,19 @@ node() {
 
             // salt "upg*" state.sls linux,openssh,salt.minion,ntp,rsyslog
             try {
-                salt.enforceState(pepperEnv, 'upg*', ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
+                salt.enforceState(pepperEnv, 'upg*', ['linux', 'openssh'])
             } catch (Exception e) {
-                common.warningMsg('Received no response because salt-minion was restarted. We should continue to run')
+                common.warningMsg(e)
+            }
+            try {
+                salt.runSaltProcessStep(master, 'upg*', 'state.sls', ["salt.minion"], null, true, 60)
+            } catch (Exception e) {
+                common.warningMsg(e)
+            }
+            try {
+                salt.enforceState(pepperEnv, 'upg*', ['ntp', 'rsyslog'])
+            } catch (Exception e) {
+                common.warningMsg(e)
             }
             salt.enforceState(pepperEnv, 'upg*', ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
 
@@ -291,10 +301,21 @@ node() {
                 salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.sync_all', [], null, true)
             }
             try {
-                salt.enforceState(pepperEnv, "${proxy_general_target}* or ${control_general_target}*", ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
+                salt.enforceState(pepperEnv, "${proxy_general_target}* or ${control_general_target}*", ['linux', 'openssh'])
             } catch (Exception e) {
-                common.warningMsg('Received no response because salt-minion was restarted. We should continue to run')
+                common.warningMsg(e)
             }
+            try {
+                salt.runSaltProcessStep(master, "${proxy_general_target}* or ${control_general_target}*", 'state.sls', ["salt.minion"], null, true, 60)
+            } catch (Exception e) {
+                common.warningMsg(e)
+            }
+            try {
+                salt.enforceState(pepperEnv, "${proxy_general_target}* or ${control_general_target}*", ['ntp', 'rsyslog'])
+            } catch (Exception e) {
+                common.warningMsg(e)
+            }
+
             salt.enforceState(pepperEnv, "${proxy_general_target}* or ${control_general_target}*", ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
 
             // salt 'ctl*' state.sls keepalived
