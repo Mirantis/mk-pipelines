@@ -7,6 +7,7 @@
  *   STAGE_TEST_UPGRADE         Run test upgrade stage (bool)
  *   STAGE_REAL_UPGRADE         Run real upgrade stage (bool)
  *   STAGE_ROLLBACK_UPGRADE     Run rollback upgrade stage (bool)
+ *   SKIP_VM_RELAUNCH           Set to true if vms should not be recreated
  *
 **/
 
@@ -24,7 +25,6 @@ node() {
 
     if (STAGE_TEST_UPGRADE.toBoolean() == true) {
         stage('Test upgrade') {
-
 
             try {
                 salt.enforceState(pepperEnv, 'I@salt:master', 'reclass')
@@ -50,41 +50,37 @@ node() {
             // read backupninja variable
             _pillar = salt.getPillar(pepperEnv, 'I@backupninja:client', '_param:backupninja_backup_host')
             def backupninja_backup_host = _pillar['return'][0].values()[0]
-            print(_pillar)
-            print(backupninja_backup_host)
 
-            _pillar = salt.getGrain(pepperEnv, 'I@salt:control', 'id')
-            def kvm01 = _pillar['return'][0].values()[0].values()[0]
-            print(_pillar)
-            print(kvm01)
+            if (SKIP_VM_RELAUNCH.toBoolean() == false) {
 
-            _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:upg01:provider')
-            def upgNodeProvider = _pillar['return'][0].values()[0]
-            print(_pillar)
-            print(upgNodeProvider)
+                _pillar = salt.getGrain(pepperEnv, 'I@salt:control', 'id')
+                def kvm01 = _pillar['return'][0].values()[0].values()[0]
+                print(_pillar)
+                print(kvm01)
 
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", 'salt:control:cluster:internal:node:upg01:provider')
+                def upgNodeProvider = _pillar['return'][0].values()[0]
+                print(_pillar)
+                print(upgNodeProvider)
 
-            salt.runSaltProcessStep(pepperEnv, "${upgNodeProvider}", 'virt.destroy', ["upg01.${domain}"], null, true)
-            salt.runSaltProcessStep(pepperEnv, "${upgNodeProvider}", 'virt.undefine', ["upg01.${domain}"], null, true)
+                salt.runSaltProcessStep(pepperEnv, "${upgNodeProvider}", 'virt.destroy', ["upg01.${domain}"], null, true)
+                salt.runSaltProcessStep(pepperEnv, "${upgNodeProvider}", 'virt.undefine', ["upg01.${domain}"], null, true)
 
+                try {
+                    salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d upg01.${domain} -y")
+                } catch (Exception e) {
+                    common.warningMsg("upg01.${domain} does not match any accepted, unaccepted or rejected keys. The key did not exist yet or was already removed. We should continue to run")
+                }
 
-            try {
-                salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d upg01.${domain} -y")
-            } catch (Exception e) {
-                common.warningMsg("upg01.${domain} does not match any accepted, unaccepted or rejected keys. The key did not exist yet or was already removed. We should continue to run")
+                // salt 'kvm02*' state.sls salt.control
+                salt.enforceState(pepperEnv, "${upgNodeProvider}", 'salt.control')
+                // wait until upg node is registered in salt-key
+                salt.minionPresent(pepperEnv, 'I@salt:master', 'upg01')
+                // salt '*' saltutil.refresh_pillar
+                salt.runSaltProcessStep(pepperEnv, 'upg*', 'saltutil.refresh_pillar', [], null, true)
+                // salt '*' saltutil.sync_all
+                salt.runSaltProcessStep(pepperEnv, 'upg*', 'saltutil.sync_all', [], null, true)
             }
-
-
-            // salt 'kvm02*' state.sls salt.control
-            salt.enforceState(pepperEnv, "${upgNodeProvider}", 'salt.control')
-
-            // wait until upg node is registered in salt-key
-            salt.minionPresent(pepperEnv, 'I@salt:master', 'upg01')
-
-            // salt '*' saltutil.refresh_pillar
-            salt.runSaltProcessStep(pepperEnv, 'upg*', 'saltutil.refresh_pillar', [], null, true)
-            // salt '*' saltutil.sync_all
-            salt.runSaltProcessStep(pepperEnv, 'upg*', 'saltutil.sync_all', [], null, true)
 
             // salt "upg*" state.sls linux,openssh,salt.minion,ntp,rsyslog
             try {
@@ -224,6 +220,9 @@ node() {
             for (t in proxy_target_hosts) {
                 def target = t.split("\\.")[0]
                 proxy_general_target = target.replaceAll('\\d+$', "")
+                if (SKIP_VM_RELAUNCH.toBoolean() == true) {
+                    break
+                }
                 _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:prx0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
@@ -248,6 +247,9 @@ node() {
             for (t in control_target_hosts) {
                 def target = t.split("\\.")[0]
                 control_general_target = target.replaceAll('\\d+$', "")
+                if (SKIP_VM_RELAUNCH.toBoolean() == true) {
+                    break
+                }
                 _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:ctl0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
@@ -266,27 +268,28 @@ node() {
                 node_count++
             }
 
-            salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh'")
+            if (SKIP_VM_RELAUNCH.toBoolean() == false) {
+                salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh'")
 
-            // salt 'kvm*' state.sls salt.control
-            salt.enforceState(pepperEnv, 'I@salt:control', 'salt.control')
+                // salt 'kvm*' state.sls salt.control
+                salt.enforceState(pepperEnv, 'I@salt:control', 'salt.control')
 
-            for (t in control_target_hosts) {
-                def target = t.split("\\.")[0]
-                // wait until ctl and prx nodes are registered in salt-key
-                salt.minionPresent(pepperEnv, 'I@salt:master', "${target}")
+                for (t in control_target_hosts) {
+                    def target = t.split("\\.")[0]
+                    // wait until ctl and prx nodes are registered in salt-key
+                    salt.minionPresent(pepperEnv, 'I@salt:master', "${target}")
+                }
+                for (t in proxy_target_hosts) {
+                    def target = t.split("\\.")[0]
+                    // wait until ctl and prx nodes are registered in salt-key
+                    salt.minionPresent(pepperEnv, 'I@salt:master', "${target}")
+                }
+
+                // salt '*' saltutil.refresh_pillar
+                salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.refresh_pillar', [], null, true)
+                // salt '*' saltutil.sync_all
+                salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.sync_all', [], null, true)
             }
-            for (t in proxy_target_hosts) {
-                def target = t.split("\\.")[0]
-                // wait until ctl and prx nodes are registered in salt-key
-                salt.minionPresent(pepperEnv, 'I@salt:master', "${target}")
-            }
-
-            // salt '*' saltutil.refresh_pillar
-            salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.refresh_pillar', [], null, true)
-            // salt '*' saltutil.sync_all
-            salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.sync_all', [], null, true)
-
             try {
                 salt.enforceState(pepperEnv, "${proxy_general_target}* or ${control_general_target}*", ['linux', 'openssh', 'salt.minion', 'ntp', 'rsyslog'])
             } catch (Exception e) {
@@ -493,6 +496,9 @@ node() {
             for (t in proxy_target_hosts) {
                 def target = t.split("\\.")[0]
                 proxy_general_target = target.replaceAll('\\d+$', "")
+                if (SKIP_VM_RELAUNCH.toBoolean() == true) {
+                    break
+                }
                 _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:prx0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
@@ -512,6 +518,9 @@ node() {
             for (t in control_target_hosts) {
                 def target = t.split("\\.")[0]
                 control_general_target = target.replaceAll('\\d+$', "")
+                if (SKIP_VM_RELAUNCH.toBoolean() == true) {
+                    break
+                }
                 _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:ctl0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
