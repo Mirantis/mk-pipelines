@@ -44,10 +44,8 @@ node() {
                 common.warningMsg("No response from some minions. We should continue to run")
             }
 
-            def _pillar = salt.getGrain(pepperEnv, 'I@salt:master', 'domain')
-            def domain = _pillar['return'][0].values()[0].values()[0]
-            print(_pillar)
-            print(domain)
+            def domain = salt.getPillar(pepperEnv, 'I@salt:master', '_param:cluster_domain')
+            domain = domain['return'][0].values()[0]
 
             // read backupninja variable
             _pillar = salt.getPillar(pepperEnv, 'I@backupninja:client', '_param:backupninja_backup_host')
@@ -209,10 +207,8 @@ node() {
         stage('Real upgrade') {
             // # actual upgrade
 
-            _pillar = salt.getGrain(pepperEnv, 'I@salt:master', 'domain')
-            domain = _pillar['return'][0].values()[0].values()[0]
-            print(_pillar)
-            print(domain)
+            def domain = salt.getPillar(pepperEnv, 'I@salt:master', '_param:cluster_domain')
+            domain = domain['return'][0].values()[0]
 
             _pillar = salt.getGrain(pepperEnv, 'I@salt:control', 'id')
             kvm01 = _pillar['return'][0].values()[0].values()[0]
@@ -278,12 +274,12 @@ node() {
             for (t in control_target_hosts) {
                 def target = t.split("\\.")[0]
                 // wait until ctl and prx nodes are registered in salt-key
-                salt.minionPresent(pepperEnv, 'I@salt:master', '${target}')
+                salt.minionPresent(pepperEnv, 'I@salt:master', "${target}")
             }
             for (t in proxy_target_hosts) {
                 def target = t.split("\\.")[0]
                 // wait until ctl and prx nodes are registered in salt-key
-                salt.minionPresent(pepperEnv, 'I@salt:master', '${target}')
+                salt.minionPresent(pepperEnv, 'I@salt:master', "${target}")
             }
 
             // salt '*' saltutil.refresh_pillar
@@ -360,6 +356,7 @@ node() {
 
             } catch (Exception e) {
                 errorOccured = true
+                input message: "Some states that require syncdb failed. Please check the reason and click proceed only if you want to restore database into it's pre-upgrade state. Otherwise, click abort."
                 common.warningMsg('Some states that require syncdb failed. Restoring production databases')
 
                 // database restore section
@@ -481,10 +478,8 @@ node() {
                 input message: "Do you really want to continue with the rollback?"
             }
 
-            _pillar = salt.getGrain(pepperEnv, 'I@salt:master', 'domain')
-            domain = _pillar['return'][0].values()[0].values()[0]
-            print(_pillar)
-            print(domain)
+            def domain = salt.getPillar(pepperEnv, 'I@salt:master', '_param:cluster_domain')
+            domain = domain['return'][0].values()[0]
 
             _pillar = salt.getGrain(pepperEnv, 'I@salt:control', 'id')
             kvm01 = _pillar['return'][0].values()[0].values()[0]
