@@ -222,7 +222,7 @@ node() {
             def errorOccured = false
 
             def proxy_general_target = ""
-            def proxy_target_hosts = salt.getMinions(pepperEnv, 'I@horizon:server')
+            def proxy_target_hosts = salt.getMinions(pepperEnv, 'I@horizon:server').sort()
             def node_count = 1
 
             for (t in proxy_target_hosts) {
@@ -511,7 +511,7 @@ node() {
                 node_count++
             }
             def control_general_target = ""
-            def control_target_hosts = salt.getMinions(pepperEnv, 'I@keystone:server')
+            def control_target_hosts = salt.getMinions(pepperEnv, 'I@keystone:server').sort()
             node_count = 1
 
             for (t in control_target_hosts) {
