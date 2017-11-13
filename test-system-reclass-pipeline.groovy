@@ -58,6 +58,8 @@ node() {
             documentationOnly = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v .releasenotes", returnStatus: true) == 1
           }
 
+          sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
+
           def branches = [:]
           def testModels = documentationOnly ? [] : TEST_MODELS.split(',')
             for (int i = 0; i < testModels.size(); i++) {

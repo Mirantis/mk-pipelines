@@ -136,6 +136,10 @@ node("python") {
       }
     }
 
+    stage("Check YAML") {
+       sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
+    }
+
     stage("test-nodes") {
       if(checkouted) {
         def modifiedClusters = null
