@@ -223,11 +223,12 @@ node() {
 
             def proxy_general_target = ""
             def proxy_target_hosts = salt.getMinions(pepperEnv, 'I@horizon:server')
+            def node_count = 1
 
             for (t in proxy_target_hosts) {
                 def target = t.split("\\.")[0]
                 proxy_general_target = target.replaceAll('\\d+$', "")
-                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:prx0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
                 sleep(2)
@@ -242,14 +243,16 @@ node() {
                 } catch (Exception e) {
                     common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
                 }
+                node_count++
             }
             def control_general_target = ""
             def control_target_hosts = salt.getMinions(pepperEnv, 'I@keystone:server')
+            node_count = 1
 
             for (t in control_target_hosts) {
                 def target = t.split("\\.")[0]
                 control_general_target = target.replaceAll('\\d+$', "")
-                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:ctl0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
                 sleep(2)
@@ -264,6 +267,7 @@ node() {
                 } catch (Exception e) {
                     common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
                 }
+                node_count++
             }
 
             salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh'")
@@ -489,11 +493,12 @@ node() {
 
             def proxy_general_target = ""
             def proxy_target_hosts = salt.getMinions(pepperEnv, 'I@horizon:server')
+            def node_count = 1
 
             for (t in proxy_target_hosts) {
                 def target = t.split("\\.")[0]
                 proxy_general_target = target.replaceAll('\\d+$', "")
-                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:prx0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
                 sleep(2)
@@ -503,14 +508,16 @@ node() {
                 } catch (Exception e) {
                     common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
                 }
+                node_count++
             }
             def control_general_target = ""
             def control_target_hosts = salt.getMinions(pepperEnv, 'I@keystone:server')
+            node_count = 1
 
             for (t in control_target_hosts) {
                 def target = t.split("\\.")[0]
                 control_general_target = target.replaceAll('\\d+$', "")
-                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:ctl0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"], null, true)
                 sleep(2)
@@ -520,6 +527,7 @@ node() {
                 } catch (Exception e) {
                     common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
                 }
+                node_count++
             }
 
             // database restore section
@@ -563,17 +571,21 @@ node() {
             salt.runSaltProcessStep(pepperEnv, 'I@galera:slave', 'service.start', ['mysql'], null, true)
             //
 
+            node_count = 1
             for (t in control_target_hosts) {
                 def target = t.split("\\.")[0]
-                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:ctl0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.start', ["${target}.${domain}"], null, true)
+                node_count++
             }
+            node_count = 1
             for (t in proxy_target_hosts) {
                 def target = t.split("\\.")[0]
-                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:${target}:provider")
+                _pillar = salt.getPillar(pepperEnv, "${kvm01}", "salt:control:cluster:internal:node:prx0${node_count}:provider")
                 def nodeProvider = _pillar['return'][0].values()[0]
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.start', ["${target}.${domain}"], null, true)
+                node_count++
             }
 
             // salt 'cmp*' cmd.run 'service nova-compute restart'
