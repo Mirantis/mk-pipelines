@@ -246,7 +246,7 @@ node() {
                 node_count++
             }
             def control_general_target = ""
-            def control_target_hosts = salt.getMinions(pepperEnv, 'I@keystone:server')
+            def control_target_hosts = salt.getMinions(pepperEnv, 'I@keystone:server and not upg*')
             node_count = 1
 
             for (t in control_target_hosts) {
