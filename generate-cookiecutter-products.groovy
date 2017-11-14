@@ -142,9 +142,11 @@ parameters:
             // apt package genisoimage is required for this stage
 
             // download create-config-drive
-            def config_drive_script_url = "https://raw.githubusercontent.com/jiribroulik/scripts/master/create_config_drive.sh"
+            // FIXME: that should be refactored, to use git clone - to be able download it from custom repo.
+            def config_drive_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/config-drive/create_config_drive.sh"
+            def user_data_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/config-drive/master_config.sh"
+
             sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
-            def user_data_script_url = "https://raw.githubusercontent.com/mceloud/scripts/master/master_config.sh"
             sh "wget -O user_data.sh ${user_data_script_url}"
 
             sh "git clone https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
@@ -172,7 +174,7 @@ parameters:
 
             if (templateContext.default_context.offline_deployment && templateContext.default_context.offline_deployment == 'True'){
                 def aptlyServerHostname = templateContext.default_context.aptly_server_hostname
-                def user_data_script_apt_url = "https://raw.githubusercontent.com/richardfelkl/scripts/master/mirror_config.sh"
+                def user_data_script_apt_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/config-drive/mirror_config.sh"
                 sh "wget -O mirror_config.sh ${user_data_script_apt_url}"
 
                 def smc_apt = [:]
