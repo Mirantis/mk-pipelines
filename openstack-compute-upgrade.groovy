@@ -71,8 +71,23 @@ node() {
 
         if(opencontrail != null) {
             stage('Remove OC component from repos on test nodes') {
+                def contrail_repo_file1 = ''
+                def contrail_repo_file2 = ''
+                try {
+                    contrail_repo_file1 = salt.cmdRun(pepperEnv, targetTestSubset, "grep -Eorl \\ oc\\([0-9]*\$\\) /etc/apt/sources.list*")['return'][0].values()[0].split("\n")[0]
+                    contrail_repo_file2 = salt.cmdRun(pepperEnv, targetTestSubset, "grep -Eorl \\ oc\\([0-9]*\\ \\) /etc/apt/sources.list*")['return'][0].values()[0].split("\n")[0]
+                } catch (Exception er) {
+                    common.warningMsg(er)
+                }
                 salt.cmdRun(pepperEnv, targetTestSubset, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.refresh_db', [], null, true)
+                try {
+                    salt.cmdRun(pepperEnv, targetTestSubset, "salt-call pkg.refresh_db")
+                } catch (Exception er) {
+                    common.warningMsg(er)
+                    // remove the malformed repo entry
+                    salt.cmdRun(pepperEnv, targetTestSubset, "rm ${contrail_repo_file1} ${contrail_repo_file2}")
+                    salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.refresh_db', [], null, true)
+                }
             }
         }
 
@@ -90,8 +105,23 @@ node() {
 
         if(opencontrail != null) {
             stage('Remove OC component from repos on sample nodes') {
+                def contrail_repo_file1 = ''
+                def contrail_repo_file2 = ''
+                try {
+                    contrail_repo_file1 = salt.cmdRun(pepperEnv, targetLiveSubset, "grep -Eorl \\ oc\\([0-9]*\$\\) /etc/apt/sources.list*")['return'][0].values()[0].split("\n")[0]
+                    contrail_repo_file2 = salt.cmdRun(pepperEnv, targetLiveSubset, "grep -Eorl \\ oc\\([0-9]*\\ \\) /etc/apt/sources.list*")['return'][0].values()[0].split("\n")[0]
+                } catch (Exception er) {
+                    common.warningMsg(er)
+                }
                 salt.cmdRun(pepperEnv, targetLiveSubset, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'pkg.refresh_db', [], null, true)
+                try {
+                    salt.cmdRun(pepperEnv, targetLiveSubset, "salt-call pkg.refresh_db")
+                } catch (Exception er) {
+                    common.warningMsg(er)
+                    // remove the malformed repo entry
+                    salt.cmdRun(pepperEnv, targetLiveSubset, "rm ${contrail_repo_file1} ${contrail_repo_file2}")
+                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'pkg.refresh_db', [], null, true)
+                }
             }
         }
 
@@ -161,8 +191,23 @@ node() {
 
         if(opencontrail != null) { 
             stage('Remove OC component from repos on all targeted nodes') {
+                def contrail_repo_file1 = ''
+                def contrail_repo_file2 = ''
+                try {
+                    contrail_repo_file1 = salt.cmdRun(pepperEnv, targetLiveAll, "grep -Eorl \\ oc\\([0-9]*\$\\) /etc/apt/sources.list*")['return'][0].values()[0].split("\n")[0]
+                    contrail_repo_file2 = salt.cmdRun(pepperEnv, targetLiveAll, "grep -Eorl \\ oc\\([0-9]*\\ \\) /etc/apt/sources.list*")['return'][0].values()[0].split("\n")[0]
+                } catch (Exception er) {
+                    common.warningMsg(er)
+                }
                 salt.cmdRun(pepperEnv, targetLiveAll, "find /etc/apt/sources.list* -type f -print0 | xargs -0 sed -i -r -e 's/ oc([0-9]*) / /g;s/ oc([0-9]*\$)//g'")
-                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.refresh_db', [], null, true)
+                try {
+                    salt.cmdRun(pepperEnv, targetLiveAll, "salt-call pkg.refresh_db")
+                } catch (Exception er) {
+                    common.warningMsg(er)
+                    // remove the malformed repo entry
+                    salt.cmdRun(pepperEnv, targetLiveAll, "rm ${contrail_repo_file1} ${contrail_repo_file2}")
+                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.refresh_db', [], null, true)
+                }
             }
         }
 
