@@ -173,9 +173,14 @@ node("python") {
             runCephCommand(pepperEnv, 'I@ceph:mon', "monmaptool /tmp/monmap --rm ${target}")
         }
 
+        def target_hosts = salt.getMinions(pepperEnv, 'I@ceph:common')
+        print target_hosts
+
         // Update configs
         stage('Update Ceph configs') {
-            salt.enforceState(pepperEnv, 'I@ceph:common', 'ceph.common', true)
+            for (target in target_hosts) {
+                salt.enforceState(pepperEnv, target, 'ceph.common', true)
+            }
         }
     }
 
