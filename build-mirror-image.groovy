@@ -73,7 +73,7 @@ node("python&&disk-xl") {
                 sh "envsubst < salt-bootstrap.sh > salt-bootstrap.sh.temp;mv salt-bootstrap.sh.temp salt-bootstrap.sh; cat salt-bootstrap.sh"
             }
 
-            openstackServer = openstack.runOpenstackCommand("openstack server create --key-name mcp-offline-keypair-${dateTime} --availability-zone ${VM_AVAILABILITY_ZONE} --image ${VM_IMAGE} --flavor ${VM_FLAVOR} --nic net-id=${VM_NETWORK_ID},v4-fixed-ip=${VM_IP} --user-data mcp-offline-mirror/scripts/salt-bootstrap.sh mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
+            openstackServer = openstack.runOpenstackCommand("openstack server create --key-name mcp-offline-keypair-${dateTime} --availability-zone ${VM_AVAILABILITY_ZONE} --image ${VM_IMAGE} --flavor ${VM_FLAVOR} --nic net-id=${VM_NETWORK_ID},v4-fixed-ip=${VM_IP} --user-data salt-bootstrap.sh mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
             sleep(60)
 
             retry(VM_IP_RETRIES, VM_IP_DELAY){
