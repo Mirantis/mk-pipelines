@@ -28,6 +28,25 @@ def pepperEnv = "pepperEnv"
 def flags = CLUSTER_FLAGS.tokenize(',')
 def osds = OSD.tokenize(',')
 
+def removePartition(master, target, partition_uuid) {
+    def partition = ""
+    try {
+        // partition = /dev/sdi2
+        partition = runCephCommand(master, target, "blkid | grep ${partition_uuid} ")['return'][0].values()[0].split("(?<=[0-9])")[0]
+    } catch (Exception e) {
+        common.warningMsg(e)
+    }
+
+    if (partition?.trim()) {
+        // dev = /dev/sdi
+        def dev = partition.replaceAll('\\d+$', "")
+        // part_id = 2
+        def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
+        runCephCommand(master, target, "parted ${dev} rm ${part_id}")
+    }
+    return
+}
+
 def runCephCommand(master, target, cmd) {
     return salt.cmdRun(master, target, cmd)
 }
@@ -83,7 +102,7 @@ node("python") {
                 def id = osd_id.replaceAll('osd.', '')
                 def backend = runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd metadata ${id} | grep osd_objectstore")['return'][0].values()[0]
 
-                if (backend.contains(ORIGIN_BACKEND)) {
+                if (backend.contains(ORIGIN_BACKEND.toLowerCase())) {
 
                     // wait for healthy cluster before manipulating with osds
                     if (WAIT_FOR_HEALTHY.toBoolean() == true) {
@@ -118,11 +137,12 @@ node("python") {
                     def mount = runCephCommand(pepperEnv, HOST, "mount | grep /var/lib/ceph/osd/ceph-${id}")['return'][0].values()[0]
                     dev = mount.split()[0].replaceAll("[0-9]","")
 
-                    // remove journal or block_db partition `parted /dev/sdj rm 3`
-                    stage('Remove journal / block_db partition') {
+                    // remove journal, block_db, block_wal partition `parted /dev/sdj rm 3`
+                    stage('Remove journal / block_db / block_wal partition') {
                         def partition_uuid = ""
                         def journal_partition_uuid = ""
                         def block_db_partition_uuid = ""
+                        def block_wal_partition_uuid = ""
                         try {
                             journal_partition_uuid = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep journal | grep partuuid")
                             journal_partition_uuid = journal_partition_uuid.toString().trim().split("\n")[0].substring(journal_partition_uuid.toString().trim().lastIndexOf("/")+1)
@@ -136,6 +156,13 @@ node("python") {
                             common.infoMsg(e)
                         }
 
+                        try {
+                            block_wal_partition_uuid = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.wal' | grep partuuid")
+                            block_wal_partition_uuid = block_wal_partition_uuid.toString().trim().split("\n")[0].substring(block_wal_partition_uuid.toString().trim().lastIndexOf("/")+1)
+                        } catch (Exception e) {
+                            common.infoMsg(e)
+                        }
+
                         // set partition_uuid = 2c76f144-f412-481e-b150-4046212ca932
                         if (journal_partition_uuid?.trim()) {
                             partition_uuid = journal_partition_uuid
@@ -143,23 +170,12 @@ node("python") {
                             partition_uuid = block_db_partition_uuid
                         }
 
-                        // if failed disk had block_db or journal on different disk, then remove the partition
+                        // if disk has journal, block_db or block_wal on different disk, then remove the partition
                         if (partition_uuid?.trim()) {
-                            def partition = ""
-                            try {
-                                // partition = /dev/sdi2
-                                partition = runCephCommand(pepperEnv, HOST, "blkid | grep ${partition_uuid} ")['return'][0].values()[0].split("(?<=[0-9])")[0]
-                            } catch (Exception e) {
-                                common.warningMsg(e)
-                            }
-
-                            if (partition?.trim()) {
-                                // dev = /dev/sdi
-                                def dev = partition.replaceAll('\\d+$', "")
-                                // part_id = 2
-                                def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
-                                runCephCommand(pepperEnv, HOST, "parted ${dev} rm ${part_id}")
-                            }
+                            removePartition(pepperEnv, HOST, partition_uuid)
+                        }
+                        if (block_wal_partition_uuid?.trim()) {
+                            removePartition(pepperEnv, HOST, block_wal_partition_uuid)
                         }
                     }
 

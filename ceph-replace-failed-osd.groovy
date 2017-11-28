@@ -3,16 +3,16 @@
  * Replace failed disk with a new disk
  *
  * Requred parameters:
- *  SALT_MASTER_URL                 URL of Salt master
- *  SALT_MASTER_CREDENTIALS         Credentials to the Salt API
+ *  SALT_MASTER_URL                     URL of Salt master
+ *  SALT_MASTER_CREDENTIALS             Credentials to the Salt API
  *
- *  HOST                            Host (minion id) to be removed
- *  ADMIN_HOST                      Host (minion id) with admin keyring and /etc/crushmap file present
- *  OSD                             Failed OSD ids to be replaced (comma-separated list - 1,2,3)
- *  DEVICE                          Comma separated list of failed devices that will be replaced at HOST (/dev/sdb,/dev/sdc)
- *  JOURNAL_OR_BLOCKDB_PARTITION    Comma separated list of partitions where journal or block_db for the failed devices on this HOST were stored (/dev/sdh2,/dev/sdh3)
- *  CLUSTER_FLAGS                   Comma separated list of tags to apply to cluster
- *  WAIT_FOR_HEALTHY                Wait for cluster rebalance before stoping daemons
+ *  HOST                                Host (minion id) to be removed
+ *  ADMIN_HOST                          Host (minion id) with admin keyring and /etc/crushmap file present
+ *  OSD                                 Failed OSD ids to be replaced (comma-separated list - 1,2,3)
+ *  DEVICE                              Comma separated list of failed devices that will be replaced at HOST (/dev/sdb,/dev/sdc)
+ *  JOURNAL_BLOCKDB_BLOCKWAL_PARTITION  Comma separated list of partitions where journal or block_db or block_wal for the failed devices on this HOST were stored (/dev/sdh2,/dev/sdh3)
+ *  CLUSTER_FLAGS                       Comma separated list of tags to apply to cluster
+ *  WAIT_FOR_HEALTHY                    Wait for cluster rebalance before stoping daemons
  *
  */
 
@@ -24,7 +24,7 @@ def pepperEnv = "pepperEnv"
 def flags = CLUSTER_FLAGS.tokenize(',')
 def osds = OSD.tokenize(',')
 def devices = DEVICE.tokenize(',')
-def journals_blockdbs = JOURNAL_OR_BLOCKDB_PARTITION.tokenize(',')
+def journals_blockdbs_blockwals = JOURNAL_BLOCKDB_BLOCKWAL_PARTITION.tokenize(',')
 
 
 def runCephCommand(master, target, cmd) {
@@ -143,14 +143,14 @@ node("python") {
         }
     }
 
-    // remove journal or block_db partition `parted /dev/sdj rm 3`
-    stage('Remove journal / block_db partitions') {
-        for (journal_blockdb in journals_blockdbs) {
-            if (journal_blockdb?.trim()) {
+    // remove journal, block_db or block_wal partition `parted /dev/sdj rm 3`
+    stage('Remove journal / block_db / block_wal partitions') {
+        for (partition in journals_blockdbs_blockwals) {
+            if (partition?.trim()) {
                 // dev = /dev/sdi
-                def dev = journal_blockdb.replaceAll("[0-9]", "")
+                def dev = partition.replaceAll("[0-9]", "")
                 // part_id = 2
-                def part_id = journal_blockdb.substring(journal_blockdb.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
+                def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
                 runCephCommand(pepperEnv, HOST, "parted ${dev} rm ${part_id}")
             }
         }
