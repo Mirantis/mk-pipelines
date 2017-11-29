@@ -138,7 +138,11 @@ node("python&&disk-xl") {
         }
 
         stage("Create instance snapshot"){
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['rm -rf /var/lib/cloud/sem/* /var/lib/cloud/instance /var/lib/cloud/instances/*'], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['cloud-init init'], null, true)
+
             openstack.runOpenstackCommand("openstack server stop mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
+
             retry(6, 30){
                 serverStatus = openstack.runOpenstackCommand("openstack server show --format value -c status mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
                 if(serverStatus != "SHUTOFF"){
