@@ -31,8 +31,8 @@ node("python") {
     }
 
     if (!found) {
-            common.errorMsg("No such HOST_TYPE was found. Please insert one of the following types: mon/osd/rgw")
-        break
+        common.errorMsg("No such HOST_TYPE was found. Please insert one of the following types: mon/osd/rgw")
+        throw new InterruptedException()
     }
 
     if (HOST_TYPE.toLowerCase() != 'osd') {

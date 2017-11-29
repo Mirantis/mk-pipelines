@@ -51,8 +51,8 @@ node("python") {
     }
 
     if (!found) {
-            common.errorMsg("No such HOST_TYPE was found. Please insert one of the following types: mon/osd/rgw")
-        break
+        common.errorMsg("No such HOST_TYPE was found. Please insert one of the following types: mon/osd/rgw")
+        throw new InterruptedException()
     }
 
     stage('Refresh_pillar') {
@@ -138,7 +138,7 @@ node("python") {
 
         // purge Ceph pkgs
         stage('Purge Ceph OSD pkgs') {
-            runCephCommand(pepperEnv, HOST, 'apt purge ceph-base ceph-common ceph-fuse ceph-mds ceph-osd libcephfs2 python-cephfs librados2 python-rados -y')
+            runCephCommand(pepperEnv, HOST, 'apt purge ceph-base ceph-common ceph-fuse ceph-mds ceph-osd python-cephfs librados2 python-rados -y')
         }
 
         // stop salt-minion service and move its configuration
@@ -178,8 +178,8 @@ node("python") {
 
         // Update configs
         stage('Update Ceph configs') {
-            for (target in target_hosts) {
-                salt.enforceState(pepperEnv, target, 'ceph.common', true)
+            for (tgt in target_hosts) {
+                salt.enforceState(pepperEnv, tgt, 'ceph.common', true)
             }
         }
     }
