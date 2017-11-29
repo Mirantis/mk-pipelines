@@ -27,6 +27,8 @@
  *   RALLY_FLAVOR                The name of the flavor for Rally image
  *   RALLY_CONFIG_REPO           Git repository with files for Rally
  *   RALLY_CONFIG_BRANCH         Git branch which will be used during the checkout
+ *   RALLY_SCENARIOS             Path to file or directory with rally scenarios
+ *   RALLY_TASK_ARGS_FILE        Path to file with rally tests arguments
  *   TEST_K8S_API_SERVER         Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE  Path to docker image with conformance e2e tests
  *   TEST_K8S_NODE               Kubernetes node to run tests from
@@ -71,7 +73,7 @@ node() {
                                        "rally_image=${RALLY_IMAGE}",
                                        "rally_flavor=${RALLY_FLAVOR}",
                                        "availability_zone=${AVAILABILITY_ZONE}"]
-                validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, rally_variables)
+                validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables)
             } else {
                 common.infoMsg("Skipping Rally tests")
             }
