@@ -75,12 +75,18 @@ node() {
                 return
             }
 
+            salt.enforceState(pepperEnv, 'I@zookeeper:backup:server', 'zookeeper.backup')
+            salt.enforceState(pepperEnv, 'I@zookeeper:backup:client', 'zookeeper.backup')
+
             try {
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "su root -c '/usr/local/bin/zookeeper-backup-runner.sh'")
             } catch (Exception er) {
                 common.errorMsg('Zookeeper failed to backup. Please fix it before continuing.')
                 return
             }
+
+            salt.enforceState(pepperEnv, 'I@cassandra:backup:server', 'cassandra.backup')
+            salt.enforceState(pepperEnv, 'I@cassandra:backup:client', 'cassandra.backup')
 
             try {
                 salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', "su root -c '/usr/local/bin/cassandra-backup-runner-call.sh'")
