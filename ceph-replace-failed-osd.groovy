@@ -13,6 +13,7 @@
  *  JOURNAL_BLOCKDB_BLOCKWAL_PARTITION  Comma separated list of partitions where journal or block_db or block_wal for the failed devices on this HOST were stored (/dev/sdh2,/dev/sdh3)
  *  CLUSTER_FLAGS                       Comma separated list of tags to apply to cluster
  *  WAIT_FOR_HEALTHY                    Wait for cluster rebalance before stoping daemons
+ *  DMCRYPT                             Set to True if replacing osds are/were encrypted
  *
  */
 
@@ -49,31 +50,11 @@ node("python") {
     // create connection to salt master
     python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
-    if (flags.size() > 0) {
-        stage('Set cluster flags') {
-            for (flag in flags) {
-                runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd set ' + flag)
-            }
-        }
-    }
-
     def osd_ids = []
 
-    print("osds:")
-    print(osds)
-
-    // get list of osd disks of the host
-    def ceph_disks = salt.getGrain(pepperEnv, HOST, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
-    common.prettyPrint(ceph_disks)
-
-    for (i in ceph_disks) {
-        def osd_id = i.getKey().toString()
-        if (osd_id in osds || OSD == '*') {
-            osd_ids.add('osd.' + osd_id)
-            print("Will delete " + osd_id)
-        } else {
-            print("Skipping " + osd_id)
-        }
+    for (osd_id in osds) {
+        osd_ids.add('osd.' + osd_id)
+        print("Will delete " + osd_id)
     }
 
     // `ceph osd out <id> <id>`
@@ -85,6 +66,15 @@ node("python") {
     if (WAIT_FOR_HEALTHY.toBoolean() == true) {
         sleep(5)
         waitForHealthy(pepperEnv)
+    }
+
+
+    if (flags.size() > 0) {
+        stage('Set cluster flags') {
+            for (flag in flags) {
+                runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd set ' + flag)
+            }
+        }
     }
 
     // stop osd daemons
@@ -129,29 +119,83 @@ node("python") {
         }
     }
 
-    // umount `umount /dev/sdi1`
-    stage('Umount devices') {
-        for (dev in devices) {
-            runCephCommand(pepperEnv, HOST, 'umount ' + dev + '1')
-        }
-    }
+    if (DMCRYPT.toBoolean() == true) {
 
-    // zap disks `ceph-disk zap /dev/sdi`
-    stage('Zap devices') {
-        for (dev in devices) {
-            runCephCommand(pepperEnv, HOST, 'ceph-disk zap ' + dev)
+        // remove partition tables
+        stage('dd part tables') {
+            for (dev in devices) {
+                runCephCommand(pepperEnv, HOST, "dd if=/dev/zero of=${dev} bs=512 count=1 conv=notrunc")
+            }
         }
-    }
 
-    // remove journal, block_db or block_wal partition `parted /dev/sdj rm 3`
-    stage('Remove journal / block_db / block_wal partitions') {
-        for (partition in journals_blockdbs_blockwals) {
-            if (partition?.trim()) {
-                // dev = /dev/sdi
-                def dev = partition.replaceAll("[0-9]", "")
-                // part_id = 2
-                def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
-                runCephCommand(pepperEnv, HOST, "parted ${dev} rm ${part_id}")
+        // remove journal, block_db or block_wal partition `parted /dev/sdj rm 3`
+        stage('Remove journal / block_db / block_wal partitions') {
+            for (partition in journals_blockdbs_blockwals) {
+                if (partition?.trim()) {
+                    // dev = /dev/sdi
+                    def dev = partition.replaceAll("[0-9]", "")
+                    // part_id = 2
+                    def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
+                    try {
+                        runCephCommand(pepperEnv, HOST, "Ignore | parted ${dev} rm ${part_id}")
+                    } catch (Exception e) {
+                        common.warningMsg(e)
+                    }
+                }
+            }
+        }
+
+        // reboot
+        stage('reboot and wait') {
+            salt.runSaltProcessStep(pepperEnv, HOST, 'system.reboot', null, null, true, 5)
+            salt.minionsReachable(pepperEnv, 'I@salt:master', HOST)
+            sleep(10)
+        }
+
+
+
+        // zap disks `ceph-disk zap /dev/sdi`
+        stage('Zap devices') {
+            for (dev in devices) {
+                try {
+                    runCephCommand(pepperEnv, HOST, 'ceph-disk zap ' + dev)
+                } catch (Exception e) {
+                    common.warningMsg(e)
+                }
+                runCephCommand(pepperEnv, HOST, 'ceph-disk zap ' + dev)
+            }
+        }
+
+    } else {
+
+        // umount `umount /dev/sdi1`
+        stage('Umount devices') {
+            for (dev in devices) {
+                runCephCommand(pepperEnv, HOST, 'umount ' + dev + '1')
+            }
+        }
+
+        // zap disks `ceph-disk zap /dev/sdi`
+        stage('Zap devices') {
+            for (dev in devices) {
+                runCephCommand(pepperEnv, HOST, 'ceph-disk zap ' + dev)
+            }
+        }
+
+        // remove journal, block_db or block_wal partition `parted /dev/sdj rm 3`
+        stage('Remove journal / block_db / block_wal partitions') {
+            for (partition in journals_blockdbs_blockwals) {
+                if (partition?.trim()) {
+                    // dev = /dev/sdi
+                    def dev = partition.replaceAll("[0-9]", "")
+                    // part_id = 2
+                    def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
+                    try {
+                        runCephCommand(pepperEnv, HOST, "parted ${dev} rm ${part_id}")
+                    } catch (Exception e) {
+                        common.warningMsg(e)
+                    }
+                }
             }
         }
     }

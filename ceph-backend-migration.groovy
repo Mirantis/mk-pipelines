@@ -47,6 +47,52 @@ def removePartition(master, target, partition_uuid) {
     return
 }
 
+def removeJournalOrBlockPartitions(master, target, id) {
+
+    // remove journal, block_db, block_wal partition `parted /dev/sdj rm 3`
+    stage('Remove journal / block_db / block_wal partition') {
+        def partition_uuid = ""
+        def journal_partition_uuid = ""
+        def block_db_partition_uuid = ""
+        def block_wal_partition_uuid = ""
+        try {
+            journal_partition_uuid = runCephCommand(master, target, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep journal | grep partuuid")
+            journal_partition_uuid = journal_partition_uuid.toString().trim().split("\n")[0].substring(journal_partition_uuid.toString().trim().lastIndexOf("/")+1)
+        } catch (Exception e) {
+            common.infoMsg(e)
+        }
+        try {
+            block_db_partition_uuid = runCephCommand(master, target, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.db' | grep partuuid")
+            block_db_partition_uuid = block_db_partition_uuid.toString().trim().split("\n")[0].substring(block_db_partition_uuid.toString().trim().lastIndexOf("/")+1)
+        } catch (Exception e) {
+            common.infoMsg(e)
+        }
+
+        try {
+            block_wal_partition_uuid = runCephCommand(master, target, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.wal' | grep partuuid")
+            block_wal_partition_uuid = block_wal_partition_uuid.toString().trim().split("\n")[0].substring(block_wal_partition_uuid.toString().trim().lastIndexOf("/")+1)
+        } catch (Exception e) {
+            common.infoMsg(e)
+        }
+
+        // set partition_uuid = 2c76f144-f412-481e-b150-4046212ca932
+        if (journal_partition_uuid?.trim()) {
+            partition_uuid = journal_partition_uuid
+        } else if (block_db_partition_uuid?.trim()) {
+            partition_uuid = block_db_partition_uuid
+        }
+
+        // if disk has journal, block_db or block_wal on different disk, then remove the partition
+        if (partition_uuid?.trim()) {
+            removePartition(master, target, partition_uuid)
+        }
+        if (block_wal_partition_uuid?.trim()) {
+            removePartition(master, target, block_wal_partition_uuid)
+        }
+    }
+    return
+}
+
 def runCephCommand(master, target, cmd) {
     return salt.cmdRun(master, target, cmd)
 }
@@ -81,11 +127,12 @@ node("python") {
 
         def target_hosts = salt.getMinions(pepperEnv, TARGET)
 
-        for (HOST in target_hosts) {
+        for (tgt in target_hosts) {
             def osd_ids = []
 
-            // get list of osd disks of the host
-            def ceph_disks = salt.getGrain(pepperEnv, HOST, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
+            // get list of osd disks of the tgt
+            salt.runSaltProcessStep(pepperEnv, tgt, 'saltutil.sync_grains', [], null, true, 5)
+            def ceph_disks = salt.getGrain(pepperEnv, tgt, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
 
             for (i in ceph_disks) {
                 def osd_id = i.getKey().toString()
@@ -121,7 +168,7 @@ node("python") {
 
                     // stop osd daemons
                     stage('Stop OSD daemons') {
-                        salt.runSaltProcessStep(pepperEnv, HOST, 'service.stop', ['ceph-osd@' + osd_id.replaceAll('osd.', '')],  null, true)
+                        salt.runSaltProcessStep(pepperEnv, tgt, 'service.stop', ['ceph-osd@' + osd_id.replaceAll('osd.', '')],  null, true)
                     }
 
                     // remove keyring `ceph auth del osd.3`
@@ -134,72 +181,72 @@ node("python") {
                         runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd rm ' + osd_id)
                     }
 
-                    def mount = runCephCommand(pepperEnv, HOST, "mount | grep /var/lib/ceph/osd/ceph-${id}")['return'][0].values()[0]
-                    dev = mount.split()[0].replaceAll("[0-9]","")
+                    def dmcrypt = ""
+                    try {
+                        dmcrypt = runCephCommand(pepperEnv, tgt, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep dmcrypt")['return'][0].values()[0]
+                    } catch (Exception e) {
+                        common.warningMsg(e)
+                    }
 
-                    // remove journal, block_db, block_wal partition `parted /dev/sdj rm 3`
-                    stage('Remove journal / block_db / block_wal partition') {
-                        def partition_uuid = ""
-                        def journal_partition_uuid = ""
-                        def block_db_partition_uuid = ""
-                        def block_wal_partition_uuid = ""
-                        try {
-                            journal_partition_uuid = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep journal | grep partuuid")
-                            journal_partition_uuid = journal_partition_uuid.toString().trim().split("\n")[0].substring(journal_partition_uuid.toString().trim().lastIndexOf("/")+1)
-                        } catch (Exception e) {
-                            common.infoMsg(e)
-                        }
-                        try {
-                            block_db_partition_uuid = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.db' | grep partuuid")
-                            block_db_partition_uuid = block_db_partition_uuid.toString().trim().split("\n")[0].substring(block_db_partition_uuid.toString().trim().lastIndexOf("/")+1)
-                        } catch (Exception e) {
-                            common.infoMsg(e)
+                    if (dmcrypt?.trim()) {
+                        def mount = runCephCommand(pepperEnv, tgt, "lsblk -rp | grep /var/lib/ceph/osd/ceph-${id} -B1")['return'][0].values()[0]
+                        dev = mount.split()[0].replaceAll("[0-9]","")
+
+                        // remove partition tables
+                        stage('dd part tables') {
+                            runCephCommand(pepperEnv, tgt, "dd if=/dev/zero of=${dev} bs=512 count=1 conv=notrunc")
                         }
 
-                        try {
-                            block_wal_partition_uuid = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.wal' | grep partuuid")
-                            block_wal_partition_uuid = block_wal_partition_uuid.toString().trim().split("\n")[0].substring(block_wal_partition_uuid.toString().trim().lastIndexOf("/")+1)
-                        } catch (Exception e) {
-                            common.infoMsg(e)
+                        // remove journal, block_db, block_wal partition `parted /dev/sdj rm 3`
+                        removeJournalOrBlockPartitions(pepperEnv, tgt, id)
+
+                        // reboot
+                        stage('reboot and wait') {
+                            salt.runSaltProcessStep(pepperEnv, tgt, 'system.reboot', null, null, true, 5)
+                            salt.minionsReachable(pepperEnv, 'I@salt:master', tgt)
+                            sleep(10)
                         }
 
-                        // set partition_uuid = 2c76f144-f412-481e-b150-4046212ca932
-                        if (journal_partition_uuid?.trim()) {
-                            partition_uuid = journal_partition_uuid
-                        } else if (block_db_partition_uuid?.trim()) {
-                            partition_uuid = block_db_partition_uuid
+                        // zap disks `ceph-disk zap /dev/sdi`
+                        stage('Zap devices') {
+                            try {
+                                runCephCommand(pepperEnv, tgt, 'ceph-disk zap ' + dev)
+                            } catch (Exception e) {
+                                common.warningMsg(e)
+                            }
+                            runCephCommand(pepperEnv, tgt, 'ceph-disk zap ' + dev)
                         }
 
-                        // if disk has journal, block_db or block_wal on different disk, then remove the partition
-                        if (partition_uuid?.trim()) {
-                            removePartition(pepperEnv, HOST, partition_uuid)
+                    } else {
+
+                        def mount = runCephCommand(pepperEnv, tgt, "mount | grep /var/lib/ceph/osd/ceph-${id}")['return'][0].values()[0]
+                        dev = mount.split()[0].replaceAll("[0-9]","")
+
+                        // remove journal, block_db, block_wal partition `parted /dev/sdj rm 3`
+                        removeJournalOrBlockPartitions(pepperEnv, tgt, id)
+
+                        // umount `umount /dev/sdi1`
+                        stage('Umount devices') {
+                            runCephCommand(pepperEnv, tgt, "umount /var/lib/ceph/osd/ceph-${id}")
                         }
-                        if (block_wal_partition_uuid?.trim()) {
-                            removePartition(pepperEnv, HOST, block_wal_partition_uuid)
+
+                        // zap disks `ceph-disk zap /dev/sdi`
+                        stage('Zap device') {
+                            runCephCommand(pepperEnv, tgt, 'ceph-disk zap ' + dev)
                         }
                     }
 
-                    // umount `umount /dev/sdi1`
-                    stage('Umount devices') {
-                        runCephCommand(pepperEnv, HOST, "umount /var/lib/ceph/osd/ceph-${id}")
-                    }
-
-                    // zap disks `ceph-disk zap /dev/sdi`
-                    stage('Zap device') {
-                        runCephCommand(pepperEnv, HOST, 'ceph-disk zap ' + dev)
-                    }
-
-                    // Deploy failed Ceph OSD
+                    // Deploy Ceph OSD
                     stage('Deploy Ceph OSD') {
-                        salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.refresh_pillar', [], null, true, 5)
-                        salt.enforceState(pepperEnv, HOST, 'ceph.osd', true)
+                        salt.runSaltProcessStep(pepperEnv, tgt, 'saltutil.refresh_pillar', [], null, true, 5)
+                        salt.enforceState(pepperEnv, tgt, 'ceph.osd', true)
                     }
 
                     if (PER_OSD_CONTROL.toBoolean() == true) {
                         stage("Verify backend version for osd.${id}") {
                             sleep(5)
-                            runCephCommand(pepperEnv, HOST, "ceph osd metadata ${id} | grep osd_objectstore")
-                            runCephCommand(pepperEnv, HOST, "ceph -s")
+                            runCephCommand(pepperEnv, tgt, "ceph osd metadata ${id} | grep osd_objectstore")
+                            runCephCommand(pepperEnv, tgt, "ceph -s")
                         }
 
                         stage('Ask for manual confirmation') {
@@ -211,8 +258,8 @@ node("python") {
             if (PER_OSD_HOST_CONTROL.toBoolean() == true) {
                 stage("Verify backend versions") {
                     sleep(5)
-                    runCephCommand(pepperEnv, HOST, "ceph osd metadata | grep osd_objectstore -B2")
-                    runCephCommand(pepperEnv, HOST, "ceph -s")
+                    runCephCommand(pepperEnv, tgt, "ceph osd metadata | grep osd_objectstore -B2")
+                    runCephCommand(pepperEnv, tgt, "ceph -s")
                 }
 
                 stage('Ask for manual confirmation') {
