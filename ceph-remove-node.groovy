@@ -95,7 +95,7 @@ node("python") {
     if (HOST_TYPE.toLowerCase() != 'osd') {
 
         // virsh destroy rgw04.deploy-name.local; virsh undefine rgw04.deploy-name.local;
-        stage('Destroy VM') {
+        stage('Destroy/Undefine VM') {
             _pillar = salt.getGrain(pepperEnv, 'I@salt:control', 'id')
             def kvm01 = _pillar['return'][0].values()[0].values()[0]
 
@@ -225,6 +225,15 @@ node("python") {
             runCephCommand(pepperEnv, HOST, 'apt purge ceph-base ceph-common ceph-fuse ceph-mds ceph-osd python-cephfs librados2 python-rados -y')
         }
 
+        stage('Remove OSD host from crushmap') {
+            def hostname = runCephCommand(pepperEnv, HOST, "hostname -s")['return'][0].values()[0].split('\n')[0]
+            try {
+                runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd crush remove ${hostname}")
+            } catch (Exception e) {
+                common.warningMsg(e)
+            }
+        }
+
         // stop salt-minion service and move its configuration
         stage('Stop salt-minion') {
             salt.cmdRun(pepperEnv, HOST, "mv /etc/salt/minion.d/minion.conf minion.conf")
@@ -242,6 +251,25 @@ node("python") {
             salt.cmdRun(pepperEnv, 'I@salt:master', "rm /srv/salt/reclass/nodes/_generated/${target}.${domain}.yml")
         } catch (Exception e) {
             common.warningMsg(e)
+        }
+    }
+
+    stage('Remove keyring') {
+        def keyring = ""
+        def keyring_lines = ""
+        try {
+            keyring_lines = runCephCommand(pepperEnv, ADMIN_HOST, "ceph auth list | grep ${target}")['return'][0].values()[0].split('\n')
+        } catch (Exception e) {
+            common.warningMsg(e)
+        }
+        for (line in keyring_lines) {
+            if (line.toLowerCase().contains(target.toLowerCase())) {
+                keyring = line
+                break
+            }
+        }
+        if (keyring?.trim()) {
+            runCephCommand(pepperEnv, ADMIN_HOST, "ceph auth del ${keyring}")
         }
     }
 
