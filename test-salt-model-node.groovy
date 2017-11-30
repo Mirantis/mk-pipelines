@@ -61,7 +61,16 @@ throttle(['test-model']) {
         if (checkouted) {
           def workspace = common.getWorkspace()
           common.infoMsg("Running salt model test for node ${NODE_TARGET} in cluster ${CLUSTER_NAME}")
-          saltModelTesting.setupAndTestNode(NODE_TARGET, CLUSTER_NAME, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION, MAX_CPU_PER_JOB.toInteger(), RECLASS_IGNORE_CLASS_NOTFOUND, LEGACY_TEST_MODE, APT_REPOSITORY, APT_REPOSITORY_GPG)
+          try {
+            setupAndTestNode(NODE_TARGET, CLUSTER_NAME, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION, MAX_CPU_PER_JOB.toInteger(), RECLASS_IGNORE_CLASS_NOTFOUND, LEGACY_TEST_MODE, APT_REPOSITORY, APT_REPOSITORY_GPG)
+          } catch (Exception e) {
+            if (e.getMessage() == "script returned exit code 124") {
+              common.errorMsg("Impossible to test node due to timeout of salt-master, ABORTING BUILD")
+              currentBuild.result = "ABORTED"
+            } else {
+              throw e
+            }
+          }
         }
       }
     } catch (Throwable e) {

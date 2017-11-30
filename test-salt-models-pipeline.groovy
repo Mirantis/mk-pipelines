@@ -18,7 +18,7 @@ def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
 def git = new com.mirantis.mk.Git()
 
-def  config_node_name_pattern
+def config_node_name_pattern
 try {
   config_node_name_pattern = CONFIG_NODE_NAME_PATTERN
 } catch (MissingPropertyException e) {
@@ -50,7 +50,7 @@ try {
 
 def checkouted = false
 futureNodes = []
-failedNodes = []
+failedNodes = false
 common = new com.mirantis.mk.Common()
 
 def setupRunner() {
@@ -58,7 +58,7 @@ def setupRunner() {
   def branches = [:]
   for (int i = 0; i < PARALLEL_NODE_GROUP_SIZE.toInteger() && i < futureNodes.size(); i++) {
     branches["Runner ${i}"] = {
-      while (futureNodes) {
+      while (futureNodes && !failedNodes) {
         def currentNode = futureNodes[0] ? futureNodes[0] : null
         if (!currentNode) {
           continue
@@ -69,13 +69,18 @@ def setupRunner() {
         try {
             triggerTestNodeJob(currentNode[0], currentNode[1], currentNode[2], currentNode[3], currentNode[4])
         } catch (Exception e) {
-          failedNodes << currentNode
-          common.warningMsg("Test of ${clusterName} failed :  ${e}")
+          if (e.getMessage().contains("completed with status ABORTED")) {
+            common.warningMsg("Test of ${clusterName} failed because the test was aborted :  ${e}")
+            futureNodes << currentNode
+          } else {
+            common.warningMsg("Test of ${clusterName} failed :  ${e}")
+            failedNodes = true
+          }
         }
       }
     }
   }
-  failedNodes = []
+
   if (branches) {
     parallel branches
   }
@@ -193,16 +198,6 @@ node("python") {
         }
 
         setupRunner()
-
-        def maxNodes = infraYMLs.size() > 10 ? infraYMLs.size() / 2 : 5
-        if (failedNodes && failedNodes.size() <= maxNodes) {
-          common.infoMsg("Some tests failed. They will be retriggered to make sure the failure is correct")
-          for (int retry = 0; retry < 2 && failedNodes; retry++) {
-            futureNodes = failedNodes
-            failedNodes = []
-            setupRunner()
-          }
-        }
 
         if (failedNodes) {
           currentBuild.result = "FAILURE"
