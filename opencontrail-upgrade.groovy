@@ -43,7 +43,7 @@ def void runCommonCommands(target, command, args, check, salt, pepperEnv, common
     if ( check == "nodetool status" ) {
         salt.commandStatus(pepperEnv, target, check, 'Status=Up')
     } else if ( check == "contrail-status" ) {
-        salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)
+        salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/", null, false)
     }
 
     //out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, null, check, null)
@@ -234,7 +234,7 @@ node() {
                 salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
 
                 //sleep(10)
-                salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active", null, false)
+                salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
 
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
@@ -271,7 +271,7 @@ node() {
 
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
                 //sleep(10)
-                salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active", null, false)
+                salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
 
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
@@ -444,7 +444,7 @@ node() {
 
                 salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
                 //sleep(10)
-                salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active", null, false)
+                salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
 
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
@@ -483,7 +483,7 @@ node() {
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
 
                 //sleep(10)
-                salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active", null, false)
+                salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
 
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
