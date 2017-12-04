@@ -16,11 +16,20 @@ try {
   components = ""
 }
 
+def storages
+try {
+    storages = STORAGES.tokenize(',')
+} catch (MissingPropertyException e) {
+    storages = ['local']
+}
+
 node() {
   try{
     stage("promote") {
       lock("aptly-api") {
-        aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY, '-d --timeout 600', DUMP_PUBLISH.toBoolean())
+        for (storage in storages) {
+          aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY, '-d --timeout 600', DUMP_PUBLISH.toBoolean(), storage)
+        }
       }
     }
   } catch (Throwable e) {
