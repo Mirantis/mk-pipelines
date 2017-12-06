@@ -400,6 +400,12 @@ node(slave_node) {
 
         }
 
+        if (common.checkContains('STACK_INSTALL', 'oss')) {
+          stage('Install Oss infra') {
+            orchestrate.installOssInfra(venvPepper)
+          }
+        }
+
         if (common.checkContains('STACK_INSTALL', 'cicd')) {
             stage('Install Cicd') {
                 orchestrate.installDockerSwarm(venvPepper)
@@ -419,6 +425,17 @@ node(slave_node) {
                 orchestrate.installDockerSwarm(venvPepper)
                 orchestrate.installStacklight(venvPepper)
             }
+        }
+
+        if (common.checkContains('STACK_INSTALL', 'oss')) {
+          stage('Install OSS') {
+            if (!common.checkContains('STACK_INSTALL', 'stacklight')) {
+              // In case if StackLightv2 enabled containers already started
+              orchestrate.installDockerSwarm(venvPepper)
+              salt.enforceState(venvPepper, 'I@docker:swarm:role:master and I@devops_portal:config', 'docker.client', true)
+            }
+            orchestrate.installOss(venvPepper)
+          }
         }
 
         //
