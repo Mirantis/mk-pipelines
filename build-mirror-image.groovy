@@ -24,6 +24,8 @@ def openstackServer = ""
 def rcFile = ""
 def openstackEnv = ""
 def serverStatus = ""
+def uploadImageStatus = ""
+def uploadMd5Status = ""
 
 def retry(int times = 5, int delay = 0, Closure body) {
     int retries = 0
@@ -111,10 +113,11 @@ node("python&&disk-xl") {
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['aptly_mirror_update.sh -s -v', 'runas=aptly'], null, true)
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['nohup aptly api serve --no-lock > /dev/null 2>&1 </dev/null &', 'runas=aptly'], null, true)
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['aptly-publisher --timeout=1200 publish -v -c /etc/aptly-publisher.yaml --architectures amd64 --url http://127.0.0.1:8080 --recreate --force-overwrite', 'runas=aptly'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/mirror-image/aptly/aptly-update.sh -O /srv/scripts/aptly-update.sh'], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['aptly db cleanup', 'runas=aptly'], null, true)
             //NEW way
             //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", 'runas=aptly'], null, true)
-            //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-arf", 'runas=aptly'], null, true)
+            //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-acrfv", 'runas=aptly'], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/mirror-image/aptly/aptly-update.sh -O /srv/scripts/aptly-update.sh'], null, true)
         }
 
         stage("Create Git mirror"){
@@ -153,11 +156,23 @@ node("python&&disk-xl") {
         }
 
         stage("Publish image"){
+            common.infoMsg("Saving image ${IMAGE_NAME}-${dateTime}")
             openstack.runOpenstackCommand("openstack image save --file ${IMAGE_NAME}-${dateTime} ${IMAGE_NAME}-${dateTime}", rcFile, openstackEnv)
-            python.setupVirtualenv(venvS4cmd)
-            python.runVirtualenvCommand(venvS4cmd, "pip install s4cmd")
-            creds = common.getPasswordCredentials(AWS_CREDENTIALS_ID)
-            python.runVirtualenvCommand(venvS4cmd, "python ./${venvS4cmd}/bin/s4cmd.py --access-key ${creds.username} --secret-key ${creds.password.toString()} --multipart-split-size=5368709120 put ${IMAGE_NAME}-${dateTime} s3://${AWS_S3_BUCKET_NAME}/${IMAGE_NAME}-${dateTime}")
+            sh "md5sum ${IMAGE_NAME}-${dateTime} > ${IMAGE_NAME}-${dateTime}.md5"
+
+            common.infoMsg("Uploading image ${IMAGE_NAME}-${dateTime}")
+            retry(3, 5){
+                uploadImageStatus = sh(script: "curl -f -T ${IMAGE_NAME}-${dateTime} ${UPLOAD_URL}", returnStatus: true)
+                if(uploadImageStatus!=0){
+                    throw new Exception("Image upload failed")
+                }
+            }
+            retry(3, 5){
+                uploadMd5Status = sh(script: "curl -f -T ${IMAGE_NAME}-${dateTime}.md5 ${UPLOAD_URL}", returnStatus: true)
+                if(uploadMd5Status != 0){
+                    throw new Exception("MD5 sum upload failed")
+                }
+            }
         }
 
     } catch (Throwable e) {
