@@ -1,16 +1,23 @@
 /**
  *
- * Launch validation of the cloud
+ * Launch HA test for the cloud
  *
  * Expected parameters:
- *   SALT_MASTER_URL             URL of Salt master
- *   SALT_MASTER_CREDENTIALS     Credentials to the Salt API
  *
- *   TEST_IMAGE                  Docker image link
- *   TARGET_NODE                 Salt target for tempest node
- *   TEMPEST_TEST_SET            If not false, run tests matched to pattern only
- *   RUN_TEMPEST_TESTS           If not false, run Tempest tests
- *   RUN_RALLY_TESTS             If not false, run Rally tests
+ *   SALT_MASTER_URL             URL of Salt master
+ *   SALT_MASTER_CREDENTIALS     Credentials that are used in this Jenkins for accessing Salt master (usually "salt")
+ *   PROXY                       Proxy address (if any) for accessing the Internet. It will be used for cloning repos and installing pip dependencies
+ *   TEST_IMAGE                  Docker image link to use for running container with testing tools.
+ *   TOOLS_REPO                  URL of repo where testing tools, scenarios, configs are located
+ *
+ *   DEBUG_MODE                  If you need to debug (keep container after test), please enabled this
+ *   MANUAL_CONFIRMATION         Ask for confirmation before doing something destructive (reboot/shutdown node)
+ *   RETRY_CHECK_STATUS          Number of retries to check node status
+ *   SKIP_LIST_PATH              Path to tempest skip list file in TOOLS_REPO
+ *   TARGET_NODES                Nodes to test
+ *   TEMPEST_REPO                Tempest repo to clone and use
+ *   TEMPEST_TARGET_NODE         Node, where tests will be executed
+ *   TEMPEST_TEST_PATTERN        Tests to run during HA scenarios
  *
  */
 
@@ -156,7 +163,7 @@ node() {
         }
 
         stage('Collect results') {
-            val.addFiles(saltMaster, TEMPEST_TARGET_NODE, remote_artifacts_dir, artifacts_dir)
+            validate.addFiles(saltMaster, TEMPEST_TARGET_NODE, remote_artifacts_dir, artifacts_dir)
             archiveArtifacts artifacts: "${artifacts_dir}/*"
             if (DEBUG_MODE == 'false') {
                 validate.runCleanup(saltMaster, TEMPEST_TARGET_NODE)
