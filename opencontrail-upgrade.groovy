@@ -32,7 +32,7 @@ def command = 'cmd.shell'
 
 def CONTROL_PKGS = 'contrail-config contrail-config-openstack contrail-control contrail-dns contrail-lib contrail-nodemgr contrail-utils contrail-web-controller contrail-web-core neutron-plugin-contrail python-contrail'
 def ANALYTIC_PKGS = 'contrail-analytics contrail-lib contrail-nodemgr contrail-utils python-contrail'
-def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
+def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms contrail-nova-driver'
 def KERNEL_MODULE_RELOAD = 'service supervisor-vrouter stop;ifdown vhost0;rmmod vrouter;modprobe vrouter;ifup vhost0;service supervisor-vrouter start;'
 
 def void runCommonCommands(target, command, args, check, salt, pepperEnv, common) {
