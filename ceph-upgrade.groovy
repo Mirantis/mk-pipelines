@@ -46,37 +46,48 @@ def waitForHealthy(master, count=0, attempts=300) {
 def backup(master, target) {
     stage("backup ${target}") {
 
-        def _pillar = salt.getGrain(master, 'I@salt:master', 'domain')
-        def domain = _pillar['return'][0].values()[0].values()[0]
-
-        def kvm_pillar = salt.getGrain(master, 'I@salt:control', 'id')
-        def kvm01 = kvm_pillar['return'][0].values()[0].values()[0]
-
-        def target_pillar = salt.getGrain(master, "I@ceph:${target}", 'host')
-        def minions = target_pillar['return'][0].values()
-        for (minion in minions) {
-            def minion_name = minion.values()[0]
-            def provider_pillar = salt.getPillar(master, "${kvm01}", "salt:control:cluster:internal:node:${minion_name}:provider")
-            def minionProvider = provider_pillar['return'][0].values()[0]
-
-            waitForHealthy(master)
+        if (target == 'osd') {
             try {
-                salt.cmdRun(master, "${minionProvider}", "[ ! -f /root/${minion_name}.${domain}.qcow2.bak ] && virsh destroy ${minion_name}.${domain}")
+                salt.enforceState(master, "I@ceph:${target}", "ceph.backup", true)
+                runCephCommand(master, "I@ceph:${target}", "su root -c '/usr/local/bin/ceph-backup-runner-call.sh'")
             } catch (Exception e) {
-                common.warningMsg('Backup already exists')
+                common.errorMsg(e)
+                common.errorMsg("Make sure Ceph backup on OSD nodes is enabled")
+                throw new InterruptedException()
             }
-            try {
-                salt.cmdRun(master, "${minionProvider}", "[ ! -f /root/${minion_name}.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/${minion_name}.${domain}/system.qcow2 /root/${minion_name}.${domain}.qcow2.bak")
-            } catch (Exception e) {
-                common.warningMsg('Backup already exists')
+        } else {
+            def _pillar = salt.getGrain(master, 'I@salt:master', 'domain')
+            def domain = _pillar['return'][0].values()[0].values()[0]
+
+            def kvm_pillar = salt.getGrain(master, 'I@salt:control', 'id')
+            def kvm01 = kvm_pillar['return'][0].values()[0].values()[0]
+
+            def target_pillar = salt.getGrain(master, "I@ceph:${target}", 'host')
+            def minions = target_pillar['return'][0].values()
+            for (minion in minions) {
+                def minion_name = minion.values()[0]
+                def provider_pillar = salt.getPillar(master, "${kvm01}", "salt:control:cluster:internal:node:${minion_name}:provider")
+                def minionProvider = provider_pillar['return'][0].values()[0]
+
+                waitForHealthy(master)
+                try {
+                    salt.cmdRun(master, "${minionProvider}", "[ ! -f /root/${minion_name}.${domain}.qcow2.bak ] && virsh destroy ${minion_name}.${domain}")
+                } catch (Exception e) {
+                    common.warningMsg('Backup already exists')
+                }
+                try {
+                    salt.cmdRun(master, "${minionProvider}", "[ ! -f /root/${minion_name}.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/${minion_name}.${domain}/system.qcow2 /root/${minion_name}.${domain}.qcow2.bak")
+                } catch (Exception e) {
+                    common.warningMsg('Backup already exists')
+                }
+                try {
+                    salt.cmdRun(master, "${minionProvider}", "virsh start ${minion_name}.${domain}")
+                } catch (Exception e) {
+                    common.warningMsg(e)
+                }
+                salt.minionsReachable(master, 'I@salt:master', "${minion_name}*")
+                waitForHealthy(master)
             }
-            try {
-                salt.cmdRun(master, "${minionProvider}", "virsh start ${minion_name}.${domain}")
-            } catch (Exception e) {
-                common.warningMsg(e)
-            }
-            salt.minionsReachable(master, 'I@salt:master', "${minion_name}*")
-            waitForHealthy(master)
         }
     }
     return
@@ -142,6 +153,9 @@ node("python") {
         }
         if (STAGE_UPGRADE_RGW.toBoolean() == true) {
             backup(pepperEnv, 'radosgw')
+        }
+        if (STAGE_UPGRADE_OSD.toBoolean() == true) {
+            backup(pepperEnv, 'osd')
         }
     }
 
