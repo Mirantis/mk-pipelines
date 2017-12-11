@@ -39,6 +39,10 @@ def void runCommonCommands(target, command, args, check, salt, pepperEnv, common
 
     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, null, args, null)
     salt.printSaltCommandResult(out)
+    // if Error occured - throw exception
+    if (out.toString().contains('E: ')) {
+        throw new Exception("Command execution failed")
+    }
     // wait until $check is in correct state
     if ( check == "nodetool status" ) {
         salt.commandStatus(pepperEnv, target, check, 'Status=Up')
@@ -81,8 +85,7 @@ node() {
             try {
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "su root -c '/usr/local/bin/zookeeper-backup-runner.sh'")
             } catch (Exception er) {
-                common.errorMsg('Zookeeper failed to backup. Please fix it before continuing.')
-                return
+                throw new Exception('Zookeeper failed to backup. Please fix it before continuing.')
             }
 
             salt.enforceState(pepperEnv, 'I@cassandra:backup:server', 'cassandra.backup')
@@ -91,8 +94,7 @@ node() {
             try {
                 salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', "su root -c '/usr/local/bin/cassandra-backup-runner-call.sh'")
             } catch (Exception er) {
-                common.errorMsg('Cassandra failed to backup. Please fix it before continuing.')
-                return
+                throw new Exception('Cassandra failed to backup. Please fix it before continuing.')
             }
 
             args = 'apt install contrail-database -y;'
