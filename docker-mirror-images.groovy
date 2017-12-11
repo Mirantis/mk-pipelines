@@ -22,7 +22,7 @@ def getImageName(String image) {
         def imageName = matcher.group(1)
         return imageName
     }else{
-        throw new IllegalFormatException("Wrong format of image name.")
+        throw new IllegalArgumentException("Wrong format of image name.")
     }
 }
 
@@ -32,13 +32,18 @@ node("docker") {
             def creds = common.getPasswordCredentials(TARGET_REGISTRY_CREDENTIALS_ID)
             sh "docker login --username=${creds.username} --password=${creds.password.toString()} ${REGISTRY_URL}"
             def images = IMAGE_LIST.tokenize('\n')
-            def imageName
+            def imageName, imagePath, targetRegistry, imageArray
             for (image in images){
-                sh "echo ${image}"
+                if(image.trim().indexOf(' ') == -1){
+                    throw new IllegalArgumentException("Wrong format of image and target repository input")
+                }
+                imageArray = image.trim().tokenize(' ')
+                imagePath = imageArray[0]
+                targetRegistry = imageArray[1]
                 imageName = getImageName(image)
-                sh "docker pull ${image}"
-                sh "docker tag ${image} ${TARGET_REGISTRY}/${imageName}:${IMAGE_TAG}"
-                sh "docker push ${TARGET_REGISTRY}/${imageName}:${IMAGE_TAG}"
+                sh """docker pull ${imagePath}
+                      docker tag ${imagePath} ${targetRegistry}/${imageName}:${IMAGE_TAG}
+                      docker push ${targetRegistry}/${imageName}:${IMAGE_TAG}"""
             }
         }
     } catch (Throwable e) {
