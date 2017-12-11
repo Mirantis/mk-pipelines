@@ -402,6 +402,7 @@ node(slave_node) {
 
         if (common.checkContains('STACK_INSTALL', 'cicd')) {
             stage('Install Cicd') {
+                orchestrate.installInfra(venvPepper)
                 orchestrate.installDockerSwarm(venvPepper)
                 orchestrate.installCicd(venvPepper)
             }
