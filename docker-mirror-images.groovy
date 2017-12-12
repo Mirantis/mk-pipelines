@@ -40,7 +40,7 @@ node("docker") {
                 imageArray = image.trim().tokenize(' ')
                 imagePath = imageArray[0]
                 targetRegistry = imageArray[1]
-                imageName = getImageName(image)
+                imageName = getImageName(imagePath)
                 sh """docker pull ${imagePath}
                       docker tag ${imagePath} ${targetRegistry}/${imageName}:${IMAGE_TAG}
                       docker push ${targetRegistry}/${imageName}:${IMAGE_TAG}"""
