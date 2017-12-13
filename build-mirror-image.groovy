@@ -144,7 +144,9 @@ node("python&&disk-xl") {
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['rm -rf /var/lib/cloud/sem/* /var/lib/cloud/instance /var/lib/cloud/instances/*'], null, true)
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['cloud-init init'], null, true)
 
-            openstack.runOpenstackCommand("openstack server stop mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
+            retry(3, 5){
+                openstack.runOpenstackCommand("openstack server stop mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
+            }
 
             retry(6, 30){
                 serverStatus = openstack.runOpenstackCommand("openstack server show --format value -c status mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
@@ -152,12 +154,16 @@ node("python&&disk-xl") {
                     throw new ResourceException("Instance is not ready for image create.")
                 }
             }
-            openstack.runOpenstackCommand("openstack server image create --name ${IMAGE_NAME}-${dateTime} --wait mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
+            retry(3, 5){
+                openstack.runOpenstackCommand("openstack server image create --name ${IMAGE_NAME}-${dateTime} --wait mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
+            }
         }
 
         stage("Publish image"){
             common.infoMsg("Saving image ${IMAGE_NAME}-${dateTime}")
-            openstack.runOpenstackCommand("openstack image save --file ${IMAGE_NAME}-${dateTime} ${IMAGE_NAME}-${dateTime}", rcFile, openstackEnv)
+            retry(3, 5){
+                openstack.runOpenstackCommand("openstack image save --file ${IMAGE_NAME}-${dateTime} ${IMAGE_NAME}-${dateTime}", rcFile, openstackEnv)
+            }
             sh "md5sum ${IMAGE_NAME}-${dateTime} > ${IMAGE_NAME}-${dateTime}.md5"
 
             common.infoMsg("Uploading image ${IMAGE_NAME}-${dateTime}")
