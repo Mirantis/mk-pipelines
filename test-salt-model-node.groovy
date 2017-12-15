@@ -29,7 +29,7 @@ def defaultGitUrl = DEFAULT_GIT_URL
 def checkouted = false
 
 throttle(['test-model']) {
-  node("python&&virtual") {
+  node("python") {
     try{
       stage("checkout") {
         if(defaultGitRef != "" && defaultGitUrl != "") {
