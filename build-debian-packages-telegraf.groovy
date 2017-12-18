@@ -4,7 +4,7 @@ def artifactory = new com.mirantis.mk.Artifactory()
 def aptly = new com.mirantis.mk.Aptly()
 
 def timestamp = common.getDatetime()
-def version = "1.3~${timestamp}"
+def version = "1.5~mcp~${timestamp}"
 
 node('docker') {
     try{
