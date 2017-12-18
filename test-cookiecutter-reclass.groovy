@@ -83,7 +83,22 @@ def testModel(modelFile, testEnv) {
     def clusterName = templateContext.default_context.cluster_name
     def clusterDomain = templateContext.default_context.cluster_domain
     git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
-    saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", clusterName, EXTRA_FORMULAS, testEnv)
+
+    def nbTry = 0
+    while (nbTry < 5) {
+        nbTry++
+        try {
+            saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", clusterName, EXTRA_FORMULAS, testEnv)
+            break
+        } catch (Exception e) {
+            if (e.getMessage() == "script returned exit code 124") {
+                common.errorMsg("Impossible to test node due to timeout of salt-master, retriggering")
+            } else {
+                throw e
+            }
+        }
+    }
+
 }
 
 def gerritRef
