@@ -18,6 +18,7 @@
  *   STACK_CLEANUP_JOB          Name of job for deleting stack
  *
  *   STACK_COMPUTE_COUNT        Number of compute nodes to launch
+ *   STATIC_MGMT_NETWORK        Check if model contains static IP address definitions for all nodes
  *
  *   AWS_STACK_REGION           CloudFormation AWS region
  *   AWS_API_CREDENTIALS        AWS Access key ID with  AWS secret access key
@@ -264,11 +265,11 @@ node(slave_node) {
 
         if (common.checkContains('STACK_INSTALL', 'core')) {
             stage('Install core infrastructure') {
-                orchestrate.installFoundationInfra(venvPepper)
+                orchestrate.installFoundationInfra(venvPepper, STATIC_MGMT_NETWORK.toBoolean())
 
                 if (common.checkContains('STACK_INSTALL', 'kvm')) {
                     orchestrate.installInfraKvm(venvPepper)
-                    orchestrate.installFoundationInfra(venvPepper)
+                    orchestrate.installFoundationInfra(venvPepper, STATIC_MGMT_NETWORK.toBoolean())
                 }
 
                 orchestrate.validateFoundationInfra(venvPepper)
