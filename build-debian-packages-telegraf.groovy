@@ -4,7 +4,6 @@ def artifactory = new com.mirantis.mk.Artifactory()
 def aptly = new com.mirantis.mk.Aptly()
 
 def timestamp = common.getDatetime()
-def version = "1.5~mcp~${timestamp}"
 
 node('docker') {
     try{
@@ -54,7 +53,7 @@ node('docker') {
                         export PATH=\$PATH:\$GOROOT/bin &&
                         export GOPATH=\$PWD &&
                         cd src/github.com/influxdata/telegraf &&
-                        scripts/build.py --package --version=\"${version}\" --platform=linux --arch=amd64""")
+                        scripts/build.py --package --platform=linux --arch=amd64""")
                 }
                 archiveArtifacts artifacts: "${workingDir}/telegraf/build/*.deb"
             }
