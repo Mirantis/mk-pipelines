@@ -82,7 +82,15 @@ def testModel(modelFile, testEnv) {
     def templateContext = readYaml text: content
     def clusterName = templateContext.default_context.cluster_name
     def clusterDomain = templateContext.default_context.cluster_domain
-    git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
+    if (SYSTEM_GIT_URL == "") {
+        git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
+    } else {
+        dir("${testEnv}/classes/system") {
+            if (!gerrit.gerritPatchsetCheckout(SYSTEM_GIT_URL, SYSTEM_GIT_REF, "HEAD", CREDENTIALS_ID)) {
+              common.errorMsg("Failed to obtain system reclass with url: ${SYSTEM_GIT_URL} and ${SYSTEM_GIT_REF}")
+            }
+        }
+    }
 
     def nbTry = 0
     while (nbTry < 5) {
