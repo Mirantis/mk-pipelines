@@ -62,18 +62,24 @@ node() {
 
           def branches = [:]
           def testModels = documentationOnly ? [] : TEST_MODELS.split(',')
-            for (int i = 0; i < testModels.size(); i++) {
-              def cluster = testModels[i]
-              def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
-              branches["${cluster}"] = {
-                build job: "test-salt-model-${cluster}", parameters: [
-                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
-                  [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
-                  [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
-                  [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
-                ]
-              }
+          for (int i = 0; i < testModels.size(); i++) {
+            def cluster = testModels[i]
+            def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
+            branches["${cluster}"] = {
+              build job: "test-salt-model-${cluster}", parameters: [
+                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
+                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
+                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
+                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
+              ]
             }
+          }
+          branches["cookiecutter"] = {
+            build job: "test-mk-cookiecutter-templates", parameters: [
+              [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
+              [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
+            ]
+          }
           parallel branches
         }else{
            throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
