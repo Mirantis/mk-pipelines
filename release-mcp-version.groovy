@@ -1,10 +1,12 @@
 /**
  *
- * Release MCP
+ * Promote MCP
  *
  * Expected parameters:
- *   MCP_VERSION
+ *   SOURCE_REVISION
+ *   TARGET_REVISION
  *   RELEASE_APTLY
+ *   RELEASE_DEB_MIRRORS
  *   RELEASE_DOCKER
  *   RELEASE_GIT
  *   APTLY_URL
@@ -33,12 +35,19 @@ def triggerAptlyPromoteJob(aptlyUrl, components, diffOnly, dumpPublish, packages
   ]
 }
 
-def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, mcpVersion, imageList) {
+def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, targetTag, imageList) {
   build job: "docker-images-mirror", parameters: [
     [$class: 'StringParameterValue', name: 'TARGET_REGISTRY_CREDENTIALS_ID', value: dockerCredentials],
     [$class: 'StringParameterValue', name: 'REGISTRY_URL', value: dockerRegistryUrl],
-    [$class: 'StringParameterValue', name: 'IMAGE_TAG', value: mcpVersion],
+    [$class: 'StringParameterValue', name: 'IMAGE_TAG', value: targetTag],
     [$class: 'StringParameterValue', name: 'IMAGE_LIST', value: imageList]
+  ]
+}
+
+def triggerMirrorRepoJob(snapshotId, snapshotName) {
+  build job: "mirror-snapshot-name-all", parameters: [
+    [$class: 'StringParameterValue', name: 'SNAPSHOT_NAME', value: snapshotName],
+    [$class: 'StringParameterValue', name: 'SNAPSHOT_ID', value: snapshotId]
   ]
 }
 
@@ -70,22 +79,27 @@ def gitRepoAddTag(repoURL, repoName, tag, credentials, ref = "HEAD"){
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
-            if(RELEASE_APTLY.toBoolean())
-            {
-                stage("Release Aptly"){
-                    triggerAptlyPromoteJob(APTLY_URL, 'all', false, true, 'all', false, '(.*)/testing', APTLY_STORAGES, '{0}/stable')
-                    triggerAptlyPromoteJob(APTLY_URL, 'all', false, true, 'all', false, '(.*)/stable', APTLY_STORAGES, '{0}/${MCP_VERSION}')
+            stage("Promote"){
+                if(RELEASE_APTLY.toBoolean())
+                {
+                    common.infoMsg("Promoting Aptly")
+                    triggerAptlyPromoteJob(APTLY_URL, 'all', false, true, 'all', false, "(.*)/${SOURCE_REVISION}", APTLY_STORAGES, "{0}/${TARGET_REVISION}")
                 }
-            }
-            if(RELEASE_DOCKER.toBoolean())
-            {
-                stage("Release Docker"){
-                    triggerDockerMirrorJob(DOCKER_CREDENTIALS, DOCKER_URL, MCP_VERSION, DOCKER_IMAGES)
+
+                if(RELEASE_DEB_MIRRORS.toBoolean()){
+                    common.infoMsg("Promoting Debmirrors")
+                    triggerMirrorRepoJob(SOURCE_REVISION, TARGET_REVISION)
                 }
-            }
-            if(RELEASE_GIT.toBoolean())
-            {
-                stage("Release Git"){
+
+                if(RELEASE_DOCKER.toBoolean())
+                {
+                    common.infoMsg("Promoting Docker images")
+                    triggerDockerMirrorJob(DOCKER_CREDENTIALS, DOCKER_URL, TARGET_REVISION, DOCKER_IMAGES)
+                }
+
+                if(RELEASE_GIT.toBoolean())
+                {
+                    common.infoMsg("Promoting Git repositories")
                     def repos = GIT_REPO_LIST.tokenize('\n')
                     def repoUrl, repoName, repoCommit, repoArray
                     for (repo in repos){
@@ -96,7 +110,7 @@ timeout(time: 12, unit: 'HOURS') {
                         repoName = repoArray[0]
                         repoUrl = repoArray[1]
                         repoCommit = repoArray[2]
-                        gitRepoAddTag(repoUrl, repoName, MCP_VERSION, GIT_CREDENTIALS, repoCommit)
+                        gitRepoAddTag(repoUrl, repoName, TARGET_REVISION, GIT_CREDENTIALS, repoCommit)
                     }
                 }
             }
