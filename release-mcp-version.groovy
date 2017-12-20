@@ -32,11 +32,10 @@ def triggerAptlyPromoteJob(aptlyUrl, components, diffOnly, dumpPublish, packages
   ]
 }
 
-def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, dockerRegistry, mcpVersion, imageList) {
+def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, mcpVersion, imageList) {
   build job: "mirror-docker-images", parameters: [
     [$class: 'StringParameterValue', name: 'TARGET_REGISTRY_CREDENTIALS_ID', value: dockerCredentials],
     [$class: 'StringParameterValue', name: 'REGISTRY_URL', value: dockerRegistryUrl],
-    [$class: 'StringParameterValue', name: 'TARGET_REGISTRY', value: dockerRegistry],
     [$class: 'StringParameterValue', name: 'IMAGE_TAG', value: mcpVersion],
     [$class: 'StringParameterValue', name: 'IMAGE_LIST', value: imageList]
   ]
