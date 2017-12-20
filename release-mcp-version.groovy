@@ -16,7 +16,8 @@
  *   GIT_REPO_LIST
  */
 
-def common = new com.mirantis.mk.Common()
+common = new com.mirantis.mk.Common()
+git = new com.mirantis.mk.Git()
 
 def triggerAptlyPromoteJob(aptlyUrl, components, diffOnly, dumpPublish, packages, recreate, source, storages, target){
   build job: "aptly-promote-all-testing-stable", parameters: [
@@ -33,7 +34,7 @@ def triggerAptlyPromoteJob(aptlyUrl, components, diffOnly, dumpPublish, packages
 }
 
 def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, mcpVersion, imageList) {
-  build job: "mirror-docker-images", parameters: [
+  build job: "docker-images-mirror", parameters: [
     [$class: 'StringParameterValue', name: 'TARGET_REGISTRY_CREDENTIALS_ID', value: dockerCredentials],
     [$class: 'StringParameterValue', name: 'REGISTRY_URL', value: dockerRegistryUrl],
     [$class: 'StringParameterValue', name: 'IMAGE_TAG', value: mcpVersion],
@@ -42,14 +43,27 @@ def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, mcpVersion, ima
 }
 
 def gitRepoAddTag(repoURL, repoName, tag, credentials, ref = "HEAD"){
-    git.checkoutGitRepository(repoName, repoURL, "master")
+    git.checkoutGitRepository(repoName, repoURL, "master", credentials)
     dir(repoName) {
-        def checkTag = sh "git tag -l ${tag}"
+        def checkTag = sh(script: "git tag -l ${tag}", returnStdout: true)
         if(checkTag == ""){
-            sh 'git tag -a ${tag} ${ref} -m "Release of mcp version ${tag}"'
+            sh "git tag -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
+        }else{
+            def currentTagRef = sh(script: "git rev-list -n 1 ${tag}", returnStdout: true)
+            if(currentTagRef.equals(ref)){
+                common.infoMsg("Tag is already on the right ref")
+                return
+            }
+            else{
+                sshagent([credentials]) {
+                    sh "git push --delete origin ${tag}"
+                }
+                sh "git tag --delete ${tag}"
+                sh "git tag -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
+            }
         }
         sshagent([credentials]) {
-            sh "git push origin master ${tag}"
+            sh "git push origin ${tag}"
         }
     }
 }
