@@ -265,11 +265,15 @@ node(slave_node) {
 
         if (common.checkContains('STACK_INSTALL', 'core')) {
             stage('Install core infrastructure') {
-                orchestrate.installFoundationInfra(venvPepper, STATIC_MGMT_NETWORK.toBoolean())
+                def staticMgmtNetwork = false
+                if (common.validInputParam('STATIC_MGMT_NETWORK')) {
+                    staticMgmtNetwork = STATIC_MGMT_NETWORK.toBoolean()
+                }
+                orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork)
 
                 if (common.checkContains('STACK_INSTALL', 'kvm')) {
                     orchestrate.installInfraKvm(venvPepper)
-                    orchestrate.installFoundationInfra(venvPepper, STATIC_MGMT_NETWORK.toBoolean())
+                    orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork)
                 }
 
                 orchestrate.validateFoundationInfra(venvPepper)
