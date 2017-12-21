@@ -38,6 +38,10 @@
  *  required for STACK_TYPE=physical
  *   SALT_MASTER_URL            URL of Salt master
 
+ *   BOOTSTRAP_EXTRA_REPO_PARAMS  optional parameter to define a list of extra repos with parameters
+ *                                which have to be added during bootstrap.
+ *                                Format: repo 1, repo priority 1, repo pin 1; repo 2, repo priority 2, repo pin 2;
+
  * Test settings:
  *   TEST_K8S_API_SERVER     Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE   Path to docker image with conformance e2e tests
@@ -166,6 +170,12 @@ node(slave_node) {
                     if (common.validInputParam('FORMULA_PKG_REVISION')) {
                         common.infoMsg("Setting formulas revision to ${FORMULA_PKG_REVISION}")
                         envParams.put('cfg_formula_pkg_revision', FORMULA_PKG_REVISION)
+                    }
+
+                    // put extra repo definitions
+                    if (common.validInputParam('BOOTSTRAP_EXTRA_REPO_PARAMS')) {
+                        common.infoMsg("Setting additional repo during bootstrap to ${BOOTSTRAP_EXTRA_REPO_PARAMS}")
+                        envParams.put('cfg_bootstrap_extra_repo_params', BOOTSTRAP_EXTRA_REPO_PARAMS)
                     }
 
                     openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv)
