@@ -100,24 +100,25 @@ node("python&&disk-xl") {
 
         stage("Create Docker Registry"){
             common.infoMsg("Creating Docker Registry")
-            salt.enforceState(venvPepper, '*apt*', ['docker.host'], true, false, null, false, -1, 2)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['docker run --restart always -d -p 5000:5000 --name registry registry:2'], null, true)
-            salt.enforceState(venvPepper, '*apt*', ['docker.client.registry'], true, false, null, false, -1, 2)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['docker system prune --all --force'], null, true)
+            salt.enforceState(venvPepper, '*apt*', ["docker.host"], true, false, null, false, -1, 2)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["docker run --restart always -d -p 5000:5000 --name registry registry:2"], null, true)
+            salt.enforceState(venvPepper, '*apt*', ["docker.client.registry"], true, false, null, false, -1, 2)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["docker system prune --all --force"], null, true)
         }
 
         stage("Create Aptly"){
             common.infoMsg("Creating Aptly")
             salt.enforceState(venvPepper, '*apt*', ['aptly'], true, false, null, false, -1, 2)
             //TODO: Do it new way
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['aptly_mirror_update.sh -s -v', 'runas=aptly'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['nohup aptly api serve --no-lock > /dev/null 2>&1 </dev/null &', 'runas=aptly'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['aptly-publisher --timeout=1200 publish -v -c /etc/aptly-publisher.yaml --architectures amd64 --url http://127.0.0.1:8080 --recreate --force-overwrite', 'runas=aptly'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['aptly db cleanup', 'runas=aptly'], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["aptly_mirror_update.sh -s -v", "runas=aptly"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["nohup aptly api serve --no-lock > /dev/null 2>&1 </dev/null &", "runas=aptly"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["aptly-publisher --timeout=1200 publish -v -c /etc/aptly-publisher.yaml --architectures amd64 --url http://127.0.0.1:8080 --recreate --force-overwrite", "runas=aptly"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["aptly db cleanup", "runas=aptly"], null, true)
             //NEW way
-            //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", 'runas=aptly'], null, true)
-            //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-acrfv", 'runas=aptly'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/aptly/aptly-update.sh -O /srv/scripts/aptly-update.sh'], null, true)
+            //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", "runas=aptly"], null, true)
+            //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-acrfv", "runas=aptly"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/aptly/aptly-update.sh -O /srv/scripts/aptly-update.sh"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["chmod +x /srv/scripts/aptly-update.sh"], null, true)
         }
 
         stage("Create Git mirror"){
@@ -127,22 +128,22 @@ node("python&&disk-xl") {
 
         stage("Create PyPi mirror"){
             common.infoMsg("Creating PyPi mirror")
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['pip install pip2pi'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/pypi_mirror/requirements.txt -O /srv/pypi_mirror/requirements.txt'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['pip2pi /srv/pypi_mirror/packages/ -r /srv/pypi_mirror/requirements.txt'], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["pip install pip2pi"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/pypi_mirror/requirements.txt -O /srv/pypi_mirror/requirements.txt"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["pip2pi /srv/pypi_mirror/packages/ -r /srv/pypi_mirror/requirements.txt"], null, true)
         }
 
         stage("Create mirror of images"){
             common.infoMsg("Creating mirror of images")
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/images_mirror/images.txt -O /srv/images.txt'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/images_mirror/update-images.sh -O /srv/scripts/update-images.sh'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['chmod +x /srv/scripts/update-images.sh'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['/srv/scripts/update-images.sh -u http://ci.mcp.mirantis.net:8085/images'], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/images_mirror/images.txt -O /srv/images.txt"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/images_mirror/update-images.sh -O /srv/scripts/update-images.sh"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["chmod +x /srv/scripts/update-images.sh"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["/srv/scripts/update-images.sh -u http://ci.mcp.mirantis.net:8085/images"], null, true)
         }
 
         stage("Create instance snapshot"){
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['rm -rf /var/lib/cloud/sem/* /var/lib/cloud/instance /var/lib/cloud/instances/*'], null, true)
-            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['cloud-init init'], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["rm -rf /var/lib/cloud/sem/* /var/lib/cloud/instance /var/lib/cloud/instances/*"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["cloud-init init"], null, true)
 
             retry(3, 5){
                 openstack.runOpenstackCommand("openstack server stop mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
