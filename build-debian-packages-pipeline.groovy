@@ -52,9 +52,17 @@ node("docker") {
         if (debian_branch) {
           pollBranches.add([name:DEBIAN_BRANCH])
         }
+        def extensions = [[$class: 'CleanCheckout']]
+        def userRemoteConfigs = [[credentialsId: SOURCE_CREDENTIALS, url: SOURCE_URL]]
+        // Checkout specified refspec to local branch
+        if (common.validInputParam('SOURCE_REFSPEC')) {
+          extensions.add([$class: 'BuildChooserSetting', buildChooser: [$class: 'GerritTriggerBuildChooser']])
+          extensions.add([$class: 'LocalBranch', localBranch: SOURCE_BRANCH])
+          userRemoteConfigs[0]['refspec'] = SOURCE_REFSPEC
+        }
         checkout changelog: true, poll: false,
           scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
-          extensions: [[$class: 'CleanCheckout']],  submoduleCfg: [], userRemoteConfigs: [[credentialsId: SOURCE_CREDENTIALS, url: SOURCE_URL]]]
+          extensions: extensions,  submoduleCfg: [], userRemoteConfigs: userRemoteConfigs]
         if (debian_branch){
           sh("git checkout "+DEBIAN_BRANCH)
         }
@@ -62,7 +70,12 @@ node("docker") {
       debian.cleanup(OS+":"+DIST)
     }
     stage("build-source") {
-      debian.buildSource("src", OS+":"+DIST, snapshot, 'Jenkins', 'autobuild@mirantis.com', revisionPostfix)
+      // If SOURCE_REFSPEC is defined refspec will be checked out to local branch and need to build it instead of origin branch.
+      if (common.validInputParam('SOURCE_REFSPEC')) {
+        debian.buildSource("src", OS+":"+DIST, snapshot, 'Jenkins', 'autobuild@mirantis.com', revisionPostfix, '')
+      } else {
+        debian.buildSource("src", OS+":"+DIST, snapshot, 'Jenkins', 'autobuild@mirantis.com', revisionPostfix)
+      }
       archiveArtifacts artifacts: "build-area/*.dsc"
       archiveArtifacts artifacts: "build-area/*_source.changes"
       archiveArtifacts artifacts: "build-area/*.tar.*"
