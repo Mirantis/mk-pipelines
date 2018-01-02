@@ -296,26 +296,6 @@ node(slave_node) {
             }
         }
 
-        // install ceph
-        if (common.checkContains('STACK_INSTALL', 'ceph')) {
-            stage('Install Ceph MONs') {
-                orchestrate.installCephMon(venvPepper)
-            }
-
-            stage('Install Ceph OSDs') {
-                orchestrate.installCephOsd(venvPepper)
-            }
-
-
-            stage('Install Ceph clients') {
-                orchestrate.installCephClient(venvPepper)
-            }
-
-            stage('Connect Ceph') {
-                orchestrate.connectCeph(venvPepper)
-            }
-        }
-
         // install k8s
         if (common.checkContains('STACK_INSTALL', 'k8s')) {
 
@@ -419,6 +399,26 @@ node(slave_node) {
                 }
             }
 
+        }
+
+        // install ceph
+        if (common.checkContains('STACK_INSTALL', 'ceph')) {
+            stage('Install Ceph MONs') {
+                orchestrate.installCephMon(venvPepper)
+            }
+
+            stage('Install Ceph OSDs') {
+                orchestrate.installCephOsd(venvPepper)
+            }
+
+
+            stage('Install Ceph clients') {
+                orchestrate.installCephClient(venvPepper)
+            }
+
+            stage('Connect Ceph') {
+                orchestrate.connectCeph(venvPepper)
+            }
         }
 
         if (common.checkContains('STACK_INSTALL', 'oss')) {
