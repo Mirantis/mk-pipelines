@@ -31,7 +31,9 @@ def analyticsPkgs = 'contrail-analytics,contrail-lib,contrail-nodemgr,contrail-u
 def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
 def KERNEL_MODULE_RELOAD = 'service supervisor-vrouter stop;ifdown vhost0;rmmod vrouter;modprobe vrouter;ifup vhost0;service supervisor-vrouter start;'
 def analyticsServices = ['supervisor-analytics', 'supervisor-database', 'zookeeper']
-def controlServices = ['contrail-webui-jobserver', 'contrail-webui-webserver', 'supervisor-config', 'ifmap-server', 'supervisor-control', 'supervisor-database', 'zookeeper']
+def configServices = ['contrail-webui-jobserver', 'contrail-webui-webserver', 'supervisor-config', 'supervisor-database', 'zookeeper']
+def controlServices = ['ifmap-server', 'supervisor-control']
+def config4Services = ['zookeeper', 'contrail-webui-middleware', 'contrail-webui', 'contrail-api', 'contrail-schema', 'contrail-svc-monitor', 'contrail-device-manager', 'contrail-config-nodemgr', 'contrail-database']
 
 def void runCommonCommands(target, command, args, check, salt, pepperEnv, common) {
 
@@ -41,9 +43,10 @@ def void runCommonCommands(target, command, args, check, salt, pepperEnv, common
     if ( check == "nodetool status" ) {
         salt.commandStatus(pepperEnv, target, check, 'Status=Up')
     } else if ( check == "doctrail all contrail-status" ) {
-        salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v FOR | grep -v \\* | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/", null, false)
+        salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v FOR | grep -v \\* | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/", null, false, true, null, true, 500)
+    } else if ( check == "contrail-status" ) {
+        salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v FOR | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/", null, false, true, null, true, 500)
     }
-
     //out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, null, check, null)
     //salt.printSaltCommandResult(out)
     //input message: "Please check the output of \'${check}\' and continue if it is correct."
@@ -125,16 +128,33 @@ node() {
             }
             try {
                 check = 'doctrail all contrail-status'
-                for (service in controlServices) {
+
+                for (service in configServices) {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', [service])
                 }
+
                 result = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'file.directory_exists', ['/var/lib/configdb/data'])['return'][0].values()[0]
                 if (result == false) {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'file.copy', ['/var/lib/cassandra', '/var/lib/configdb', 'recurse=True'])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'file.copy', ['/var/lib/zookeeper', '/var/lib/config_zookeeper_data', 'recurse=True'])
                 }
-                salt.enforceState(pepperEnv, 'I@opencontrail:control', 'docker.client')
-                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
+
+                for (service in controlServices) {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *0[23]*', 'service.stop', [service])
+                }
+
+                salt.enforceState(pepperEnv, 'I@opencontrail:control and *0[23]*', 'docker.client')
+
+                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
+
+                sleep(120)
+
+                for (service in controlServices) {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'service.stop', [service])
+                }
+
+                salt.enforceState(pepperEnv, 'I@opencontrail:control and *01*', 'docker.client')
+
                 salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.install', ['neutron-plugin-contrail,contrail-heat,python-contrail'])
                 salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'])
             } catch (Exception er) {
@@ -268,26 +288,23 @@ node() {
 
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'saltutil.refresh_pillar', [], null, true)
             salt.enforceState(pepperEnv, 'I@opencontrail:database', 'linux.system.repo')
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
 
-            if(env["ASK_ON_ERROR"] && env["ASK_ON_ERROR"] == "true"){
-                salt.enforceState(pepperEnv, 'I@opencontrail:database and *01*', 'opencontrail.database', true)
-                salt.enforceState(pepperEnv, 'I@opencontrail:database', 'opencontrail.database', true)
-            }else{
-                try {
-                    salt.enforceState(pepperEnv, 'I@opencontrail:database and *01*', 'opencontrail.database', true)
-                } catch (Exception e) {
-                    common.warningMsg('Exception in state opencontrail.database on I@opencontrail:database and *01*')
-                }
-                try {
-                    salt.enforceState(pepperEnv, 'I@opencontrail:database and *01*', 'opencontrail.database', true)
-                } catch (Exception e) {
-                    common.warningMsg('Exception in state opencontrail.database on I@opencontrail:database')
-                }
-            }
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *0[23]*', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
+            for (service in config4Services) {
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ["doctrail controller systemctl stop ${service}"], null, true)
+            }
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *0[23]*', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+
+            check = 'contrail-status'
+            runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
+
+            sleep(120)
+
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
         }
     }
 
