@@ -1,11 +1,29 @@
 /**
  *
- * Update Salt environment pipeline
+ * Build mirror image pipeline
  *
  * Expected parameters:
- *   SALT_MASTER_URL            Salt API server location
- *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
- *   UPDATE_FORMULAS            Boolean switch for enforcing updating formulas
+ * CLUSTER_MODEL - An URL to the Reclass model for the mirror VM.
+ * CLUSTER_NAME - Cluster name used in the above model.
+ * IMAGE_NAME - Name of the result image.
+ * OS_CREDENTIALS_ID - ID of credentials for OpenStack API stored in Jenkins.
+ * OS_PROJECT - Project in OpenStack under the VM will be spawned.
+ * OS_URL - Keystone auth endpoint of the OpenStack.
+ * OS_VERSION - OpenStack version
+ * SCRIPTS_REF - ref on the github to get the scripts from.
+ * SALT_MASTER_CREDENTIALS - ID of credentials to be used to connect to the Salt API of the VM
+ * UPLOAD_URL - URL of an WebDAV used to upload the image after creating.
+ * VM_AVAILABILITY_ZONE - Availability zone in OpenStack in the VM will be spawned.
+ * VM_CONNECT_RETRIES - Number of retries for SSH connection to the VM after it’s spawned after 8 minutes.
+ * VM_CONNECT_DELAY - Delay between connect retries above.
+ * VM_FLAVOR - Flavor to be used for VM in OpenStack.
+ * VM_FLOATING_IP_POOL - Floating IP pool to be used to assign floating IP to the VM.
+ * VM_IMAGE - Name of the image to be used for VM in OpenStack.
+ * VM_IP - Static IP that is assigned to the VM which belongs to the network used.
+ * VM_IP_RETRIES - Number of retries between tries to assign the floating IP to the VM.
+ * VM_IP_DELAY - Delay between floating IP assign retries above.
+ * VM_NETWORK_ID - ID of the network that VM connects to.
+ *
  */
 
 // Load shared libs
@@ -13,11 +31,9 @@ def salt = new com.mirantis.mk.Salt()
 def common = new com.mirantis.mk.Common()
 def python = new com.mirantis.mk.Python()
 def openstack = new com.mirantis.mk.Openstack()
-def git = new com.mirantis.mk.Git()
 def date = new Date()
 def dateTime = date.format("ddMMyyyy-HHmmss")
 def venvPepper = "venvPepper"
-def venvS4cmd = "venvS4cmd"
 def privateKey = ""
 def floatingIP = ""
 def openstackServer = ""
@@ -119,6 +135,13 @@ node("python&&disk-xl") {
             //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-acrfv", "runas=aptly"], null, true)
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/aptly/aptly-update.sh -O /srv/scripts/aptly-update.sh"], null, true)
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["chmod +x /srv/scripts/aptly-update.sh"], null, true)
+        }
+
+        stage("Create Debmirrors"){
+            common.infoMsg("Creating Debmirrors")
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/debmirror.sh -O /srv/scripts/debmirror.sh"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["chmod +x /srv/scripts/debmirror.sh"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["export MCP_VERSION='${MCP_VERSION}';/srv/scripts/debmirror.sh"], null, true)
         }
 
         stage("Create Git mirror"){
