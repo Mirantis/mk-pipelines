@@ -64,7 +64,15 @@ node("docker") {
           scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
           extensions: extensions,  submoduleCfg: [], userRemoteConfigs: userRemoteConfigs]
         if (debian_branch){
-          sh("git checkout "+DEBIAN_BRANCH)
+          /* There are 2 schemas of build spec keeping:
+                 1. Separate branch with build specs. I.e. debian/xenial
+                 2. Separate directory with specs.
+             Logic below makes package build compatible with both schemas.
+          */
+          def retStatus = sh(script: 'git checkout ' + DEBIAN_BRANCH, returnStatus: true)
+          if (retStatus != 0) {
+            common.warningMsg("Cannot checkout ${DEBIAN_BRANCH} branch. Going to build package by ${SOURCE_BRANCH} branch.")
+          }
         }
       }
       debian.cleanup(OS+":"+DIST)
