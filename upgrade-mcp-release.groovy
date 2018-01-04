@@ -29,9 +29,7 @@ node("python") {
         if(UPDATE_LOCAL_REPOS.toBoolean()){
             stage("Update local repos"){
                 common.infoMsg("Updating local repositories")
-                salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["aptly publish list --raw | awk '{print \$2, \$1}' | xargs -n2 aptly publish drop", 'runas=aptly'], null, true)
-                salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["aptly snapshot list --raw | grep -E '*' | xargs -n 1 aptly snapshot drop", 'runas=aptly'], null, true)
-                salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop", 'runas=aptly'], null, true)
+                salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", 'runas=aptly'], null, true)
                 salt.enforceState(venvPepper, '*apt*', 'aptly', true)
                 salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", 'runas=aptly'], null, true)
                 salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-acfrv", 'runas=aptly'], null, true)
