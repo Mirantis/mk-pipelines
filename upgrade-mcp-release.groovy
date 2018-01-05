@@ -29,18 +29,20 @@ timeout(time: 12, unit: 'HOURS') {
             if(UPDATE_LOCAL_REPOS.toBoolean()){
                 stage("Update local repos"){
                     common.infoMsg("Updating local repositories")
-                    salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", 'runas=aptly'], null, true)
+                    salt.cmdRun(venvPepper, '*apt*', "aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", true, null, true, ['runas=aptly'])
                     salt.enforceState(venvPepper, '*apt*', 'aptly', true)
                     salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", 'runas=aptly'], null, true)
-                    salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-acfrv", 'runas=aptly'], null, true)
+                    salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-afrv", 'runas=aptly'], null, true)
 
                     salt.enforceState(venvPepper, '*apt*', 'docker.client.registry', true)
 
+                    salt.cmdRun(venvPepper, '*apt*', "export HOME='/root';export MCP_VERSION='${MCP_VERSION}';/srv/scripts/debmirror.sh")
+
                     salt.enforceState(venvPepper, '*apt*', 'git server', true)
 
-                    salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['pip2pi /srv/pypi_mirror/packages/ -r /srv/pypi_mirror/requirements.txt'], null, true)
+                    salt.cmdRun(venvPepper, '*apt*', 'pip2pi /srv/pypi_mirror/packages/ -r /srv/pypi_mirror/requirements.txt')
 
-                    salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['/srv/scripts/update-images.sh'], null, true)
+                    salt.cmdRun(venvPepper, '*apt*', '/srv/scripts/update-images.sh')
                 }
             }
 
