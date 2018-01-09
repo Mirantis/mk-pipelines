@@ -149,8 +149,8 @@ parameters:
             sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
             sh "wget -O user_data.sh ${user_data_script_url}"
 
-            sh "git clone https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
-            sh "git clone https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
+            sh "git clone --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
+            sh "git clone --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
             args = "--user-data user_data.sh --hostname ${saltMaster} --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ ${saltMaster}.${clusterDomain}-config.iso"
 
             // load data from model
@@ -160,6 +160,19 @@ parameters:
             smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
             smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
             smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
+            if (templateContext.default_context.local_repositories && templateContext.default_context.local_repositories == 'True'){
+                smc['PIPELINES_FROM_ISO'] = 'false'
+                smc['PIPELINE_REPO_URL'] = 'http://' + templateContext['default_context']['aptly_server_deploy_address'] + ':8088'
+            }
+            if (templateContext.default_context.upstream_proxy_enabled && templateContext.default_context.upstream_proxy_enabled == 'True'){
+                if (templateContext.default_context.upstream_proxy_auth_enabled && templateContext.default_context.upstream_proxy_auth_enabled == 'True'){
+                    smc['http_proxy'] = 'http://' + templateContext['default_context']['upstream_proxy_user'] + ':' + templateContext['default_context']['upstream_proxy_password'] + '@' + templateContext['default_context']['upstream_proxy_address'] + ':' + templateContext['default_context']['upstream_proxy_port']
+                    smc['https_proxy'] = 'http://' + templateContext['default_context']['upstream_proxy_user'] + ':' + templateContext['default_context']['upstream_proxy_password'] + '@' + templateContext['default_context']['upstream_proxy_address'] + ':' + templateContext['default_context']['upstream_proxy_port']
+                } else {
+                    smc['http_proxy'] = 'http://' + templateContext['default_context']['upstream_proxy_address'] + ':' + templateContext['default_context']['upstream_proxy_port']
+                    smc['https_proxy'] = 'http://' + templateContext['default_context']['upstream_proxy_address'] + ':' + templateContext['default_context']['upstream_proxy_port']
+                }
+            }
 
             for (i in common.entries(smc)) {
                 sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" user_data.sh"
@@ -172,7 +185,7 @@ parameters:
             // save cfg iso to artifacts
             archiveArtifacts artifacts: "output-${clusterName}/${saltMaster}.${clusterDomain}-config.iso"
 
-            if (templateContext.default_context.offline_deployment && templateContext.default_context.offline_deployment == 'True'){
+            if (templateContext.default_context.local_repositories && templateContext.default_context.local_repositories == 'True'){
                 def aptlyServerHostname = templateContext.default_context.aptly_server_hostname
                 def user_data_script_apt_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/config-drive/mirror_config.sh"
                 sh "wget -O mirror_config.sh ${user_data_script_apt_url}"
