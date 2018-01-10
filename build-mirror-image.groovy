@@ -120,6 +120,8 @@ node("python&&disk-xl") {
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["docker run --restart always -d -p 5000:5000 --name registry registry:2"], null, true)
             salt.enforceState(venvPepper, '*apt*', ["docker.client.registry"], true, false, null, false, -1, 2)
             salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["docker system prune --all --force"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/config/interfaces -O /root/interfaces"], null, true)
+            salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ["wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/config/minion.conf -O /root/minion.conf"], null, true)
         }
 
         stage("Create Aptly"){
