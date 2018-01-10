@@ -97,8 +97,14 @@ node("python") {
     }
     stage("test") {
       if (checkouted) {
-        sh("make clean")
-        sh("[ $SALT_VERSION != 'latest' ] || export SALT_VERSION=''; make test")
+        try {
+          saltVersion = SALT_VERSION
+        } catch (MissingPropertyException e) {
+          saltVersion = "latest"
+        }
+        withEnv(["SALT_VERSION=${saltVersion}"]) {
+          sh("make clean && make test")
+        }
       }
     }
     stage("kitchen") {
