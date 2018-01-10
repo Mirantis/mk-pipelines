@@ -512,6 +512,26 @@ node(slave_node) {
             }
         }
 
+        if (common.checkContains('STACK_TEST', 'opencontrail')) {
+            stage('Run opencontrail tests') {
+                def opencontrail_tests_dir = "/opt/opencontrail_test/fuel-plugin-contrail/plugin_test/vapor/"
+                def report_dir = "/opt/opencontrail-test-report/"
+                def cmd = ". ${opencontrail_tests_dir}exports.sh && " +
+                          "cd ${opencontrail_tests_dir} && " +
+                          "py.test --junit-xml=${report_dir}report.xml" +
+                          " --html=${report_dir}report.html -v vapor/tests/ -k 'not destructive' "
+
+                salt.runSaltProcessStep(venvPepper, 'cfg*', 'saltutil.refresh_pillar', [], null, true)
+                salt.enforceState(venvPepper, 'I@opencontrail:test' , 'opencontrail.test' , true)
+
+                salt.cmdRun(venvPepper, 'I@opencontrail:test', cmd, false)
+
+                writeFile(file: 'report.xml', text: salt.getFileContent(venvPepper,
+                          'I@opencontrail:test', "${report_dir}report.xml"))
+                junit(keepLongStdio: true, testResults: 'report.xml')
+            }
+        }
+
 
         stage('Finalize') {
             if (common.checkContains('STACK_INSTALL', 'finalize')) {
