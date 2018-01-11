@@ -64,6 +64,12 @@ node("python&&docker") {
 
                 if (SHARED_RECLASS_URL != '') {
                     ssh.agentSh "git submodule add \"${SHARED_RECLASS_URL}\" \"classes/system\""
+
+                    def mcpVersion = templateContext['default_context']['mcp_version']
+                    if(mcpVersion != "stable" && mcpVersion != "nightly" && mcpVersion != "testing"){
+                        ssh.agentSh "cd \"classes/system\";git fetch --tags;git checkout ${mcpVersion}"
+                    }
+
                     git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
                 }
             }
