@@ -67,42 +67,43 @@ def gitRepoAddTag(repoURL, repoName, tag, credentials, ref = "HEAD"){
         }
     }
 }
-
-node() {
-    try {
-        if(RELEASE_APTLY.toBoolean())
-        {
-            stage("Release Aptly"){
-                triggerAptlyPromoteJob(APTLY_URL, 'all', false, true, 'all', false, '(.*)/testing', APTLY_STORAGES, '{0}/stable')
-                triggerAptlyPromoteJob(APTLY_URL, 'all', false, true, 'all', false, '(.*)/stable', APTLY_STORAGES, '{0}/${MCP_VERSION}')
-            }
-        }
-        if(RELEASE_DOCKER.toBoolean())
-        {
-            stage("Release Docker"){
-                triggerDockerMirrorJob(DOCKER_CREDENTIALS, DOCKER_URL, MCP_VERSION, DOCKER_IMAGES)
-            }
-        }
-        if(RELEASE_GIT.toBoolean())
-        {
-            stage("Release Git"){
-                def repos = GIT_REPO_LIST.tokenize('\n')
-                def repoUrl, repoName, repoCommit, repoArray
-                for (repo in repos){
-                    if(repo.trim().indexOf(' ') == -1){
-                        throw new IllegalArgumentException("Wrong format of repository and commit input")
-                    }
-                    repoArray = repo.trim().tokenize(' ')
-                    repoName = repoArray[0]
-                    repoUrl = repoArray[1]
-                    repoCommit = repoArray[2]
-                    gitRepoAddTag(repoUrl, repoName, MCP_VERSION, GIT_CREDENTIALS, repoCommit)
+timeout(time: 12, unit: 'HOURS') {
+    node() {
+        try {
+            if(RELEASE_APTLY.toBoolean())
+            {
+                stage("Release Aptly"){
+                    triggerAptlyPromoteJob(APTLY_URL, 'all', false, true, 'all', false, '(.*)/testing', APTLY_STORAGES, '{0}/stable')
+                    triggerAptlyPromoteJob(APTLY_URL, 'all', false, true, 'all', false, '(.*)/stable', APTLY_STORAGES, '{0}/${MCP_VERSION}')
                 }
             }
+            if(RELEASE_DOCKER.toBoolean())
+            {
+                stage("Release Docker"){
+                    triggerDockerMirrorJob(DOCKER_CREDENTIALS, DOCKER_URL, MCP_VERSION, DOCKER_IMAGES)
+                }
+            }
+            if(RELEASE_GIT.toBoolean())
+            {
+                stage("Release Git"){
+                    def repos = GIT_REPO_LIST.tokenize('\n')
+                    def repoUrl, repoName, repoCommit, repoArray
+                    for (repo in repos){
+                        if(repo.trim().indexOf(' ') == -1){
+                            throw new IllegalArgumentException("Wrong format of repository and commit input")
+                        }
+                        repoArray = repo.trim().tokenize(' ')
+                        repoName = repoArray[0]
+                        repoUrl = repoArray[1]
+                        repoCommit = repoArray[2]
+                        gitRepoAddTag(repoUrl, repoName, MCP_VERSION, GIT_CREDENTIALS, repoCommit)
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            // If there was an error or exception thrown, the build failed
+            currentBuild.result = "FAILURE"
+            throw e
         }
-    } catch (Throwable e) {
-        // If there was an error or exception thrown, the build failed
-        currentBuild.result = "FAILURE"
-        throw e
     }
 }

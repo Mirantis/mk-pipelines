@@ -10,38 +10,39 @@
 common = new com.mirantis.mk.Common()
 salt = new com.mirantis.mk.Salt()
 orchestrate = new com.mirantis.mk.Orchestrate()
+timeout(time: 12, unit: 'HOURS') {
+    node {
 
-node {
+        // connection objects
+        def master
 
-    // connection objects
-    def master
+        stage("Connect to Salt master") {
+            master = salt.connection(SALT_URL, SALT_MASTER_CREDENTIALS)
+        }
 
-    stage("Connect to Salt master") {
-        master = salt.connection(SALT_URL, SALT_MASTER_CREDENTIALS)
+
+        stage("Enforce kubernetes.control") {
+            common.infoMsg('Enforcing kubernetes.control on I@kubernetes:master')
+
+            salt.runSaltProcessStep(
+                master,
+                'I@kubernetes:master',
+                'state.sls',
+                ['kubernetes.control'],
+            )
+        }
+
+        stage("setup-components") {
+            common.infoMsg('Setting up components')
+
+            salt.runSaltProcessStep(
+                master,
+                'I@kubernetes:master',
+                'cmd.run',
+                ['/bin/bash -c \'find /srv/kubernetes/ -type d | grep -v jobs | while read i; do ls $i/*.yml &>/dev/null && (set -x; hyperkube kubectl apply -f $i || echo Command failed; set +x); done;\'']
+            )
+
+        }
+
     }
-
-
-    stage("Enforce kubernetes.control") {
-        common.infoMsg('Enforcing kubernetes.control on I@kubernetes:master')
-
-        salt.runSaltProcessStep(
-            master,
-            'I@kubernetes:master',
-            'state.sls',
-            ['kubernetes.control'],
-        )
-    }
-
-    stage("setup-components") {
-        common.infoMsg('Setting up components')
-
-        salt.runSaltProcessStep(
-            master,
-            'I@kubernetes:master',
-            'cmd.run',
-            ['/bin/bash -c \'find /srv/kubernetes/ -type d | grep -v jobs | while read i; do ls $i/*.yml &>/dev/null && (set -x; hyperkube kubectl apply -f $i || echo Command failed; set +x); done;\'']
-        )
-
-    }
-
 }

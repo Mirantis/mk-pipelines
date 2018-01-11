@@ -25,89 +25,90 @@ def result
 def packages
 def command
 def commandKwargs
+timeout(time: 12, unit: 'HOURS') {
+    node() {
+        try {
 
-node() {
-    try {
-
-        stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-        }
-
-        stage('List target servers') {
-            minions = salt.getMinions(pepperEnv, TARGET_SERVERS)
-
-            if (minions.isEmpty()) {
-                throw new Exception("No minion was targeted")
+            stage('Setup virtualenv for Pepper') {
+                python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             }
 
-            if (TARGET_SUBSET_TEST != "") {
-                targetTestSubset = minions.subList(0, Integer.valueOf(TARGET_SUBSET_TEST)).join(' or ')
-            } else {
-                targetTestSubset = minions.join(' or ')
+            stage('List target servers') {
+                minions = salt.getMinions(pepperEnv, TARGET_SERVERS)
+
+                if (minions.isEmpty()) {
+                    throw new Exception("No minion was targeted")
+                }
+
+                if (TARGET_SUBSET_TEST != "") {
+                    targetTestSubset = minions.subList(0, Integer.valueOf(TARGET_SUBSET_TEST)).join(' or ')
+                } else {
+                    targetTestSubset = minions.join(' or ')
+                }
+                targetLiveSubset = minions.subList(0, Integer.valueOf(TARGET_SUBSET_LIVE)).join(' or ')
+
+                targetLiveAll = minions.join(' or ')
+                common.infoMsg("Found nodes: ${targetLiveAll}")
+                common.infoMsg("Selected test nodes: ${targetTestSubset}")
+                common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
             }
-            targetLiveSubset = minions.subList(0, Integer.valueOf(TARGET_SUBSET_LIVE)).join(' or ')
 
-            targetLiveAll = minions.join(' or ')
-            common.infoMsg("Found nodes: ${targetLiveAll}")
-            common.infoMsg("Selected test nodes: ${targetTestSubset}")
-            common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
-        }
-
-        stage("List package upgrades") {
-            common.infoMsg("Listing all the packages that have a new update available on test nodes: ${targetTestSubset}")
-            salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.list_upgrades', [], null, true)
-            if(TARGET_PACKAGES != "" && TARGET_PACKAGES != "*"){
-                common.infoMsg("Note that only the ${TARGET_PACKAGES} would be installed from the above list of available updates on the ${targetTestSubset}")
+            stage("List package upgrades") {
+                common.infoMsg("Listing all the packages that have a new update available on test nodes: ${targetTestSubset}")
+                salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.list_upgrades', [], null, true)
+                if(TARGET_PACKAGES != "" && TARGET_PACKAGES != "*"){
+                    common.infoMsg("Note that only the ${TARGET_PACKAGES} would be installed from the above list of available updates on the ${targetTestSubset}")
+                }
             }
-        }
 
-        stage('Confirm live package upgrades on sample') {
-            if(TARGET_PACKAGES==""){
-                timeout(time: 2, unit: 'HOURS') {
-                    def userInput = input(
-                     id: 'userInput', message: 'Insert package names for update', parameters: [
-                     [$class: 'TextParameterDefinition', defaultValue: '', description: 'Package names (or *)', name: 'packages']
-                    ])
-                    if(userInput!= "" && userInput!= "*"){
-                        TARGET_PACKAGES = userInput
+            stage('Confirm live package upgrades on sample') {
+                if(TARGET_PACKAGES==""){
+                    timeout(time: 2, unit: 'HOURS') {
+                        def userInput = input(
+                         id: 'userInput', message: 'Insert package names for update', parameters: [
+                         [$class: 'TextParameterDefinition', defaultValue: '', description: 'Package names (or *)', name: 'packages']
+                        ])
+                        if(userInput!= "" && userInput!= "*"){
+                            TARGET_PACKAGES = userInput
+                        }
+                    }
+                }else{
+                    timeout(time: 2, unit: 'HOURS') {
+                       input message: "Approve live package upgrades on ${targetLiveSubset} nodes?"
                     }
                 }
-            }else{
+            }
+
+            if (TARGET_PACKAGES != "") {
+                command = "pkg.install"
+                packages = TARGET_PACKAGES.tokenize(' ')
+                commandKwargs = ['only_upgrade': 'true']
+            }else {
+                command = "pkg.upgrade"
+                packages = null
+            }
+
+            stage('Apply package upgrades on sample') {
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, packages, commandKwargs)
+                salt.printSaltCommandResult(out)
+            }
+
+            stage('Confirm package upgrades on all nodes') {
                 timeout(time: 2, unit: 'HOURS') {
-                   input message: "Approve live package upgrades on ${targetLiveSubset} nodes?"
+                   input message: "Approve live package upgrades on ${targetLiveAll} nodes?"
                 }
             }
-        }
 
-        if (TARGET_PACKAGES != "") {
-            command = "pkg.install"
-            packages = TARGET_PACKAGES.tokenize(' ')
-            commandKwargs = ['only_upgrade': 'true']
-        }else {
-            command = "pkg.upgrade"
-            packages = null
-        }
-
-        stage('Apply package upgrades on sample') {
-            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, packages, commandKwargs)
-            salt.printSaltCommandResult(out)
-        }
-
-        stage('Confirm package upgrades on all nodes') {
-            timeout(time: 2, unit: 'HOURS') {
-               input message: "Approve live package upgrades on ${targetLiveAll} nodes?"
+            stage('Apply package upgrades on all nodes') {
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, packages, commandKwargs)
+                salt.printSaltCommandResult(out)
             }
-        }
 
-        stage('Apply package upgrades on all nodes') {
-            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, packages, commandKwargs)
-            salt.printSaltCommandResult(out)
+        } catch (Throwable e) {
+            // If there was an error or exception thrown, the build failed
+            currentBuild.result = "FAILURE"
+            currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+            throw e
         }
-
-    } catch (Throwable e) {
-        // If there was an error or exception thrown, the build failed
-        currentBuild.result = "FAILURE"
-        currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-        throw e
     }
 }

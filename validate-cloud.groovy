@@ -44,97 +44,98 @@ def python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
 def artifacts_dir = 'validation_artifacts/'
-
-node() {
-    try{
-        stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-        }
-
-        stage('Configure') {
-            validate.installDocker(pepperEnv, TARGET_NODE)
-            if (ACCUMULATE_RESULTS.toBoolean() == false) {
-                sh "rm -r ${artifacts_dir}"
+timeout(time: 12, unit: 'HOURS') {
+    node() {
+        try{
+            stage('Setup virtualenv for Pepper') {
+                python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             }
-            sh "mkdir -p ${artifacts_dir}"
-        }
 
-        stage('Run Tempest tests') {
-            if (RUN_TEMPEST_TESTS.toBoolean() == true) {
-                validate.runTempestTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, TEMPEST_CONFIG_REPO, TEMPEST_CONFIG_BRANCH, TEMPEST_REPO, TEMPEST_VERSION, TEMPEST_TEST_SET)
-            } else {
-                common.infoMsg("Skipping Tempest tests")
+            stage('Configure') {
+                validate.installDocker(pepperEnv, TARGET_NODE)
+                if (ACCUMULATE_RESULTS.toBoolean() == false) {
+                    sh "rm -r ${artifacts_dir}"
+                }
+                sh "mkdir -p ${artifacts_dir}"
             }
-        }
 
-        stage('Run Rally tests') {
-            if (RUN_RALLY_TESTS.toBoolean() == true) {
-                def rally_variables = ["floating_network=${FLOATING_NETWORK}",
-                                       "rally_image=${RALLY_IMAGE}",
-                                       "rally_flavor=${RALLY_FLAVOR}",
-                                       "availability_zone=${AVAILABILITY_ZONE}"]
-                validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables)
-            } else {
-                common.infoMsg("Skipping Rally tests")
+            stage('Run Tempest tests') {
+                if (RUN_TEMPEST_TESTS.toBoolean() == true) {
+                    validate.runTempestTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, TEMPEST_CONFIG_REPO, TEMPEST_CONFIG_BRANCH, TEMPEST_REPO, TEMPEST_VERSION, TEMPEST_TEST_SET)
+                } else {
+                    common.infoMsg("Skipping Tempest tests")
+                }
             }
-        }
 
-        stage('Run SPT tests') {
-            if (RUN_SPT_TESTS.toBoolean() == true) {
-                def spt_variables = ["spt_ssh_user=${SPT_SSH_USER}",
-                                     "spt_floating_network=${FLOATING_NETWORK}",
-                                     "spt_image=${SPT_IMAGE}",
-                                     "spt_user=${SPT_IMAGE_USER}",
-                                     "spt_flavor=${SPT_FLAVOR}",
-                                     "spt_availability_zone=${AVAILABILITY_ZONE}"]
-                validate.runSptTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, spt_variables)
-            } else {
-                common.infoMsg("Skipping SPT tests")
+            stage('Run Rally tests') {
+                if (RUN_RALLY_TESTS.toBoolean() == true) {
+                    def rally_variables = ["floating_network=${FLOATING_NETWORK}",
+                                           "rally_image=${RALLY_IMAGE}",
+                                           "rally_flavor=${RALLY_FLAVOR}",
+                                           "availability_zone=${AVAILABILITY_ZONE}"]
+                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables)
+                } else {
+                    common.infoMsg("Skipping Rally tests")
+                }
             }
-        }
 
-        stage('Run k8s bootstrap tests') {
-            if (RUN_K8S_TESTS.toBoolean() == true) {
-                def image = 'tomkukral/k8s-scripts'
-                def output_file = 'k8s-bootstrap-tests.txt'
-                def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
-                test.runConformanceTests(pepperEnv, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
-
-                def file_content = validate.getFileContent(pepperEnv, TEST_K8S_NODE, outfile)
-                writeFile file: "${artifacts_dir}${output_file}", text: file_content
-            } else {
-                common.infoMsg("Skipping k8s bootstrap tests")
+            stage('Run SPT tests') {
+                if (RUN_SPT_TESTS.toBoolean() == true) {
+                    def spt_variables = ["spt_ssh_user=${SPT_SSH_USER}",
+                                         "spt_floating_network=${FLOATING_NETWORK}",
+                                         "spt_image=${SPT_IMAGE}",
+                                         "spt_user=${SPT_IMAGE_USER}",
+                                         "spt_flavor=${SPT_FLAVOR}",
+                                         "spt_availability_zone=${AVAILABILITY_ZONE}"]
+                    validate.runSptTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, spt_variables)
+                } else {
+                    common.infoMsg("Skipping SPT tests")
+                }
             }
-        }
 
-        stage('Run k8s conformance e2e tests') {
-            if (RUN_K8S_TESTS.toBoolean() == true) {
-                def image = TEST_K8S_CONFORMANCE_IMAGE
-                def output_file = 'report-k8s-e2e-tests.txt'
-                def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
-                test.runConformanceTests(pepperEnv, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
+            stage('Run k8s bootstrap tests') {
+                if (RUN_K8S_TESTS.toBoolean() == true) {
+                    def image = 'tomkukral/k8s-scripts'
+                    def output_file = 'k8s-bootstrap-tests.txt'
+                    def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
+                    test.runConformanceTests(pepperEnv, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
 
-                def file_content = validate.getFileContent(pepperEnv, TEST_K8S_NODE, outfile)
-                writeFile file: "${artifacts_dir}${output_file}", text: file_content
-            } else {
-                common.infoMsg("Skipping k8s conformance e2e tests")
+                    def file_content = validate.getFileContent(pepperEnv, TEST_K8S_NODE, outfile)
+                    writeFile file: "${artifacts_dir}${output_file}", text: file_content
+                } else {
+                    common.infoMsg("Skipping k8s bootstrap tests")
+                }
             }
-        }
-        stage('Generate report') {
-            if (GENERATE_REPORT.toBoolean() == true) {
-                common.infoMsg("Generating html test report ...")
-                validate.generateTestReport(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir)
-            } else {
-                common.infoMsg("Skipping report generation")
+
+            stage('Run k8s conformance e2e tests') {
+                if (RUN_K8S_TESTS.toBoolean() == true) {
+                    def image = TEST_K8S_CONFORMANCE_IMAGE
+                    def output_file = 'report-k8s-e2e-tests.txt'
+                    def outfile = "/tmp/" + image.replaceAll('/', '-') + '.output'
+                    test.runConformanceTests(pepperEnv, TEST_K8S_NODE, TEST_K8S_API_SERVER, image)
+
+                    def file_content = validate.getFileContent(pepperEnv, TEST_K8S_NODE, outfile)
+                    writeFile file: "${artifacts_dir}${output_file}", text: file_content
+                } else {
+                    common.infoMsg("Skipping k8s conformance e2e tests")
+                }
             }
+            stage('Generate report') {
+                if (GENERATE_REPORT.toBoolean() == true) {
+                    common.infoMsg("Generating html test report ...")
+                    validate.generateTestReport(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir)
+                } else {
+                    common.infoMsg("Skipping report generation")
+                }
+            }
+            stage('Collect results') {
+                archiveArtifacts artifacts: "${artifacts_dir}/*"
+            }
+        } catch (Throwable e) {
+            // If there was an error or exception thrown, the build failed
+            currentBuild.result = "FAILURE"
+            currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+            throw e
         }
-        stage('Collect results') {
-            archiveArtifacts artifacts: "${artifacts_dir}/*"
-        }
-    } catch (Throwable e) {
-        // If there was an error or exception thrown, the build failed
-        currentBuild.result = "FAILURE"
-        currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-        throw e
     }
 }

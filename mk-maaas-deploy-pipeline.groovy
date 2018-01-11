@@ -24,50 +24,51 @@ git = new com.mirantis.mk.git()
 openstack = new com.mirantis.mk.openstack()
 salt = new com.mirantis.mk.salt()
 
-node {
+timeout(time: 12, unit: 'HOURS') {
+    node {
 
-    // connection objects
-    def openstackCloud
-    def saltMaster
+        // connection objects
+        def openstackCloud
+        def saltMaster
 
-    // value defaults
-    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : "liberty"
-    def openstackEnv = "${env.WORKSPACE}/venv"
+        // value defaults
+        def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : "liberty"
+        def openstackEnv = "${env.WORKSPACE}/venv"
 
-    stage ('Download Heat templates') {
-        git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
+        stage ('Download Heat templates') {
+            git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
+        }
+
+        stage('Install OpenStack env') {
+            openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
+        }
+
+        stage('Connect to OpenStack cloud') {
+            openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+            openstack.getKeystoneToken(openstackCloud, openstackEnv)
+        }
+
+        stage('Launch new Heat stack') {
+            envParams = [
+                'availability_zone': HEAT_STACK_ZONE,
+                'public_net': HEAT_STACK_PUBLIC_NET
+            ]
+            openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
+        }
+
+        stage("Connect to Salt master") {
+            saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
+            saltMasterUrl = "http://${saltMasterHost}:8000"
+            saltMaster = salt.createSaltConnection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
+        }
+
+        stage("Install core infra") {
+            salt.installFoundationInfra(saltMaster)
+            salt.validateFoundationInfra(saltMaster)
+        }
+
+        //stage('Delete Heat stack') {
+        //    openstack.deleteHeatStack(openstackCloud, HEAT_STACK_NAME, openstackEnv)
+        //}
     }
-
-    stage('Install OpenStack env') {
-        openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
-    }
-
-    stage('Connect to OpenStack cloud') {
-        openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
-        openstack.getKeystoneToken(openstackCloud, openstackEnv)
-    }
-
-    stage('Launch new Heat stack') {
-        envParams = [
-            'availability_zone': HEAT_STACK_ZONE,
-            'public_net': HEAT_STACK_PUBLIC_NET
-        ]
-        openstack.createHeatStack(openstackCloud, HEAT_STACK_NAME, HEAT_STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, openstackEnv)
-    }
-
-    stage("Connect to Salt master") {
-        saltMasterHost = openstack.getHeatStackOutputParam(openstackCloud, HEAT_STACK_NAME, 'salt_master_ip', openstackEnv)
-        saltMasterUrl = "http://${saltMasterHost}:8000"
-        saltMaster = salt.createSaltConnection(saltMasterUrl, SALT_MASTER_CREDENTIALS)
-    }
-
-    stage("Install core infra") {
-        salt.installFoundationInfra(saltMaster)
-        salt.validateFoundationInfra(saltMaster)
-    }
-
-    //stage('Delete Heat stack') {
-    //    openstack.deleteHeatStack(openstackCloud, HEAT_STACK_NAME, openstackEnv)
-    //}
-
 }

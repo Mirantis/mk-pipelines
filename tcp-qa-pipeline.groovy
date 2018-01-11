@@ -113,26 +113,27 @@ def uploadResults(){
 
 def runSlavesLabels = params.SLAVE_LABELS ?: 'tcp-qa-slaves'
 def runTimeout = params.TEST_TIMEOUT ?: 240
-
-node (runSlavesLabels) {
-    try {
-      timeout(time: runTimeout.toInteger(), unit: 'MINUTES') {
-        runTests()
-      }
-    }
-    catch (err) {
-        echo "Failed: ${err}"
-        currentBuild.result = 'FAILURE'
-    }
-    finally {
-        if (env.UPLOAD_RESULTS == "true") {
-            testRunUrl = uploadResults()
-            currentBuild.description = """
-            <a href="${testRunUrl}">TestRail report</a>
-            """
+timeout(time: 12, unit: 'HOURS') {
+    node (runSlavesLabels) {
+        try {
+          timeout(time: runTimeout.toInteger(), unit: 'MINUTES') {
+            runTests()
+          }
         }
-        environment.destroyEnv()
-        archiveArtifacts allowEmptyArchive: true, artifacts: 'nosetests.xml,tests.log,*.ini', excludes: null
-        junit keepLongStdio: false, testResults: 'nosetests.xml'
+        catch (err) {
+            echo "Failed: ${err}"
+            currentBuild.result = 'FAILURE'
+        }
+        finally {
+            if (env.UPLOAD_RESULTS == "true") {
+                testRunUrl = uploadResults()
+                currentBuild.description = """
+                <a href="${testRunUrl}">TestRail report</a>
+                """
+            }
+            environment.destroyEnv()
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'nosetests.xml,tests.log,*.ini', excludes: null
+            junit keepLongStdio: false, testResults: 'nosetests.xml'
+        }
     }
 }

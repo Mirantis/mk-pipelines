@@ -107,108 +107,109 @@ def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, fo
   ]
 }
 
-
-node("python") {
-  try{
-    stage("checkout") {
-      if (gerritRef) {
-        // job is triggered by Gerrit
-        // test if change aren't already merged
-        def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
-        // test if gerrit change is already Verified
-        if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified", "+")){
-          common.successMsg("Gerrit change ${GERRIT_CHANGE_NUMBER} patchset ${GERRIT_PATCHSET_NUMBER} already has Verified, skipping tests") // do nothing
-        // test WIP contains in commit message
-        }else if (gerritChange.commitMessage.contains("WIP")) {
-          common.successMsg("Commit message contains WIP, skipping tests") // do nothing
-        } else {
-          def merged = gerritChange.status == "MERGED"
-          if(!merged){
-            checkouted = gerrit.gerritPatchsetCheckout ([
-              credentialsId : CREDENTIALS_ID
-            ])
-          } else{
-            common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
-          }
-        }
-        // defaultGitUrl is passed to the triggered job
-        defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
-        defaultGitRef = GERRIT_REFSPEC
-      } else if(defaultGitRef && defaultGitUrl) {
-          checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
-      } else {
-        throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
-      }
-    }
-
-    stage("Check YAML") {
-       sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
-    }
-
-    stage("test-nodes") {
-      if(checkouted) {
-        def modifiedClusters = null
-
+timeout(time: 12, unit: 'HOURS') {
+  node("python") {
+    try{
+      stage("checkout") {
         if (gerritRef) {
-          checkChange = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v classes/cluster", returnStatus: true)
-          if (checkChange == 1) {
-            modifiedClusters = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep classes/cluster/ | awk -F/ '{print \$3}' | uniq", returnStdout: true).tokenize()
+          // job is triggered by Gerrit
+          // test if change aren't already merged
+          def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
+          // test if gerrit change is already Verified
+          if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified", "+")){
+            common.successMsg("Gerrit change ${GERRIT_CHANGE_NUMBER} patchset ${GERRIT_PATCHSET_NUMBER} already has Verified, skipping tests") // do nothing
+          // test WIP contains in commit message
+          }else if (gerritChange.commitMessage.contains("WIP")) {
+            common.successMsg("Commit message contains WIP, skipping tests") // do nothing
+          } else {
+            def merged = gerritChange.status == "MERGED"
+            if(!merged){
+              checkouted = gerrit.gerritPatchsetCheckout ([
+                credentialsId : CREDENTIALS_ID
+              ])
+            } else{
+              common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to test them")
+            }
           }
-        }
-
-        def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
-        def clusterDirectories = sh(script: "ls -d ./classes/cluster/*/ | awk -F/ '{print \$4}'", returnStdout: true).tokenize()
-
-        // create a list of cluster names present in cluster folder
-        def infraList = []
-        for (elt in infraYMLs) {
-          infraList << elt.tokenize('/')[3]
-        }
-
-        // verify we have all valid clusters loaded
-        def commonList = infraList.intersect(clusterDirectories)
-        def differenceList = infraList.plus(clusterDirectories)
-        differenceList.removeAll(commonList)
-
-        if(!differenceList.isEmpty()){
-          common.warningMsg("The following clusters are not valid : ${differenceList} - That means we cannot found cluster_name in init.yml or infra/init.yml")
-        }
-        if (modifiedClusters) {
-          infraYMLs.removeAll { !modifiedClusters.contains(it.tokenize('/')[3]) }
-          common.infoMsg("Testing only modified clusters: ${infraYMLs}")
-        }
-
-        for (int i = 0; i < infraYMLs.size(); i++) {
-          def infraYMLConfig = readYaml(file: infraYMLs[i])
-          if(!infraYMLConfig["parameters"].containsKey("_param")){
-              common.warningMsg("ERROR: Cannot find soft params (_param) in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
-              continue
-          }
-          def infraParams = infraYMLConfig["parameters"]["_param"];
-          if(!infraParams.containsKey("infra_config_hostname") || !infraParams.containsKey("cluster_name") || !infraParams.containsKey("cluster_domain")){
-              common.warningMsg("ERROR: Cannot find _param:infra_config_hostname or _param:cluster_name or _param:cluster_domain  in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
-              continue
-          }
-          def clusterName = infraParams["cluster_name"]
-          def clusterDomain = infraParams["cluster_domain"]
-          def configHostname = infraParams["infra_config_hostname"]
-          def testTarget = String.format("%s.%s", configHostname, clusterDomain)
-
-          futureNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
-        }
-
-        setupRunner()
-
-        if (failedNodes) {
-          currentBuild.result = "FAILURE"
+          // defaultGitUrl is passed to the triggered job
+          defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
+          defaultGitRef = GERRIT_REFSPEC
+        } else if(defaultGitRef && defaultGitUrl) {
+            checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
+        } else {
+          throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
         }
       }
+
+      stage("Check YAML") {
+         sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
+      }
+
+      stage("test-nodes") {
+        if(checkouted) {
+          def modifiedClusters = null
+
+          if (gerritRef) {
+            checkChange = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v classes/cluster", returnStatus: true)
+            if (checkChange == 1) {
+              modifiedClusters = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep classes/cluster/ | awk -F/ '{print \$3}' | uniq", returnStdout: true).tokenize()
+            }
+          }
+
+          def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
+          def clusterDirectories = sh(script: "ls -d ./classes/cluster/*/ | awk -F/ '{print \$4}'", returnStdout: true).tokenize()
+
+          // create a list of cluster names present in cluster folder
+          def infraList = []
+          for (elt in infraYMLs) {
+            infraList << elt.tokenize('/')[3]
+          }
+
+          // verify we have all valid clusters loaded
+          def commonList = infraList.intersect(clusterDirectories)
+          def differenceList = infraList.plus(clusterDirectories)
+          differenceList.removeAll(commonList)
+
+          if(!differenceList.isEmpty()){
+            common.warningMsg("The following clusters are not valid : ${differenceList} - That means we cannot found cluster_name in init.yml or infra/init.yml")
+          }
+          if (modifiedClusters) {
+            infraYMLs.removeAll { !modifiedClusters.contains(it.tokenize('/')[3]) }
+            common.infoMsg("Testing only modified clusters: ${infraYMLs}")
+          }
+
+          for (int i = 0; i < infraYMLs.size(); i++) {
+            def infraYMLConfig = readYaml(file: infraYMLs[i])
+            if(!infraYMLConfig["parameters"].containsKey("_param")){
+                common.warningMsg("ERROR: Cannot find soft params (_param) in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
+                continue
+            }
+            def infraParams = infraYMLConfig["parameters"]["_param"];
+            if(!infraParams.containsKey("infra_config_hostname") || !infraParams.containsKey("cluster_name") || !infraParams.containsKey("cluster_domain")){
+                common.warningMsg("ERROR: Cannot find _param:infra_config_hostname or _param:cluster_name or _param:cluster_domain  in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
+                continue
+            }
+            def clusterName = infraParams["cluster_name"]
+            def clusterDomain = infraParams["cluster_domain"]
+            def configHostname = infraParams["infra_config_hostname"]
+            def testTarget = String.format("%s.%s", configHostname, clusterDomain)
+
+            futureNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
+          }
+
+          setupRunner()
+
+          if (failedNodes) {
+            currentBuild.result = "FAILURE"
+          }
+        }
+      }
+    } catch (Throwable e) {
+       currentBuild.result = "FAILURE"
+       currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+       throw e
+    } finally {
+       common.sendNotification(currentBuild.result,"",["slack"])
     }
-  } catch (Throwable e) {
-     currentBuild.result = "FAILURE"
-     currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-     throw e
-  } finally {
-     common.sendNotification(currentBuild.result,"",["slack"])
   }
 }

@@ -26,53 +26,53 @@ git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 aws = new com.mirantis.mk.Aws()
 salt = new com.mirantis.mk.Salt()
+timeout(time: 12, unit: 'HOURS') {
+    node {
 
-node {
+        def venv_path = "${env.WORKSPACE}/venv"
+        def env_vars
 
-    def venv_path = "${env.WORKSPACE}/venv"
-    def env_vars
-
-    // default STACK_TYPE is heat
-    if (!common.validInputParam('STACK_TYPE')) {
-        STACK_TYPE = 'heat'
-    }
-
-    stage('Install environment') {
-        if (STACK_TYPE == 'heat') {
-
-            def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
-            openstack.setupOpenstackVirtualenv(venv_path, openstackVersion)
-
-        } else if (STACK_TYPE == 'aws') {
-
-            env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_DEFAULT_REGION)
-            aws.setupVirtualEnv(venv_path)
-
-        } else {
-            throw new Exception('Stack type is not supported')
+        // default STACK_TYPE is heat
+        if (!common.validInputParam('STACK_TYPE')) {
+            STACK_TYPE = 'heat'
         }
 
-    }
+        stage('Install environment') {
+            if (STACK_TYPE == 'heat') {
 
-    stage('Delete stack') {
-        if (STACK_TYPE == 'heat') {
-            def openstackCloud = openstack.createOpenstackEnv(
-                OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
-                OPENSTACK_API_PROJECT,OPENSTACK_API_PROJECT_DOMAIN,
-                OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,
-                OPENSTACK_API_VERSION)
-            openstack.getKeystoneToken(openstackCloud, venv_path)
+                def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
+                openstack.setupOpenstackVirtualenv(venv_path, openstackVersion)
 
-            common.infoMsg("Deleting Heat Stack " + STACK_NAME)
-            openstack.deleteHeatStack(openstackCloud, STACK_NAME, venv_path)
-        } else if (STACK_TYPE == 'aws') {
+            } else if (STACK_TYPE == 'aws') {
 
-            aws.deleteStack(venv_path, env_vars, STACK_NAME)
+                env_vars = aws.getEnvVars(AWS_API_CREDENTIALS, AWS_DEFAULT_REGION)
+                aws.setupVirtualEnv(venv_path)
 
-        } else {
-            throw new Exception('Stack type is not supported')
+            } else {
+                throw new Exception('Stack type is not supported')
+            }
+
         }
 
-    }
+        stage('Delete stack') {
+            if (STACK_TYPE == 'heat') {
+                def openstackCloud = openstack.createOpenstackEnv(
+                    OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
+                    OPENSTACK_API_PROJECT,OPENSTACK_API_PROJECT_DOMAIN,
+                    OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,
+                    OPENSTACK_API_VERSION)
+                openstack.getKeystoneToken(openstackCloud, venv_path)
 
+                common.infoMsg("Deleting Heat Stack " + STACK_NAME)
+                openstack.deleteHeatStack(openstackCloud, STACK_NAME, venv_path)
+            } else if (STACK_TYPE == 'aws') {
+
+                aws.deleteStack(venv_path, env_vars, STACK_NAME)
+
+            } else {
+                throw new Exception('Stack type is not supported')
+            }
+
+        }
+    }
 }

@@ -23,73 +23,74 @@ test = new com.mirantis.mk.Test()
 def python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
+timeout(time: 12, unit: 'HOURS') {
+    node("python") {
+        try {
 
-node("python") {
-    try {
+            stage('Setup virtualenv for Pepper') {
+                python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            }
 
-        stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            //
+            // Test
+            //
+            def artifacts_dir = '_artifacts/'
+
+            if (common.checkContains('TEST_SERVICE', 'k8s')) {
+                stage('Run k8s bootstrap tests') {
+                    def image = 'tomkukral/k8s-scripts'
+                    def output_file = image.replaceAll('/', '-') + '.output'
+
+                    // run image
+                    test.runConformanceTests(pepperEnv, 'ctl01*', TEST_K8S_API_SERVER, image)
+
+                    // collect output
+                    sh "mkdir -p ${artifacts_dir}"
+                    file_content = salt.getFileContent(pepperEnv, 'ctl01*', '/tmp/' + output_file)
+                    writeFile file: "${artifacts_dir}${output_file}", text: file_content
+                    sh "cat ${artifacts_dir}${output_file}"
+
+                    // collect artifacts
+                    archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
+                }
+
+                stage('Run k8s conformance e2e tests') {
+                    def image = K8S_CONFORMANCE_IMAGE
+                    def output_file = image.replaceAll('/', '-') + '.output'
+
+                    // run image
+                    test.runConformanceTests(pepperEnv, 'ctl01*', TEST_K8S_API_SERVER, image)
+
+                    // collect output
+                    sh "mkdir -p ${artifacts_dir}"
+                    file_content = salt.getFileContent(pepperEnv, 'ctl01*', '/tmp/' + output_file)
+                    writeFile file: "${artifacts_dir}${output_file}", text: file_content
+                    sh "cat ${artifacts_dir}${output_file}"
+
+                    // collect artifacts
+                    archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
+                }
+            }
+
+            if (common.checkContains('TEST_SERVICE', 'openstack')) {
+                if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
+                    test.install_docker(pepperEnv, TEST_TEMPEST_TARGET)
+                }
+
+                stage('Run OpenStack tests') {
+                    test.runTempestTests(pepperEnv, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
+                }
+
+                writeFile(file: 'report.xml', text: salt.getFileContent(pepperEnv, TEST_TEMPEST_TARGET, '/root/report.xml'))
+                junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor:  Double.parseDouble(TEST_JUNIT_RATIO))
+                def testResults = test.collectJUnitResults(currentBuild.rawBuild.getAction(hudson.tasks.test.AbstractTestResultAction.class))
+                if(testResults){
+                    currentBuild.desc = String.format("result: %s", testResults["failed"] / testResults["total"])
+                }
+            }
+        } catch (Throwable e) {
+            currentBuild.result = 'FAILURE'
+            throw e
         }
-
-        //
-        // Test
-        //
-        def artifacts_dir = '_artifacts/'
-
-        if (common.checkContains('TEST_SERVICE', 'k8s')) {
-            stage('Run k8s bootstrap tests') {
-                def image = 'tomkukral/k8s-scripts'
-                def output_file = image.replaceAll('/', '-') + '.output'
-
-                // run image
-                test.runConformanceTests(pepperEnv, 'ctl01*', TEST_K8S_API_SERVER, image)
-
-                // collect output
-                sh "mkdir -p ${artifacts_dir}"
-                file_content = salt.getFileContent(pepperEnv, 'ctl01*', '/tmp/' + output_file)
-                writeFile file: "${artifacts_dir}${output_file}", text: file_content
-                sh "cat ${artifacts_dir}${output_file}"
-
-                // collect artifacts
-                archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
-            }
-
-            stage('Run k8s conformance e2e tests') {
-                def image = K8S_CONFORMANCE_IMAGE
-                def output_file = image.replaceAll('/', '-') + '.output'
-
-                // run image
-                test.runConformanceTests(pepperEnv, 'ctl01*', TEST_K8S_API_SERVER, image)
-
-                // collect output
-                sh "mkdir -p ${artifacts_dir}"
-                file_content = salt.getFileContent(pepperEnv, 'ctl01*', '/tmp/' + output_file)
-                writeFile file: "${artifacts_dir}${output_file}", text: file_content
-                sh "cat ${artifacts_dir}${output_file}"
-
-                // collect artifacts
-                archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
-            }
-        }
-
-        if (common.checkContains('TEST_SERVICE', 'openstack')) {
-            if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
-                test.install_docker(pepperEnv, TEST_TEMPEST_TARGET)
-            }
-
-            stage('Run OpenStack tests') {
-                test.runTempestTests(pepperEnv, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
-            }
-
-            writeFile(file: 'report.xml', text: salt.getFileContent(pepperEnv, TEST_TEMPEST_TARGET, '/root/report.xml'))
-            junit(keepLongStdio: true, testResults: 'report.xml', healthScaleFactor:  Double.parseDouble(TEST_JUNIT_RATIO))
-            def testResults = test.collectJUnitResults(currentBuild.rawBuild.getAction(hudson.tasks.test.AbstractTestResultAction.class))
-            if(testResults){
-                currentBuild.desc = String.format("result: %s", testResults["failed"] / testResults["total"])
-            }
-        }
-    } catch (Throwable e) {
-        currentBuild.result = 'FAILURE'
-        throw e
     }
 }

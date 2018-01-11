@@ -16,28 +16,29 @@
 git = new com.mirantis.mk.Git()
 openstack = new com.mirantis.mk.Openstack()
 salt = new com.mirantis.mk.Salt()
+timeout(time: 12, unit: 'HOURS') {
+    node {
 
-node {
+        // connection objects
+        def openstackCloud
+        def saltMaster
 
-    // connection objects
-    def openstackCloud
-    def saltMaster
+        // value defaults
+        def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
+        def openstackEnv = "${env.WORKSPACE}/venv"
 
-    // value defaults
-    def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
-    def openstackEnv = "${env.WORKSPACE}/venv"
+        stage('Install OpenStack env') {
+            openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
+        }
 
-    stage('Install OpenStack env') {
-        openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
+        stage('Connect to OpenStack cloud') {
+            openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+            openstack.getKeystoneToken(openstackCloud, openstackEnv)
+        }
+
+        stage('Delete Heat stack') {
+            openstack.deleteHeatStack(openstackCloud, HEAT_STACK_NAME, openstackEnv)
+        }
+
     }
-
-    stage('Connect to OpenStack cloud') {
-        openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
-        openstack.getKeystoneToken(openstackCloud, openstackEnv)
-    }
-
-    stage('Delete Heat stack') {
-        openstack.deleteHeatStack(openstackCloud, HEAT_STACK_NAME, openstackEnv)
-    }
-
 }

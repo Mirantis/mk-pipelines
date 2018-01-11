@@ -15,24 +15,25 @@
 validate = new com.mirantis.mcp.Validate()
 
 def artifacts_dir = 'validation_artifacts/'
+timeout(time: 12, unit: 'HOURS') {
+    node() {
+        try{
+            stage('Initialization') {
+                validate.prepareVenv(SANITY_TESTS_REPO, PROXY)
+            }
 
-node() {
-    try{
-        stage('Initialization') {
-            validate.prepareVenv(SANITY_TESTS_REPO, PROXY)
+            stage('Run Infra tests') {
+                sh "mkdir -p ${artifacts_dir}"
+                validate.runSanityTests(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS, SANITY_TESTS_SET, artifacts_dir)
+            }
+            stage ('Publish results') {
+                archiveArtifacts artifacts: "${artifacts_dir}/*"
+                junit "${artifacts_dir}/*.xml"
+            }
+        } catch (Throwable e) {
+            // If there was an error or exception thrown, the build failed
+            currentBuild.result = "FAILURE"
+            throw e
         }
-
-        stage('Run Infra tests') {
-            sh "mkdir -p ${artifacts_dir}"
-            validate.runSanityTests(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS, SANITY_TESTS_SET, artifacts_dir)
-        }
-        stage ('Publish results') {
-            archiveArtifacts artifacts: "${artifacts_dir}/*"
-            junit "${artifacts_dir}/*.xml"
-        }
-    } catch (Throwable e) {
-        // If there was an error or exception thrown, the build failed
-        currentBuild.result = "FAILURE"
-        throw e
     }
 }

@@ -15,22 +15,23 @@ def python = new com.mirantis.mk.Python()
 def pepperEnv = "pepperEnv"
 def target = ['expression': TARGET_SERVERS, 'type': 'compound']
 def result
+timeout(time: 12, unit: 'HOURS') {
+    node("python") {
+        try {
 
-node("python") {
-    try {
+            stage('Setup virtualenv for Pepper') {
+                python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            }
 
-        stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            stage('Update Reclass model') {
+                result = salt.runSaltCommand(pepperEnv, 'local', target, 'state.apply', null, 'reclass.storage')
+                result = salt.runSaltCommand(pepperEnv, 'local', target, 'state.apply', null, 'reclass.storage.node')
+                salt.checkResult(result)
+            }
+
+        } catch (Throwable e) {
+            currentBuild.result = 'FAILURE'
+            throw e
         }
-
-        stage('Update Reclass model') {
-            result = salt.runSaltCommand(pepperEnv, 'local', target, 'state.apply', null, 'reclass.storage')
-            result = salt.runSaltCommand(pepperEnv, 'local', target, 'state.apply', null, 'reclass.storage.node')
-            salt.checkResult(result)
-        }
-
-    } catch (Throwable e) {
-        currentBuild.result = 'FAILURE'
-        throw e
     }
 }

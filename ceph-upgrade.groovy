@@ -141,83 +141,84 @@ def upgrade(master, target) {
     sleep(5)
     return
 }
+timeout(time: 12, unit: 'HOURS') {
+    node("python") {
 
-node("python") {
+        // create connection to salt master
+        python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
-    // create connection to salt master
-    python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-
-    if (BACKUP_ENABLED.toBoolean() == true) {
-        if (STAGE_UPGRADE_MON.toBoolean() == true) {
-            backup(pepperEnv, 'mon')
-        }
-        if (STAGE_UPGRADE_RGW.toBoolean() == true) {
-            backup(pepperEnv, 'radosgw')
-        }
-        if (STAGE_UPGRADE_OSD.toBoolean() == true) {
-            backup(pepperEnv, 'osd')
-        }
-    }
-
-    if (flags.size() > 0) {
-        stage('Set cluster flags') {
-            for (flag in flags) {
-                runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd set ' + flag)
+        if (BACKUP_ENABLED.toBoolean() == true) {
+            if (STAGE_UPGRADE_MON.toBoolean() == true) {
+                backup(pepperEnv, 'mon')
+            }
+            if (STAGE_UPGRADE_RGW.toBoolean() == true) {
+                backup(pepperEnv, 'radosgw')
+            }
+            if (STAGE_UPGRADE_OSD.toBoolean() == true) {
+                backup(pepperEnv, 'osd')
             }
         }
-    }
 
-    if (STAGE_UPGRADE_MON.toBoolean() == true) {
-        upgrade(pepperEnv, 'mon')
-    }
-
-    if (STAGE_UPGRADE_MGR.toBoolean() == true) {
-        upgrade(pepperEnv, 'mgr')
-    }
-
-    if (STAGE_UPGRADE_OSD.toBoolean() == true) {
-        upgrade(pepperEnv, 'osd')
-    }
-
-    if (STAGE_UPGRADE_RGW.toBoolean() == true) {
-        upgrade(pepperEnv, 'radosgw')
-    }
-
-    if (STAGE_UPGRADE_CLIENT.toBoolean() == true) {
-        upgrade(pepperEnv, 'common')
-    }
-
-    // remove cluster flags
-    if (flags.size() > 0) {
-        stage('Unset cluster flags') {
-            for (flag in flags) {
-                if (!flag.contains('sortbitwise')) {
-                    common.infoMsg('Removing flag ' + flag)
-                    runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd unset ' + flag)
+        if (flags.size() > 0) {
+            stage('Set cluster flags') {
+                for (flag in flags) {
+                    runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd set ' + flag)
                 }
-
             }
         }
-    }
 
-    if (STAGE_FINALIZE.toBoolean() == true) {
-        stage("Finalize ceph version upgrade") {
-            runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd require-osd-release ${TARGET_RELEASE}")
-            try {
-                runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd set-require-min-compat-client ${ORIGIN_RELEASE}")
-            } catch (Exception e) {
-                common.warningMsg(e)
-            }
-            try {
-                runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd crush tunables optimal")
-            } catch (Exception e) {
-                common.warningMsg(e)
+        if (STAGE_UPGRADE_MON.toBoolean() == true) {
+            upgrade(pepperEnv, 'mon')
+        }
+
+        if (STAGE_UPGRADE_MGR.toBoolean() == true) {
+            upgrade(pepperEnv, 'mgr')
+        }
+
+        if (STAGE_UPGRADE_OSD.toBoolean() == true) {
+            upgrade(pepperEnv, 'osd')
+        }
+
+        if (STAGE_UPGRADE_RGW.toBoolean() == true) {
+            upgrade(pepperEnv, 'radosgw')
+        }
+
+        if (STAGE_UPGRADE_CLIENT.toBoolean() == true) {
+            upgrade(pepperEnv, 'common')
+        }
+
+        // remove cluster flags
+        if (flags.size() > 0) {
+            stage('Unset cluster flags') {
+                for (flag in flags) {
+                    if (!flag.contains('sortbitwise')) {
+                        common.infoMsg('Removing flag ' + flag)
+                        runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd unset ' + flag)
+                    }
+
+                }
             }
         }
-    }
 
-    // wait for healthy cluster
-    if (WAIT_FOR_HEALTHY.toBoolean() == true) {
-        waitForHealthy(pepperEnv)
+        if (STAGE_FINALIZE.toBoolean() == true) {
+            stage("Finalize ceph version upgrade") {
+                runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd require-osd-release ${TARGET_RELEASE}")
+                try {
+                    runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd set-require-min-compat-client ${ORIGIN_RELEASE}")
+                } catch (Exception e) {
+                    common.warningMsg(e)
+                }
+                try {
+                    runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd crush tunables optimal")
+                } catch (Exception e) {
+                    common.warningMsg(e)
+                }
+            }
+        }
+
+        // wait for healthy cluster
+        if (WAIT_FOR_HEALTHY.toBoolean() == true) {
+            waitForHealthy(pepperEnv)
+        }
     }
 }

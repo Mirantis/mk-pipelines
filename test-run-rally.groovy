@@ -21,39 +21,40 @@ test = new com.mirantis.mk.Test()
 def python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
+timeout(time: 12, unit: 'HOURS') {
+    node("python") {
+        try {
 
-node("python") {
-    try {
+            //
+            // Prepare connection
+            //
+            stage('Setup virtualenv for Pepper') {
+                python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            }
 
-        //
-        // Prepare connection
-        //
-        stage('Setup virtualenv for Pepper') {
-            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-        }
+            //
+            // Test
+            //
 
-        //
-        // Test
-        //
-
-        stage('Run OpenStack Rally scenario') {
-            test.runRallyScenarios(pepperEnv, IMAGE_LINK, TEST_TARGET, RALLY_SCENARIO, "/home/rally/rally_reports/",
-                    DO_CLEANUP_RESOURCES)
-        }
-        stage('Copy test reports') {
-            test.copyTempestResults(pepperEnv, TEST_TARGET)
-        }
-        stage('Archiving test artifacts') {
-            test.archiveRallyArtifacts(pepperEnv, TEST_TARGET)
-        }
-    } catch (Throwable e) {
-        currentBuild.result = 'FAILURE'
-        throw e
-    } finally {
-        if (CLEANUP_REPORTS_AND_CONTAINER.toBoolean()) {
-            stage('Cleanup reports and container') {
-                test.removeReports(pepperEnv, TEST_TARGET, "rally_reports", 'rally_reports.tar')
-                test.removeDockerContainer(pepperEnv, TEST_TARGET, CONTAINER_NAME)
+            stage('Run OpenStack Rally scenario') {
+                test.runRallyScenarios(pepperEnv, IMAGE_LINK, TEST_TARGET, RALLY_SCENARIO, "/home/rally/rally_reports/",
+                        DO_CLEANUP_RESOURCES)
+            }
+            stage('Copy test reports') {
+                test.copyTempestResults(pepperEnv, TEST_TARGET)
+            }
+            stage('Archiving test artifacts') {
+                test.archiveRallyArtifacts(pepperEnv, TEST_TARGET)
+            }
+        } catch (Throwable e) {
+            currentBuild.result = 'FAILURE'
+            throw e
+        } finally {
+            if (CLEANUP_REPORTS_AND_CONTAINER.toBoolean()) {
+                stage('Cleanup reports and container') {
+                    test.removeReports(pepperEnv, TEST_TARGET, "rally_reports", 'rally_reports.tar')
+                    test.removeDockerContainer(pepperEnv, TEST_TARGET, CONTAINER_NAME)
+                }
             }
         }
     }

@@ -42,26 +42,27 @@ String _colon = ':'
 
 String img_src_name, img_src_tag
 String img_dst_name, img_dst_tag
+timeout(time: 12, unit: 'HOURS') {
+    node(slave_label) {
+        (img_src_name, img_src_tag) = image_src.tokenize(_colon)
+        (img_dst_name, img_dst_tag) = image_dst.tokenize(_colon)
 
-node(slave_label) {
-    (img_src_name, img_src_tag) = image_src.tokenize(_colon)
-    (img_dst_name, img_dst_tag) = image_dst.tokenize(_colon)
+        String api_req = JsonOutput.toJson([
+            targetRepo: repo_dst,
+            dockerRepository: img_src_name,
+            targetDockerRepository: img_dst_name,
+            tag: img_src_tag,
+            targetTag: img_dst_tag,
+            copy: copy_image,
+        ])
 
-    String api_req = JsonOutput.toJson([
-        targetRepo: repo_dst,
-        dockerRepository: img_src_name,
-        targetDockerRepository: img_dst_name,
-        tag: img_src_tag,
-        targetTag: img_dst_tag,
-        copy: copy_image,
-    ])
-
-    withCredentials([usernameColonPassword(credentialsId: artifactory_creds, variable: 'USERPASS')]) {
-        sh """
-            curl -fLsS \
-                -u \$USERPASS \
-                -X POST -d '${api_req}' -H 'Content-Type: application/json' \
-                '${artifactory_url}api/docker/${repo_src}/v2/promote'
-        """
+        withCredentials([usernameColonPassword(credentialsId: artifactory_creds, variable: 'USERPASS')]) {
+            sh """
+                curl -fLsS \
+                    -u \$USERPASS \
+                    -X POST -d '${api_req}' -H 'Content-Type: application/json' \
+                    '${artifactory_url}api/docker/${repo_src}/v2/promote'
+            """
+        }
     }
 }

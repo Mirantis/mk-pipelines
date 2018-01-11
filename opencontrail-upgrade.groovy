@@ -54,448 +54,449 @@ def void runCommonCommands(target, command, args, check, salt, pepperEnv, common
     //salt.printSaltCommandResult(out)
     //input message: "Please check the output of \'${check}\' and continue if it is correct."
 }
+timeout(time: 12, unit: 'HOURS') {
+    node() {
 
-node() {
-
-    stage('Setup virtualenv for Pepper') {
-        python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-    }
-
-    if (STAGE_CONTROLLERS_UPGRADE.toBoolean() == true && !errorOccured) {
-
-        stage('Opencontrail controllers upgrade') {
-
-            oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
-
-            oc_component_repo = oc_component_repo['return'][0].values()[0]
-
-            try {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'saltutil.refresh_pillar', [], null, true)
-                salt.enforceState(pepperEnv, 'I@opencontrail:control', 'linux.system.repo')
-            } catch (Exception er) {
-                errorOccured = true
-                common.errorMsg("Opencontrail component on I@opencontrail:control probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
-                return
-            }
-
-            salt.enforceState(pepperEnv, 'I@zookeeper:backup:server', 'zookeeper.backup')
-            salt.enforceState(pepperEnv, 'I@zookeeper:backup:client', 'zookeeper.backup')
-
-            try {
-                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "su root -c '/usr/local/bin/zookeeper-backup-runner.sh'")
-            } catch (Exception er) {
-                throw new Exception('Zookeeper failed to backup. Please fix it before continuing.')
-            }
-
-            salt.enforceState(pepperEnv, 'I@cassandra:backup:server', 'cassandra.backup')
-            salt.enforceState(pepperEnv, 'I@cassandra:backup:client', 'cassandra.backup')
-
-            try {
-                salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', "su root -c '/usr/local/bin/cassandra-backup-runner-call.sh'")
-            } catch (Exception er) {
-                throw new Exception('Cassandra failed to backup. Please fix it before continuing.')
-            }
-
-            args = 'apt install contrail-database -y;'
-            check = 'nodetool status'
-
-            // ntw01
-            runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
-            // ntw02
-            runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
-            // ntw03
-            runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
-
-            args = "apt install -o Dpkg::Options::=\"--force-confold\" ${CONTROL_PKGS} -y --force-yes;"
-            check = 'contrail-status'
-
-            // ntw01
-            runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
-            // ntw02
-            runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
-            // ntw03
-            runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
-
-            try {
-                salt.enforceState(pepperEnv, 'I@opencontrail:control', 'opencontrail')
-            } catch (Exception er) {
-                common.errorMsg('Opencontrail state was executed on I@opencontrail:control and failed please fix it manually.')
-            }
-
-            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:control', 'type': 'compound'], command, null, check, null)
-            salt.printSaltCommandResult(out)
-
-            common.warningMsg('Please check \'show bgp summary\' on your bgp router if all bgp peers are in healthy state.')
-        }
-    }
-
-    if (STAGE_ANALYTICS_UPGRADE.toBoolean() == true && !errorOccured) {
-
-        stage('Ask for manual confirmation') {
-            input message: "Do you want to continue with the Opencontrail analytic nodes upgrade?"
+        stage('Setup virtualenv for Pepper') {
+            python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
-        stage('Opencontrail analytics upgrade') {
+        if (STAGE_CONTROLLERS_UPGRADE.toBoolean() == true && !errorOccured) {
 
-            oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+            stage('Opencontrail controllers upgrade') {
 
-            oc_component_repo = oc_component_repo['return'][0].values()[0]
+                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
 
-            try {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'saltutil.refresh_pillar', [], null, true)
-                salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'linux.system.repo')
-            } catch (Exception er) {
-                errorOccured = true
-                common.errorMsg("Opencontrail component on I@opencontrail:collector probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
-                return
-            }
-
-            args = 'apt install contrail-database -y;'
-            check = 'nodetool status'
-
-            // nal01
-            runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
-            // nal02
-            runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
-            // nal03
-            runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
-
-            args = "apt install -o Dpkg::Options::=\"--force-confold\" ${ANALYTIC_PKGS} -y --force-yes;"
-            check = 'contrail-status'
-
-            // nal01
-            runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
-            // nal02
-            runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
-            // nal03
-            runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
-
-            try {
-                salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'opencontrail')
-            } catch (Exception er) {
-                common.errorMsg('Opencontrail state was executed on I@opencontrail:collector and failed please fix it manually.')
-            }
-
-            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:collector', 'type': 'compound'], command, null, check, null)
-            salt.printSaltCommandResult(out)
-        }
-    }
-
-    if (STAGE_COMPUTES_UPGRADE.toBoolean() == true && !errorOccured) {
-
-        try {
-
-            stage('List targeted compute servers') {
-                minions = salt.getMinions(pepperEnv, COMPUTE_TARGET_SERVERS)
-
-                if (minions.isEmpty()) {
-                    throw new Exception("No minion was targeted")
-                }
-
-                targetLiveSubset = minions.subList(0, Integer.valueOf(COMPUTE_TARGET_SUBSET_LIVE)).join(' or ')
-                targetLiveSubsetProbe = minions.subList(0, probe).join(' or ')
-
-                targetLiveAll = minions.join(' or ')
-                common.infoMsg("Found nodes: ${targetLiveAll}")
-                common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
-            }
-
-            stage('Confirm upgrade on sample nodes') {
-                input message: "Do you want to continue with the Opencontrail compute upgrade on the following sample nodes? ${targetLiveSubset}"
-            }
-
-            stage("Opencontrail compute upgrade on sample nodes") {
-
-                oc_component_repo = salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
                 oc_component_repo = oc_component_repo['return'][0].values()[0]
 
                 try {
-                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'saltutil.refresh_pillar', [], null, true)
-                    salt.enforceState(pepperEnv, targetLiveSubset, 'linux.system.repo')
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control', 'linux.system.repo')
                 } catch (Exception er) {
                     errorOccured = true
-                    common.errorMsg("Opencontrail component on ${targetLiveSubset} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                    common.errorMsg("Opencontrail component on I@opencontrail:control probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
                     return
                 }
 
-                args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
-                check = 'contrail-status'
-
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, null)
-                salt.printSaltCommandResult(out)
+                salt.enforceState(pepperEnv, 'I@zookeeper:backup:server', 'zookeeper.backup')
+                salt.enforceState(pepperEnv, 'I@zookeeper:backup:client', 'zookeeper.backup')
 
                 try {
-                    salt.enforceState(pepperEnv, targetLiveSubset, 'opencontrail')
+                    salt.cmdRun(pepperEnv, 'I@opencontrail:control', "su root -c '/usr/local/bin/zookeeper-backup-runner.sh'")
                 } catch (Exception er) {
-                    common.errorMsg("Opencontrail state was executed on ${targetLiveSubset} and failed please fix it manually.")
+                    throw new Exception('Zookeeper failed to backup. Please fix it before continuing.')
                 }
 
-                salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
+                salt.enforceState(pepperEnv, 'I@cassandra:backup:server', 'cassandra.backup')
+                salt.enforceState(pepperEnv, 'I@cassandra:backup:client', 'cassandra.backup')
 
-                //sleep(10)
-                salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
+                try {
+                    salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', "su root -c '/usr/local/bin/cassandra-backup-runner-call.sh'")
+                } catch (Exception er) {
+                    throw new Exception('Cassandra failed to backup. Please fix it before continuing.')
+                }
 
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
+                args = 'apt install contrail-database -y;'
+                check = 'nodetool status'
+
+                // ntw01
+                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
+                // ntw02
+                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
+                // ntw03
+                runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
+
+                args = "apt install -o Dpkg::Options::=\"--force-confold\" ${CONTROL_PKGS} -y --force-yes;"
+                check = 'contrail-status'
+
+                // ntw01
+                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
+                // ntw02
+                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
+                // ntw03
+                runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
+
+                try {
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control', 'opencontrail')
+                } catch (Exception er) {
+                    common.errorMsg('Opencontrail state was executed on I@opencontrail:control and failed please fix it manually.')
+                }
+
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:control', 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
+
+                common.warningMsg('Please check \'show bgp summary\' on your bgp router if all bgp peers are in healthy state.')
+            }
+        }
+
+        if (STAGE_ANALYTICS_UPGRADE.toBoolean() == true && !errorOccured) {
+
+            stage('Ask for manual confirmation') {
+                input message: "Do you want to continue with the Opencontrail analytic nodes upgrade?"
             }
 
-            stage('Confirm upgrade on all targeted nodes') {
-                input message: "Do you want to continue with the Opencontrail compute upgrade on all the targeted nodes? ${targetLiveAll} nodes?"
-            }
-            stage("Opencontrail compute upgrade on all targeted nodes") {
+            stage('Opencontrail analytics upgrade') {
 
-                oc_component_repo = salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+
                 oc_component_repo = oc_component_repo['return'][0].values()[0]
 
                 try {
-                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'saltutil.refresh_pillar', [], null, true)
-                    salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo')
-                } catch (Exception er) {
-                    common.errorMsg("Opencontrail component on ${targetLiveAll} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
-                    return
-                }
-
-                args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
-                check = 'contrail-status'
-
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, null)
-                salt.printSaltCommandResult(out)
-
-                try {
-                    salt.enforceState(pepperEnv, targetLiveAll, 'opencontrail')
-                } catch (Exception er) {
-                    common.errorMsg("Opencontrail state was executed on ${targetLiveAll} and failed please fix it manually.")
-                }
-
-                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                //sleep(10)
-                salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
-
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
-                salt.printSaltCommandResult(out)
-            }
-
-        } catch (Throwable e) {
-            // If there was an error or exception thrown, the build failed
-            currentBuild.result = "FAILURE"
-            currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-            throw e
-        }
-    }
-
-
-    if (STAGE_CONTROLLERS_ROLLBACK.toBoolean() == true && !errorOccured) {
-
-        stage('Ask for manual confirmation') {
-            input message: "Do you want to continue with the Opencontrail control nodes rollback?"
-        }
-
-       stage('Opencontrail controllers rollback') {
-
-            oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
-            oc_component_repo = oc_component_repo['return'][0].values()[0]
-
-            try {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'saltutil.refresh_pillar', [], null, true)
-                salt.enforceState(pepperEnv, 'I@opencontrail:control', 'linux.system.repo')
-            } catch (Exception er) {
-                errorOccured = true
-                common.errorMsg("Opencontrail component on I@opencontrail:control probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
-                return
-            }
-
-            args = 'apt install contrail-database -y --force-yes;'
-            check = 'nodetool status'
-
-            // ntw01
-            runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
-            // ntw02
-            runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
-            // ntw03
-            runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
-
-            args = "apt install -o Dpkg::Options::=\"--force-confold\" ${CONTROL_PKGS} -y --force-yes;"
-            check = 'contrail-status'
-
-            // ntw01
-            runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
-            // ntw02
-            runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
-            // ntw03
-            runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
-
-            try {
-                salt.enforceState(pepperEnv, 'I@opencontrail:control', 'opencontrail')
-            } catch (Exception er) {
-                common.errorMsg('Opencontrail state was executed on I@opencontrail:control and failed please fix it manually.')
-            }
-
-            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:control', 'type': 'compound'], command, null, check, null)
-            salt.printSaltCommandResult(out)
-
-            common.warningMsg('Please check \'show bgp summary\' on your bgp router if all bgp peers are in healthy state.')
-        }
-    }
-
-    if (STAGE_ANALYTICS_ROLLBACK.toBoolean() == true && !errorOccured) {
-
-        stage('Ask for manual confirmation') {
-            input message: "Do you want to continue with the Opencontrail analytic nodes rollback?"
-        }
-
-        stage('Opencontrail analytics rollback') {
-
-            oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
-            oc_component_repo = oc_component_repo['return'][0].values()[0]
-
-            try {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'saltutil.refresh_pillar', [], null, true)
-                salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'linux.system.repo')
-            } catch (Exception er) {
-                errorOccured = true
-                common.errorMsg("Opencontrail component on I@opencontrail:collector probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
-                return
-            }
-
-            args = 'apt install contrail-database -y --force-yes;'
-            check = 'nodetool status'
-
-            // nal01
-            runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
-            // nal02
-            runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
-            // nal03
-            runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
-
-            args = "apt install -o Dpkg::Options::=\"--force-confold\" ${ANALYTIC_PKGS} -y --force-yes;"
-            check = 'contrail-status'
-
-            // nal01
-            runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
-            // nal02
-            runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
-            // nal03
-            runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
-
-            try {
-                salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'opencontrail')
-            } catch (Exception er) {
-                common.errorMsg('Opencontrail state was executed on I@opencontrail:collector and failed please fix it manually.')
-            }
-
-            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:collector', 'type': 'compound'], command, null, check, null)
-            salt.printSaltCommandResult(out)
-        }
-    }
-
-    if (STAGE_COMPUTES_ROLLBACK.toBoolean() == true && !errorOccured) {
-
-        try {
-
-            stage('List targeted compute servers') {
-                minions = salt.getMinions(pepperEnv, COMPUTE_TARGET_SERVERS)
-
-                if (minions.isEmpty()) {
-                    throw new Exception("No minion was targeted")
-                }
-
-                targetLiveSubset = minions.subList(0, Integer.valueOf(COMPUTE_TARGET_SUBSET_LIVE)).join(' or ')
-                targetLiveSubsetProbe = minions.subList(0, probe).join(' or ')
-
-                targetLiveAll = minions.join(' or ')
-                common.infoMsg("Found nodes: ${targetLiveAll}")
-                common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
-            }
-
-            stage('Confirm rollback on sample nodes') {
-                input message: "Do you want to continue with the Opencontrail compute rollback on the following sample nodes? ${targetLiveSubset}"
-            }
-
-            stage("Opencontrail compute rollback on sample nodes") {
-
-                oc_component_repo = salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
-                oc_component_repo = oc_component_repo['return'][0].values()[0]
-
-                try {
-                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'saltutil.refresh_pillar', [], null, true)
-                    salt.enforceState(pepperEnv, targetLiveSubset, 'linux.system.repo')
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'linux.system.repo')
                 } catch (Exception er) {
                     errorOccured = true
-                    common.errorMsg("Opencontrail component on ${targetLiveSubset} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                    common.errorMsg("Opencontrail component on I@opencontrail:collector probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
                     return
                 }
 
-                args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                args = 'apt install contrail-database -y;'
+                check = 'nodetool status'
+
+                // nal01
+                runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
+                // nal02
+                runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
+                // nal03
+                runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
+
+                args = "apt install -o Dpkg::Options::=\"--force-confold\" ${ANALYTIC_PKGS} -y --force-yes;"
                 check = 'contrail-status'
 
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, null)
-                salt.printSaltCommandResult(out)
+                // nal01
+                runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
+                // nal02
+                runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
+                // nal03
+                runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
 
                 try {
-                    salt.enforceState(pepperEnv, targetLiveSubset, 'opencontrail')
+                    salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'opencontrail')
                 } catch (Exception er) {
-                    common.errorMsg("Opencontrail state was executed on ${targetLiveSubset} and failed please fix it manually.")
+                    common.errorMsg('Opencontrail state was executed on I@opencontrail:collector and failed please fix it manually.')
                 }
 
-                salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                //sleep(10)
-                salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
-
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:collector', 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
             }
+        }
 
-            stage('Confirm rollback on all targeted nodes') {
-                input message: "Do you want to continue with the Opencontrail compute upgrade on all the targeted nodes? ${targetLiveAll} nodes?"
+        if (STAGE_COMPUTES_UPGRADE.toBoolean() == true && !errorOccured) {
+
+            try {
+
+                stage('List targeted compute servers') {
+                    minions = salt.getMinions(pepperEnv, COMPUTE_TARGET_SERVERS)
+
+                    if (minions.isEmpty()) {
+                        throw new Exception("No minion was targeted")
+                    }
+
+                    targetLiveSubset = minions.subList(0, Integer.valueOf(COMPUTE_TARGET_SUBSET_LIVE)).join(' or ')
+                    targetLiveSubsetProbe = minions.subList(0, probe).join(' or ')
+
+                    targetLiveAll = minions.join(' or ')
+                    common.infoMsg("Found nodes: ${targetLiveAll}")
+                    common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
+                }
+
+                stage('Confirm upgrade on sample nodes') {
+                    input message: "Do you want to continue with the Opencontrail compute upgrade on the following sample nodes? ${targetLiveSubset}"
+                }
+
+                stage("Opencontrail compute upgrade on sample nodes") {
+
+                    oc_component_repo = salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                    oc_component_repo = oc_component_repo['return'][0].values()[0]
+
+                    try {
+                        salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
+                        salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'saltutil.refresh_pillar', [], null, true)
+                        salt.enforceState(pepperEnv, targetLiveSubset, 'linux.system.repo')
+                    } catch (Exception er) {
+                        errorOccured = true
+                        common.errorMsg("Opencontrail component on ${targetLiveSubset} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                        return
+                    }
+
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    check = 'contrail-status'
+
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, null)
+                    salt.printSaltCommandResult(out)
+
+                    try {
+                        salt.enforceState(pepperEnv, targetLiveSubset, 'opencontrail')
+                    } catch (Exception er) {
+                        common.errorMsg("Opencontrail state was executed on ${targetLiveSubset} and failed please fix it manually.")
+                    }
+
+                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
+
+                    //sleep(10)
+                    salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
+
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
+                    salt.printSaltCommandResult(out)
+                }
+
+                stage('Confirm upgrade on all targeted nodes') {
+                    input message: "Do you want to continue with the Opencontrail compute upgrade on all the targeted nodes? ${targetLiveAll} nodes?"
+                }
+                stage("Opencontrail compute upgrade on all targeted nodes") {
+
+                    oc_component_repo = salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                    oc_component_repo = oc_component_repo['return'][0].values()[0]
+
+                    try {
+                        salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
+                        salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'saltutil.refresh_pillar', [], null, true)
+                        salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo')
+                    } catch (Exception er) {
+                        common.errorMsg("Opencontrail component on ${targetLiveAll} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                        return
+                    }
+
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    check = 'contrail-status'
+
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, null)
+                    salt.printSaltCommandResult(out)
+
+                    try {
+                        salt.enforceState(pepperEnv, targetLiveAll, 'opencontrail')
+                    } catch (Exception er) {
+                        common.errorMsg("Opencontrail state was executed on ${targetLiveAll} and failed please fix it manually.")
+                    }
+
+                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
+                    //sleep(10)
+                    salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
+
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
+                    salt.printSaltCommandResult(out)
+                }
+
+            } catch (Throwable e) {
+                // If there was an error or exception thrown, the build failed
+                currentBuild.result = "FAILURE"
+                currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+                throw e
+            }
+        }
+
+
+        if (STAGE_CONTROLLERS_ROLLBACK.toBoolean() == true && !errorOccured) {
+
+            stage('Ask for manual confirmation') {
+                input message: "Do you want to continue with the Opencontrail control nodes rollback?"
             }
 
-            stage("Opencontrail compute upgrade on all targeted nodes") {
+           stage('Opencontrail controllers rollback') {
 
-                oc_component_repo = salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
                 oc_component_repo = oc_component_repo['return'][0].values()[0]
 
                 try {
-                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'saltutil.refresh_pillar', [], null, true)
-                    salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo')
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control', 'linux.system.repo')
                 } catch (Exception er) {
-                    common.errorMsg("Opencontrail component on ${targetLiveAll} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                    errorOccured = true
+                    common.errorMsg("Opencontrail component on I@opencontrail:control probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
                     return
                 }
 
-                args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS} -y;"
+                args = 'apt install contrail-database -y --force-yes;'
+                check = 'nodetool status'
+
+                // ntw01
+                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
+                // ntw02
+                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
+                // ntw03
+                runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
+
+                args = "apt install -o Dpkg::Options::=\"--force-confold\" ${CONTROL_PKGS} -y --force-yes;"
                 check = 'contrail-status'
 
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, null)
-                salt.printSaltCommandResult(out)
+                // ntw01
+                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
+                // ntw02
+                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
+                // ntw03
+                runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
 
                 try {
-                    salt.enforceState(pepperEnv, targetLiveAll, 'opencontrail')
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control', 'opencontrail')
                 } catch (Exception er) {
-                    common.errorMsg("Opencontrail state was executed on ${targetLiveAll} and failed please fix it manually.")
+                    common.errorMsg('Opencontrail state was executed on I@opencontrail:control and failed please fix it manually.')
                 }
 
-                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-
-                //sleep(10)
-                salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
-
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:control', 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
+
+                common.warningMsg('Please check \'show bgp summary\' on your bgp router if all bgp peers are in healthy state.')
+            }
+        }
+
+        if (STAGE_ANALYTICS_ROLLBACK.toBoolean() == true && !errorOccured) {
+
+            stage('Ask for manual confirmation') {
+                input message: "Do you want to continue with the Opencontrail analytic nodes rollback?"
             }
 
-        } catch (Throwable e) {
-            // If there was an error or exception thrown, the build failed
-            currentBuild.result = "FAILURE"
-            currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-            throw e
+            stage('Opencontrail analytics rollback') {
+
+                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                oc_component_repo = oc_component_repo['return'][0].values()[0]
+
+                try {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'linux.system.repo')
+                } catch (Exception er) {
+                    errorOccured = true
+                    common.errorMsg("Opencontrail component on I@opencontrail:collector probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                    return
+                }
+
+                args = 'apt install contrail-database -y --force-yes;'
+                check = 'nodetool status'
+
+                // nal01
+                runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
+                // nal02
+                runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
+                // nal03
+                runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
+
+                args = "apt install -o Dpkg::Options::=\"--force-confold\" ${ANALYTIC_PKGS} -y --force-yes;"
+                check = 'contrail-status'
+
+                // nal01
+                runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
+                // nal02
+                runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
+                // nal03
+                runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
+
+                try {
+                    salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'opencontrail')
+                } catch (Exception er) {
+                    common.errorMsg('Opencontrail state was executed on I@opencontrail:collector and failed please fix it manually.')
+                }
+
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:collector', 'type': 'compound'], command, null, check, null)
+                salt.printSaltCommandResult(out)
+            }
+        }
+
+        if (STAGE_COMPUTES_ROLLBACK.toBoolean() == true && !errorOccured) {
+
+            try {
+
+                stage('List targeted compute servers') {
+                    minions = salt.getMinions(pepperEnv, COMPUTE_TARGET_SERVERS)
+
+                    if (minions.isEmpty()) {
+                        throw new Exception("No minion was targeted")
+                    }
+
+                    targetLiveSubset = minions.subList(0, Integer.valueOf(COMPUTE_TARGET_SUBSET_LIVE)).join(' or ')
+                    targetLiveSubsetProbe = minions.subList(0, probe).join(' or ')
+
+                    targetLiveAll = minions.join(' or ')
+                    common.infoMsg("Found nodes: ${targetLiveAll}")
+                    common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
+                }
+
+                stage('Confirm rollback on sample nodes') {
+                    input message: "Do you want to continue with the Opencontrail compute rollback on the following sample nodes? ${targetLiveSubset}"
+                }
+
+                stage("Opencontrail compute rollback on sample nodes") {
+
+                    oc_component_repo = salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                    oc_component_repo = oc_component_repo['return'][0].values()[0]
+
+                    try {
+                        salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
+                        salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'saltutil.refresh_pillar', [], null, true)
+                        salt.enforceState(pepperEnv, targetLiveSubset, 'linux.system.repo')
+                    } catch (Exception er) {
+                        errorOccured = true
+                        common.errorMsg("Opencontrail component on ${targetLiveSubset} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                        return
+                    }
+
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    check = 'contrail-status'
+
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, null)
+                    salt.printSaltCommandResult(out)
+
+                    try {
+                        salt.enforceState(pepperEnv, targetLiveSubset, 'opencontrail')
+                    } catch (Exception er) {
+                        common.errorMsg("Opencontrail state was executed on ${targetLiveSubset} and failed please fix it manually.")
+                    }
+
+                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
+                    //sleep(10)
+                    salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
+
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
+                    salt.printSaltCommandResult(out)
+                }
+
+                stage('Confirm rollback on all targeted nodes') {
+                    input message: "Do you want to continue with the Opencontrail compute upgrade on all the targeted nodes? ${targetLiveAll} nodes?"
+                }
+
+                stage("Opencontrail compute upgrade on all targeted nodes") {
+
+                    oc_component_repo = salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                    oc_component_repo = oc_component_repo['return'][0].values()[0]
+
+                    try {
+                        salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
+                        salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'saltutil.refresh_pillar', [], null, true)
+                        salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo')
+                    } catch (Exception er) {
+                        common.errorMsg("Opencontrail component on ${targetLiveAll} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                        return
+                    }
+
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS} -y;"
+                    check = 'contrail-status'
+
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, null)
+                    salt.printSaltCommandResult(out)
+
+                    try {
+                        salt.enforceState(pepperEnv, targetLiveAll, 'opencontrail')
+                    } catch (Exception er) {
+                        common.errorMsg("Opencontrail state was executed on ${targetLiveAll} and failed please fix it manually.")
+                    }
+
+                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
+
+                    //sleep(10)
+                    salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
+
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
+                    salt.printSaltCommandResult(out)
+                }
+
+            } catch (Throwable e) {
+                // If there was an error or exception thrown, the build failed
+                currentBuild.result = "FAILURE"
+                currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+                throw e
+            }
         }
     }
 }
