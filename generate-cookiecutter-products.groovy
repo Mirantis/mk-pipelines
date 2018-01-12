@@ -198,7 +198,7 @@ parameters:
 
                 def smc_apt = [:]
                 smc_apt['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
-                smc_apt['APTLY_DEPLOY_IP'] = templateContext['default_context']['aptly_server_address']
+                smc_apt['APTLY_DEPLOY_IP'] = templateContext['default_context']['aptly_server_deploy_address']
                 smc_apt['APTLY_DEPLOY_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
                 smc_apt['APTLY_MINION_ID'] = "${aptlyServerHostname}.${clusterDomain}"
 
