@@ -43,6 +43,8 @@ timeout(time: 12, unit: 'HOURS') {
        throw e
     } finally {
        common.sendNotification(currentBuild.result,"",["slack"])
+       def _extra_descr = "${SOURCE}=>${TARGET}:\n${COMPONENTS} ${packages}"
+       currentBuild.description = currentBuild.description ? _extra_descr + " " + currentBuild.description : _extra_descr
     }
   }
 }
