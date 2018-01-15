@@ -107,6 +107,16 @@ def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, fo
   ]
 }
 
+def _clusterTestEnabled(infraYMLConfig){
+  if(infraYMLConfig["parameters"].containsKey("_jenkins")){
+    if(infraYMLConfig["parameters"]["_jenkins"].containsKey("tests_enabled")){
+      return infraYMLConfig["parameters"]["_jenkins"]["tests_enabled"];
+    }
+  }
+  // ci tests are enabled by default
+  return true;
+}
+
 timeout(time: 12, unit: 'HOURS') {
   node("python") {
     try{
@@ -180,21 +190,23 @@ timeout(time: 12, unit: 'HOURS') {
 
           for (int i = 0; i < infraYMLs.size(); i++) {
             def infraYMLConfig = readYaml(file: infraYMLs[i])
-            if(!infraYMLConfig["parameters"].containsKey("_param")){
-                common.warningMsg("ERROR: Cannot find soft params (_param) in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
-                continue
-            }
-            def infraParams = infraYMLConfig["parameters"]["_param"];
-            if(!infraParams.containsKey("infra_config_hostname") || !infraParams.containsKey("cluster_name") || !infraParams.containsKey("cluster_domain")){
-                common.warningMsg("ERROR: Cannot find _param:infra_config_hostname or _param:cluster_name or _param:cluster_domain  in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
-                continue
-            }
-            def clusterName = infraParams["cluster_name"]
-            def clusterDomain = infraParams["cluster_domain"]
-            def configHostname = infraParams["infra_config_hostname"]
-            def testTarget = String.format("%s.%s", configHostname, clusterDomain)
+            if(_clusterTestEnabled(infraYMLConfig)){
+                if(!infraYMLConfig["parameters"].containsKey("_param")){
+                    common.warningMsg("ERROR: Cannot find soft params (_param) in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
+                    continue
+                }
+                def infraParams = infraYMLConfig["parameters"]["_param"];
+                if(!infraParams.containsKey("infra_config_hostname") || !infraParams.containsKey("cluster_name") || !infraParams.containsKey("cluster_domain")){
+                    common.warningMsg("ERROR: Cannot find _param:infra_config_hostname or _param:cluster_name or _param:cluster_domain  in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
+                    continue
+                }
+                def clusterName = infraParams["cluster_name"]
+                def clusterDomain = infraParams["cluster_domain"]
+                def configHostname = infraParams["infra_config_hostname"]
+                def testTarget = String.format("%s.%s", configHostname, clusterDomain)
 
-            futureNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
+                futureNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
+            }
           }
 
           setupRunner()
