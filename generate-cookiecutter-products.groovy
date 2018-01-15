@@ -121,15 +121,15 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Generate new SaltMaster node') {
                 def nodeFile = "${modelEnv}/nodes/${saltMaster}.${clusterDomain}.yml"
                 def nodeString = """classes:
-    - cluster.${clusterName}.infra.config
-    parameters:
-      _param:
-        linux_system_codename: xenial
-        reclass_data_revision: master
-      linux:
-        system:
-          name: ${saltMaster}
-          domain: ${clusterDomain}
+- cluster.${clusterName}.infra.config
+parameters:
+  _param:
+    linux_system_codename: xenial
+    reclass_data_revision: master
+  linux:
+    system:
+      name: ${saltMaster}
+      domain: ${clusterDomain}
     """
                 sh "mkdir -p ${modelEnv}/nodes/"
                 writeFile(file: nodeFile, text: nodeString)
