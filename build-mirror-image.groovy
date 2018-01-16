@@ -4,6 +4,7 @@
  *
  * Expected parameters:
  * CLUSTER_MODEL - An URL to the Reclass model for the mirror VM.
+ * CLUSTER_MODEL_REF - Branch or tag to use for cluster model
  * CLUSTER_NAME - Cluster name used in the above model.
  * IMAGE_NAME - Name of the result image.
  * OS_CREDENTIALS_ID - ID of credentials for OpenStack API stored in Jenkins.
@@ -88,7 +89,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                 floatingIP = openstack.runOpenstackCommand("openstack ip floating create --format value -c floating_ip_address ${VM_FLOATING_IP_POOL}", rcFile, openstackEnv)
 
-                withEnv(["CLUSTER_NAME=${CLUSTER_NAME}", "CLUSTER_MODEL=${CLUSTER_MODEL}"]) {
+                withEnv(["CLUSTER_NAME=${CLUSTER_NAME}", "CLUSTER_MODEL=${CLUSTER_MODEL}", "CLUSTER_MODEL_REF=${CLUSTER_MODEL_REF}", "MCP_VERSION=${MCP_VERSION}"]) {
                     sh "envsubst < salt-bootstrap.sh > salt-bootstrap.sh.temp;mv salt-bootstrap.sh.temp salt-bootstrap.sh; cat salt-bootstrap.sh"
                 }
 
