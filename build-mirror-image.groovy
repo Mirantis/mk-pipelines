@@ -44,28 +44,12 @@ def serverStatus = ""
 def uploadImageStatus = ""
 def uploadMd5Status = ""
 
-def retry(int times = 5, int delay = 0, Closure body) {
-    int retries = 0
-    def exceptions = []
-    while(retries++ < times) {
-        try {
-            return body.call()
-        } catch(e) {
-            sleep(delay)
-        }
-    }
-    currentBuild.result = "FAILURE"
-    throw new Exception("Failed after $times retries")
-}
-
 timeout(time: 12, unit: 'HOURS') {
     node("python&&disk-xl") {
         try {
             def workspace = common.getWorkspace()
             openstackEnv = String.format("%s/venv", workspace)
             venvPepper = String.format("%s/venvPepper", workspace)
-            rcFile = openstack.createOpenstackEnv(openstackEnv, OS_URL, OS_CREDENTIALS_ID, OS_PROJECT, "default", "", "default", "2", "")
-            def openstackVersion = OS_VERSION
 
             VM_IP_DELAY = VM_IP_DELAY as Integer
             VM_IP_RETRIES = VM_IP_RETRIES as Integer
@@ -79,10 +63,11 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 sh "wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/salt-bootstrap.sh"
-                openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
+                openstack.setupOpenstackVirtualenv(openstackEnv, OS_VERSION)
             }
 
             stage("Spawn Instance"){
+                rcFile = openstack.createOpenstackEnv(OS_URL, OS_CREDENTIALS_ID, OS_PROJECT, "default", "", "default", "2", "")
                 privateKey = openstack.runOpenstackCommand("openstack keypair create mcp-offline-keypair-${dateTime}", rcFile, openstackEnv)
 
                 common.infoMsg(privateKey)
@@ -94,21 +79,26 @@ timeout(time: 12, unit: 'HOURS') {
                     sh "envsubst < salt-bootstrap.sh > salt-bootstrap.sh.temp;mv salt-bootstrap.sh.temp salt-bootstrap.sh; cat salt-bootstrap.sh"
                 }
 
-                openstackServer = openstack.runOpenstackCommand("openstack server create --key-name mcp-offline-keypair-${dateTime} --availability-zone ${VM_AVAILABILITY_ZONE} --image ${VM_IMAGE} --flavor ${VM_FLAVOR} --nic net-id=${VM_NETWORK_ID},v4-fixed-ip=${VM_IP} --user-data salt-bootstrap.sh mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
+                if(VM_IP != ""){
+                    openstackServer = openstack.runOpenstackCommand("openstack server create --key-name mcp-offline-keypair-${dateTime} --availability-zone ${VM_AVAILABILITY_ZONE} --image ${VM_IMAGE} --flavor ${VM_FLAVOR} --nic net-id=${VM_NETWORK_ID},v4-fixed-ip=${VM_IP} --user-data salt-bootstrap.sh mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
+                }else{
+                    openstackServer = openstack.runOpenstackCommand("openstack server create --key-name mcp-offline-keypair-${dateTime} --availability-zone ${VM_AVAILABILITY_ZONE} --image ${VM_IMAGE} --flavor ${VM_FLAVOR} --nic net-id=${VM_NETWORK_ID} --user-data salt-bootstrap.sh mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)                    
+                }
                 sleep(60)
 
-                retry(VM_IP_RETRIES, VM_IP_DELAY){
+                common.retry(VM_IP_RETRIES, VM_IP_DELAY){
                     openstack.runOpenstackCommand("openstack ip floating add ${floatingIP} mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
                 }
 
                 sleep(500)
 
-                retry(VM_CONNECT_RETRIES, VM_CONNECT_DELAY){
+                common.retry(VM_CONNECT_RETRIES, VM_CONNECT_DELAY){
                     sh "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_rsa root@${floatingIP}:/srv/initComplete ./"
                 }
 
                 python.setupPepperVirtualenv(venvPepper, "http://${floatingIP}:6969", SALT_MASTER_CREDENTIALS)
             }
+
             stage("Prepare instance"){
                 salt.runSaltProcessStep(venvPepper, '*apt*', 'saltutil.refresh_pillar', [], null, true)
                 salt.runSaltProcessStep(venvPepper, '*apt*', 'saltutil.sync_all', [], null, true)
@@ -130,14 +120,8 @@ timeout(time: 12, unit: 'HOURS') {
             stage("Create Aptly"){
                 common.infoMsg("Creating Aptly")
                 salt.enforceState(venvPepper, '*apt*', ['aptly'], true, false, null, false, -1, 2)
-                //TODO: Do it new way
-                salt.cmdRun(venvPepper, '*apt*', "aptly_mirror_update.sh -s -v", true, null, true, ["runas=aptly"])
-                salt.cmdRun(venvPepper, '*apt*', "nohup aptly api serve --no-lock > /dev/null 2>&1 </dev/null &", true, null, true, ["runas=aptly"])
-                salt.cmdRun(venvPepper, '*apt*', "aptly-publisher --timeout=1200 publish -v -c /etc/aptly-publisher.yaml --architectures amd64 --url http://127.0.0.1:8080 --recreate --force-overwrite", true, null, true, ["runas=aptly"])
-                salt.cmdRun(venvPepper, '*apt*', "aptly db cleanup", true, null, true, ["runas=aptly"])
-                //NEW way
-                //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", "runas=aptly"], null, true)
-                //salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-acrfv", "runas=aptly"], null, true)
+                salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", "runas=aptly"], null, true)
+                salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-acrfv", "runas=aptly"], null, true)
                 salt.cmdRun(venvPepper, '*apt*', "wget https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${SCRIPTS_REF}/mirror-image/aptly/aptly-update.sh -O /srv/scripts/aptly-update.sh")
                 salt.cmdRun(venvPepper, '*apt*', "chmod +x /srv/scripts/aptly-update.sh")
             }
@@ -173,36 +157,37 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.cmdRun(venvPepper, '*apt*', "rm -rf /var/lib/cloud/sem/* /var/lib/cloud/instance /var/lib/cloud/instances/*")
                 salt.cmdRun(venvPepper, '*apt*', "cloud-init init")
 
-                retry(3, 5){
+                common.retry(3, 5){
                     openstack.runOpenstackCommand("openstack server stop mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
                 }
 
-                retry(6, 30){
+                common.retry(6, 30){
                     serverStatus = openstack.runOpenstackCommand("openstack server show --format value -c status mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
                     if(serverStatus != "SHUTOFF"){
                         throw new ResourceException("Instance is not ready for image create.")
                     }
                 }
-                retry(3, 5){
+                common.retry(3, 5){
                     openstack.runOpenstackCommand("openstack server image create --name ${IMAGE_NAME}-${dateTime} --wait mcp-offline-mirror-${dateTime}", rcFile, openstackEnv)
                 }
             }
 
             stage("Publish image"){
                 common.infoMsg("Saving image ${IMAGE_NAME}-${dateTime}")
-                retry(3, 5){
+                common.retry(3, 5){
                     openstack.runOpenstackCommand("openstack image save --file ${IMAGE_NAME}-${dateTime}.qcow2 ${IMAGE_NAME}-${dateTime}", rcFile, openstackEnv)
                 }
                 sh "md5sum ${IMAGE_NAME}-${dateTime}.qcow2 > ${IMAGE_NAME}-${dateTime}.qcow2.md5"
 
                 common.infoMsg("Uploading image ${IMAGE_NAME}-${dateTime}")
-                retry(3, 5){
+                common.retry(3, 5){
                     uploadImageStatus = sh(script: "curl -f -T ${IMAGE_NAME}-${dateTime}.qcow2 ${UPLOAD_URL}", returnStatus: true)
                     if(uploadImageStatus!=0){
                         throw new Exception("Image upload failed")
                     }
                 }
-                retry(3, 5){
+
+                common.retry(3, 5){
                     uploadMd5Status = sh(script: "curl -f -T ${IMAGE_NAME}-${dateTime}.qcow2.md5 ${UPLOAD_URL}", returnStatus: true)
                     if(uploadMd5Status != 0){
                         throw new Exception("MD5 sum upload failed")
