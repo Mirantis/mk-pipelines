@@ -75,7 +75,11 @@ timeout(time: 12, unit: 'HOURS') {
 
         // get list of osd disks of the host
         salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.sync_grains', [], null, true, 5)
-        def ceph_disks = salt.getGrain(pepperEnv, HOST, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
+        def cephGrain = salt.getGrain(pepperEnv, HOST, 'ceph')['return']
+        if(cephGrain['return'].isEmpty()){
+            throw new Exception("Ceph salt grain cannot be found!")
+        }
+        def ceph_disks = cephGrain['return'][0].values()[0].values()[0]['ceph_disk']
         common.prettyPrint(ceph_disks)
 
         for (i in ceph_disks) {
@@ -89,7 +93,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         // wait for healthy cluster
-        if (WAIT_FOR_HEALTHY.toBoolean() == true) {
+        if (WAIT_FOR_HEALTHY.toBoolean()) {
             waitForHealthy(pepperEnv)
         }
 
@@ -99,7 +103,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         // wait for healthy cluster
-        if (WAIT_FOR_HEALTHY.toBoolean() == true) {
+        if (WAIT_FOR_HEALTHY.toBoolean()) {
             sleep(5)
             waitForHealthy(pepperEnv)
         }
