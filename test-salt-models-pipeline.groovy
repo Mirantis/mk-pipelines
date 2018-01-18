@@ -158,12 +158,9 @@ timeout(time: 12, unit: 'HOURS') {
       stage("test-nodes") {
         if(checkouted) {
           def modifiedClusters = null
-
-          if (gerritRef) {
-            checkChange = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v classes/cluster", returnStatus: true)
-            if (checkChange == 1) {
-              modifiedClusters = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep classes/cluster/ | awk -F/ '{print \$3}' | uniq", returnStdout: true).tokenize()
-            }
+          def checkChange = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v classes/cluster", returnStatus: true)
+          if (checkChange == 1) {
+            modifiedClusters = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep classes/cluster/ | awk -F/ '{print \$3}' | uniq", returnStdout: true).tokenize()
           }
 
           def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
