@@ -45,7 +45,7 @@ timeout(time: 12, unit: 'HOURS') {
             print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
 
             stage ('Download Cookiecutter template') {
-                if (COOKIECUTTER_TEMPLATE_BRANCH.startsWith('refs/changes/')) {
+                if (COOKIECUTTER_TEMPLATE_BRANCH.startsWith('refs/')) {
                     git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, 'master', COOKIECUTTER_TEMPLATE_CREDENTIALS)
 
                     dir(templateEnv) {
