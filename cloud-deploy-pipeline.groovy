@@ -50,6 +50,13 @@
  *   TEST_TEMPEST_IMAGE           Tempest image link
  *   TEST_TEMPEST_PATTERN         If not false, run tests matched to pattern only
  *   TEST_TEMPEST_TARGET          Salt target for tempest node
+ *   TESTRAIL_REPORT              Whether upload results to testrail or not
+ *   TESTRAIL_REPORTER_IMAGE      Docker image for testrail reporter
+ *   TESTRAIL_QA_CREDENTIALS      Credentials for upload to testrail
+ *   TESTRAIL_MILESTONE           Product version for tests
+ *   TESTRAIL_PLAN                Testrail test plan
+ *   TESTRAIL_GROUP               Testrail test group
+ *   TESTRAIL_SUITE               Testrail test suite
  *
  * optional parameters for overwriting soft params
  *   SALT_OVERRIDES              YAML with overrides for Salt deployment
@@ -499,6 +506,19 @@ timeout(time: 12, unit: 'HOURS') {
 
                 stage('Archive rally artifacts') {
                     test.archiveRallyArtifacts(venvPepper, TEST_TEMPEST_TARGET)
+                }
+
+                if (common.validInputParam('TESTRAIL_REPORT') && TESTRAIL_REPORT.toBoolean()) {
+                    stage('Upload test results to TestRail') {
+                        def date = sh(script: 'date +%Y-%m-%d', returnStdout: true).trim()
+                        def plan = TESTRAIL_PLAN ?: "[${TESTRAIL_MILESTONE}]System-Devcloud-${date}"
+                        def group = TESTRAIL_GROUP ?: STACK_TEMPLATE
+
+                        salt.cmdRun(venvPepper, TEST_TEMPEST_TARGET, "cd /root/rally_reports && cp \$(ls -t *xml | head -n1) report.xml")
+                        test.uploadResultsTestrail("/root/rally_reports/report.xml",
+                                TESTRAIL_REPORTER_IMAGE, group, TESTRAIL_QA_CREDENTIALS,
+                                plan, TESTRAIL_MILESTONE, TESTRAIL_SUITE)
+                    }
                 }
             }
 
