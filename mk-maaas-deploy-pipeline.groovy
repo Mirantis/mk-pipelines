@@ -32,8 +32,9 @@ timeout(time: 12, unit: 'HOURS') {
         def saltMaster
 
         // value defaults
+        def workspace = common.getWorkspace()
         def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : "liberty"
-        def openstackEnv = "${env.WORKSPACE}/venv"
+        def openstackEnv = "${workspace}/venv"
 
         stage ('Download Heat templates') {
             git.checkoutGitRepository('template', HEAT_TEMPLATE_URL, HEAT_TEMPLATE_BRANCH, HEAT_TEMPLATE_CREDENTIALS)
@@ -44,7 +45,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         stage('Connect to OpenStack cloud') {
-            openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+            openstackCloud = openstack.createOpenstackEnv(openstackEnv, OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
             openstack.getKeystoneToken(openstackCloud, openstackEnv)
         }
 

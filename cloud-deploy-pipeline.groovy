@@ -91,8 +91,9 @@ timeout(time: 12, unit: 'HOURS') {
     node(slave_node) {
         try {
             // Set build-specific variables
-            venv = "${env.WORKSPACE}/venv"
-            venvPepper = "${env.WORKSPACE}/venvPepper"
+            def workspace = common.getWorkspace()
+            venv = "${workspace}/venv"
+            venvPepper = "${workspace}/venvPepper"
 
             //
             // Prepare machines
@@ -136,7 +137,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                     // create openstack env
                     openstack.setupOpenstackVirtualenv(venv, OPENSTACK_API_CLIENT)
-                    openstackCloud = openstack.createOpenstackEnv(
+                    openstackCloud = openstack.createOpenstackEnv(venv,
                         OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
                         OPENSTACK_API_PROJECT, OPENSTACK_API_PROJECT_DOMAIN,
                         OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,

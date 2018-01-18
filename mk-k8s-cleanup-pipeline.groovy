@@ -25,14 +25,15 @@ timeout(time: 12, unit: 'HOURS') {
 
         // value defaults
         def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
-        def openstackEnv = "${env.WORKSPACE}/venv"
+        def workspace = common.getWorkspace()
+        def openstackEnv = "${workspace}/venv"
 
         stage('Install OpenStack env') {
             openstack.setupOpenstackVirtualenv(openstackEnv, openstackVersion)
         }
 
         stage('Connect to OpenStack cloud') {
-            openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
+            openstackCloud = openstack.createOpenstackEnv(openstackEnv, OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT)
             openstack.getKeystoneToken(openstackCloud, openstackEnv)
         }
 

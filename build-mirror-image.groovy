@@ -34,7 +34,7 @@ def python = new com.mirantis.mk.Python()
 def openstack = new com.mirantis.mk.Openstack()
 def date = new Date()
 def dateTime = date.format("ddMMyyyy-HHmmss")
-def venvPepper = "venvPepper"
+def venvPepper = ""
 def privateKey = ""
 def floatingIP = ""
 def openstackServer = ""
@@ -62,8 +62,9 @@ timeout(time: 12, unit: 'HOURS') {
     node("python&&disk-xl") {
         try {
             def workspace = common.getWorkspace()
-            rcFile = openstack.createOpenstackEnv(OS_URL, OS_CREDENTIALS_ID, OS_PROJECT, "default", "", "default", "2", "")
             openstackEnv = String.format("%s/venv", workspace)
+            venvPepper = String.format("%s/venvPepper", workspace)
+            rcFile = openstack.createOpenstackEnv(openstackEnv, OS_URL, OS_CREDENTIALS_ID, OS_PROJECT, "default", "", "default", "2", "")
             def openstackVersion = OS_VERSION
 
             VM_IP_DELAY = VM_IP_DELAY as Integer

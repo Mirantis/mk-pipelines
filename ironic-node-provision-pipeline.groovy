@@ -40,7 +40,7 @@ salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
 def python = new com.mirantis.mk.Python()
 
-def pepperEnv = "pepperEnv"
+def pepperEnv
 def venv
 def outputs = [:]
 
@@ -76,7 +76,9 @@ timeout(time: 12, unit: 'HOURS') {
     node("python") {
         try {
             // Set build-specific variables
-            venv = "${env.WORKSPACE}/venv"
+            def workspace = common.getWorkspace()
+            venv = "${workspace}/venv"
+            venvPepper = "${workspace}/venvPepper"
 
             def required_params = ['IRONIC_AUTHORIZATION_PROFILE', 'IRONIC_DEPLOY_NODES']
             def missed_params = []
@@ -112,7 +114,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                         // create openstack env
                         openstack.setupOpenstackVirtualenv(venv, OPENSTACK_API_CLIENT)
-                        openstackCloud = openstack.createOpenstackEnv(
+                        openstackCloud = openstack.createOpenstackEnv(venv,
                             OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
                             OPENSTACK_API_PROJECT, OPENSTACK_API_PROJECT_DOMAIN,
                             OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,

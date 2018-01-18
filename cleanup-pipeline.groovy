@@ -28,8 +28,8 @@ aws = new com.mirantis.mk.Aws()
 salt = new com.mirantis.mk.Salt()
 timeout(time: 12, unit: 'HOURS') {
     node {
-
-        def venv_path = "${env.WORKSPACE}/venv"
+        def workspace = common.getWorkspace()
+        def venv_path = "${workspace}/venv"
         def env_vars
 
         // default STACK_TYPE is heat
@@ -56,7 +56,7 @@ timeout(time: 12, unit: 'HOURS') {
 
         stage('Delete stack') {
             if (STACK_TYPE == 'heat') {
-                def openstackCloud = openstack.createOpenstackEnv(
+                def openstackCloud = openstack.createOpenstackEnv(venv_path,
                     OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
                     OPENSTACK_API_PROJECT,OPENSTACK_API_PROJECT_DOMAIN,
                     OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,

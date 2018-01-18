@@ -31,7 +31,6 @@ orchestrate = new com.mirantis.mk.Orchestrate()
 test = new com.mirantis.mk.Test()
 def python = new com.mirantis.mk.Python()
 
-def pepperEnv = "pepperEnv"
 artifacts_dir = "_artifacts"
 timeout(time: 12, unit: 'HOURS') {
     node {
@@ -41,8 +40,9 @@ timeout(time: 12, unit: 'HOURS') {
 
         // value defaults
         def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
-        def openstackEnv = "${env.WORKSPACE}/venv"
-
+        def workspace = common.getWorkspace()
+        def openstackEnv = "${workspace}/venv"
+        def pepperEnv = "${workspace}/pepperEnv"
         if (HEAT_STACK_NAME == "") {
             HEAT_STACK_NAME = BUILD_TAG
         }
@@ -56,7 +56,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         stage('Connect to OpenStack cloud') {
-            openstackCloud = openstack.createOpenstackEnv(OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT,
+            openstackCloud = openstack.createOpenstackEnv(openstackEnv, OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS, OPENSTACK_API_PROJECT,
             "", OPENSTACK_API_PROJECT_DOMAIN_ID, OPENSTACK_API_USER_DOMAIN_ID, OPENSTACK_API_VERSION)
             openstack.getKeystoneToken(openstackCloud, openstackEnv)
         }
