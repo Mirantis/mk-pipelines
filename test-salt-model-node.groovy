@@ -29,7 +29,7 @@ def defaultGitUrl = DEFAULT_GIT_URL
 def checkouted = false
 
 throttle(['test-model']) {
-  timeout(time: 12, unit: 'HOURS') {
+  timeout(time: 1, unit: 'HOURS') {
     node("python") {
       try{
         stage("checkout") {
