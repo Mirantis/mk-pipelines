@@ -43,8 +43,13 @@ def setupRunner(defaultGitRef, defaultGitUrl) {
         try {
           triggerTestFormulaJob(currentFormula, defaultGitRef, defaultGitUrl)
         } catch (Exception e) {
-          failedFormulas << currentFormula
-          common.warningMsg("Test of ${currentFormula} failed :  ${e}")
+          if (e.getMessage().contains("completed with status ABORTED")) {
+            common.warningMsg("Test of ${currentFormula} was aborted and will be retriggered")
+            futureFormulas << currentFormula
+          } else {
+            failedFormulas << currentFormula
+            common.warningMsg("Test of ${currentFormula} failed :  ${e}")
+          }
         }
       }
     }
