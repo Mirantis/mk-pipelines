@@ -20,7 +20,7 @@ try {
 def checkouted = false
 
 throttle(['test-formula']) {
-  timeout(time: 12, unit: 'HOURS') {
+  timeout(time: 1, unit: 'HOURS') {
     node("python") {
       try {
         stage("checkout") {
