@@ -1,9 +1,8 @@
 /**
  * Pipeline for generating and testing sphinx generated documentation
- *
- * Parameters:
- *   SALT_MASTER_URL
- *   SALT_MASTER_CREDENTIALS
+ * MODEL_GIT_URL
+ * MODEL_GIT_REF
+ * CLUSTER_NAME
  *
  */
 
@@ -15,25 +14,41 @@ try {
 }
 
 common = new com.mirantis.mk.Common()
+ssh = new com.mirantis.mk.Ssh()
 gerrit = new com.mirantis.mk.Gerrit()
+git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 salt = new com.mirantis.mk.Salt()
 
 timeout(time: 12, unit: 'HOURS') {
   node("python") {
     try {
-       def masterName = "cfg01.test-salt-formulas-docs.lab"
-       def img = docker.image("tcpcloud/salt-models-testing:latest")
+       def workspace = common.getWorkspace()
+       def masterName = "cfg01." + CLUSTER_NAME.replace("-","_") + ".lab"
+       def img = docker.image("tcpcloud/salt-models-testing:nightly")
        img.pull()
-       img.inside("-u root:root --hostname ${masterName}--ulimit nofile=4096:8192 --cpus=2") {
+       img.inside("-u root:root --hostname ${masterName} --ulimit nofile=4096:8192 --cpus=2") {
            stage("Prepare salt env") {
-              withEnv(["MASTER_HOSTNAME=${masterName}", "CLUSTER_NAME=test-salt-formulas-docs-cluster", "MINION_ID=${masterName}"]){
-                    //TODO: we need to have some simple model or maybe not, bootstrap.sh script generates test model
-                    //sh("cp -r ${testDir}/* /srv/salt/reclass && echo '127.0.1.2  salt' >> /etc/hosts")
-                    sh("echo '127.0.1.2  salt' >> /etc/hosts")
-                    // sedding apt to internal -  should be not necessary
-                    sh("cd /srv/salt && find . -type f \\( -name '*.yml' -or -name '*.sh' \\) -exec sed -i 's/apt-mk.mirantis.com/apt.mirantis.net:8085/g' {} \\;")
-                    sh("cd /srv/salt && find . -type f \\( -name '*.yml' -or -name '*.sh' \\) -exec sed -i 's/apt.mirantis.com/apt.mirantis.net:8085/g' {} \\;")
+              if(MODEL_GIT_REF != "" && MODEL_GIT_URL != "") {
+                  checkouted = gerrit.gerritPatchsetCheckout(MODEL_GIT_URL, MODEL_GIT_REF, "HEAD", CREDENTIALS_ID)
+              } else {
+                throw new Exception("Cannot checkout gerrit patchset, MODEL_GIT_URL or MODEL_GIT_REF is null")
+              }
+              if(checkouted) {
+                if (fileExists('classes/system')) {
+                    ssh.prepareSshAgentKey(CREDENTIALS_ID)
+                    dir('classes/system') {
+                      // XXX: JENKINS-33510 dir step not work properly inside containers
+                      //remoteUrl = git.getGitRemote()
+                      ssh.ensureKnownHosts("https://github.com/Mirantis/reclass-system-salt-model")
+                    }
+                    ssh.agentSh("git submodule init; git submodule sync; git submodule update --recursive")
+                }
+              }
+              // install all formulas
+              sh("apt-get update && apt-get install -y salt-formula-*")
+              withEnv(["MASTER_HOSTNAME=${masterName}", "CLUSTER_NAME=${CLUSTER_NAME}", "MINION_ID=${masterName}"]){
+                    sh("cp -r ${workspace}/* /srv/salt/reclass && echo '127.0.1.2  salt' >> /etc/hosts")
                     sh("""bash -c 'source /srv/salt/scripts/bootstrap.sh; cd /srv/salt/scripts \
                           && source_local_envs \
                           && configure_salt_master \
@@ -42,9 +57,6 @@ timeout(time: 12, unit: 'HOURS') {
                           saltservice_restart; \
                           saltmaster_init'""")
               }
-           }
-           stage("Install all formulas"){
-              sh("apt update && apt install -y salt-formula-*")
            }
            stage("Checkout formula review"){
               if(gerritRef){
@@ -55,9 +67,28 @@ timeout(time: 12, unit: 'HOURS') {
               }
            }
            stage("Generate documentation"){
-               def pepperEnv = common.getWorkspace() + "/venvPepper"
-               python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-               salt.enforceState(venvPepper, masterName , 'sphinx' , true)
+                def saltResult = sh(script:"salt-call state.sls salt.minion,sphinx.server,nginx", returnStatus:true)
+                if(saltResult > 0){
+                    common.warnMsg("Salt call salt.minion,sphinx.server,nginx failed but continuing")
+                }
+           }
+           stage("Publish outputs"){
+                sh("mkdir ${workspace}/output")
+                //TODO: verify existance of created output files
+                // /srv/static/sites/reclass_doc will be used for publishHTML step
+                sh("tar -zcf ${workspace}/output/docs-html.tar.gz /srv/static/sites/reclass_doc")
+                sh("cp -R /srv/static/sites/reclass_doc ${workspace}")
+                publishHTML (target: [
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: false,
+                    keepAll: true,
+                    reportDir: 'reclass_doc',
+                    reportFiles: 'index.html',
+                    reportName: "Reclass documentation"
+                ])
+                // /srv/static/extern will be used as tar artifact
+                sh("tar -zcf ${workspace}/output/docs-src.tar.gz /srv/static/extern")
+                archiveArtifacts artifacts: "output/*"
            }
        }
     } catch (Throwable e) {
