@@ -25,9 +25,10 @@ timeout(time: 12, unit: 'HOURS') {
     try {
        def workspace = common.getWorkspace()
        def masterName = "cfg01." + CLUSTER_NAME.replace("-","_") + ".lab"
+       //def jenkinsUserIds = common.getJenkinsUserIds()
        def img = docker.image("tcpcloud/salt-models-testing:nightly")
        img.pull()
-       img.inside("-u root:root --hostname ${masterName} --ulimit nofile=4096:8192 --cpus=2") {
+       img.inside("--hostname ${masterName} --ulimit nofile=4096:8192 --cpus=2") {
            stage("Prepare salt env") {
               if(MODEL_GIT_REF != "" && MODEL_GIT_URL != "") {
                   checkouted = gerrit.gerritPatchsetCheckout(MODEL_GIT_URL, MODEL_GIT_REF, "HEAD", CREDENTIALS_ID)
@@ -73,22 +74,25 @@ timeout(time: 12, unit: 'HOURS') {
                 }
            }
            stage("Publish outputs"){
-                sh("mkdir ${workspace}/output")
-                //TODO: verify existance of created output files
-                // /srv/static/sites/reclass_doc will be used for publishHTML step
-                sh("tar -zcf ${workspace}/output/docs-html.tar.gz /srv/static/sites/reclass_doc")
-                sh("cp -R /srv/static/sites/reclass_doc ${workspace}")
-                publishHTML (target: [
-                    allowMissing: false,
-                    alwaysLinkToLastBuild: false,
-                    keepAll: true,
-                    reportDir: 'reclass_doc',
-                    reportFiles: 'index.html',
-                    reportName: "Reclass documentation"
-                ])
-                // /srv/static/extern will be used as tar artifact
-                sh("tar -zcf ${workspace}/output/docs-src.tar.gz /srv/static/extern")
-                archiveArtifacts artifacts: "output/*"
+                try{
+                  sh("mkdir ${workspace}/output")
+                  //TODO: verify existance of created output files
+                  // /srv/static/sites/reclass_doc will be used for publishHTML step
+                  sh("tar -zcf ${workspace}/output/docs-html.tar.gz /srv/static/sites/reclass_doc")
+                  sh("cp -R /srv/static/sites/reclass_doc ${workspace}")
+                  publishHTML (target: [
+                      reportDir: 'reclass_doc',
+                      reportFiles: 'index.html',
+                      reportName: "Reclass-documentation"
+                  ])
+                  // /srv/static/extern will be used as tar artifact
+                  sh("tar -zcf ${workspace}/output/docs-src.tar.gz /srv/static/extern")
+                  archiveArtifacts artifacts: "output/*"
+                }catch(Exception e){
+                    common.errorMsg("Documentation publish stage failed!")
+                }finally{
+                   sh("rm -r ./output")
+                }
            }
        }
     } catch (Throwable e) {

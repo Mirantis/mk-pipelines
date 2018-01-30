@@ -21,7 +21,7 @@ def checkouted = false
 
 throttle(['test-formula']) {
   timeout(time: 1, unit: 'HOURS') {
-    node("python") {
+    node("python&&docker") {
       try {
         stage("checkout") {
           if (defaultGitRef && defaultGitUrl) {
