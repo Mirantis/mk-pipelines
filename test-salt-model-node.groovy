@@ -30,7 +30,7 @@ def checkouted = false
 
 throttle(['test-model']) {
   timeout(time: 1, unit: 'HOURS') {
-    node("python") {
+    node("python&&docker") {
       try{
         stage("checkout") {
           if(defaultGitRef != "" && defaultGitUrl != "") {
