@@ -54,6 +54,8 @@ timeout(time: 12, unit: 'HOURS') {
             def clusterDomain = templateContext.default_context.cluster_domain
             def clusterName = templateContext.default_context.cluster_name
             def saltMaster = templateContext.default_context.salt_master_hostname
+            def localRepositories = templateContext.default_context.local_repositories.toBoolean()
+            def offlineDeployment = templateContext.default_context.offline_deployment.toBoolean()
             def cutterEnv = "${env.WORKSPACE}/cutter"
             def jinjaEnv = "${env.WORKSPACE}/jinja"
             def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
@@ -98,6 +100,7 @@ timeout(time: 12, unit: 'HOURS') {
                     sh "git init"
                     ssh.agentSh("git submodule add ${sharedReclassUrl} 'classes/system'")
                 }
+
                 def sharedReclassBranch = templateContext.default_context.shared_reclass_branch
                 // Use refspec if exists first of all
                 if (sharedReclassBranch.toString().startsWith('refs/')) {
@@ -158,6 +161,16 @@ timeout(time: 12, unit: 'HOURS') {
                     sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
                 } else {
                     common.warningMsg("Product " + product + " is disabled")
+                }
+            }
+
+            if(localRepositories && !offlineDeployment){
+                def aptlyModelUrl = templateContext.default_context.local_model_url
+                dir(path: modelEnv) {
+                    ssh.agentSh "git submodule add \"${aptlyModelUrl}\" \"classes/cluster/${clusterName}/cicd/aptly\""
+                        if(!(mcpVersion in ["nightly", "testing", "stable"])){
+                        ssh.agentSh "cd \"classes/cluster/${clusterName}/cicd/aptly\";git fetch --tags;git checkout ${mcpVersion}"
+                    }
                 }
             }
 
