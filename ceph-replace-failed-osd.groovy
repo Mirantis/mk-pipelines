@@ -122,9 +122,14 @@ timeout(time: 12, unit: 'HOURS') {
         if (DMCRYPT.toBoolean() == true) {
 
             // remove partition tables
-            stage('dd part tables') {
+            stage('dd / zap device') {
                 for (dev in devices) {
-                    runCephCommand(pepperEnv, HOST, "dd if=/dev/zero of=${dev} bs=512 count=1 conv=notrunc")
+                    runCephCommand(pepperEnv, HOST, "dd if=/dev/zero of=${dev} bs=4096k count=1 conv=notrunc")
+                    try {
+                        runCephCommand(pepperEnv, HOST, "sgdisk --zap-all --clear --mbrtogpt -g -- ${dev}")
+                    } catch (Exception e) {
+                        common.warningMsg(e)
+                    }
                 }
             }
 
@@ -135,7 +140,7 @@ timeout(time: 12, unit: 'HOURS') {
                         // dev = /dev/sdi
                         def dev = partition.replaceAll("[0-9]", "")
                         // part_id = 2
-                        def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
+                        def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]+", "")
                         try {
                             runCephCommand(pepperEnv, HOST, "Ignore | parted ${dev} rm ${part_id}")
                         } catch (Exception e) {
