@@ -68,9 +68,7 @@ timeout(time: 12, unit: 'HOURS') {
                 openstack.setupOpenstackVirtualenv(venv, OPENSTACK_API_CLIENT)
                 openstackCloud = openstack.createOpenstackEnv(venv,
                     OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
-                    OPENSTACK_API_PROJECT, OPENSTACK_API_PROJECT_DOMAIN,
-                    OPENSTACK_API_PROJECT_ID, OPENSTACK_API_USER_DOMAIN,
-                    OPENSTACK_API_VERSION)
+                    OPENSTACK_API_PROJECT, "default", "", "default", "3")
                 openstack.getKeystoneToken(openstackCloud, venv)
 
                 // set reclass repo in heat env
