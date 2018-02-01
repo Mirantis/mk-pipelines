@@ -16,7 +16,6 @@
  *   OPENSTACK_API_URL          OpenStack API address
  *   OPENSTACK_API_CREDENTIALS  Credentials to the OpenStack API
  *   OPENSTACK_API_PROJECT      OpenStack project to connect to
- *   OPENSTACK_API_CLIENT       Versions of OpenStack python clients
  *   OPENSTACK_API_VERSION      Version of the OpenStack API (2/3)
  *
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
@@ -65,7 +64,7 @@ timeout(time: 12, unit: 'HOURS') {
                 git.checkoutGitRepository('template', STACK_TEMPLATE_URL, STACK_TEMPLATE_BRANCH, STACK_TEMPLATE_CREDENTIALS)
 
                 // create openstack env
-                openstack.setupOpenstackVirtualenv(venv, OPENSTACK_API_CLIENT)
+                openstack.setupOpenstackVirtualenv(venv)
                 openstackCloud = openstack.createOpenstackEnv(venv,
                     OPENSTACK_API_URL, OPENSTACK_API_CREDENTIALS,
                     OPENSTACK_API_PROJECT, "default", "", "default", "3")
