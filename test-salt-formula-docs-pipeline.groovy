@@ -28,7 +28,7 @@ timeout(time: 12, unit: 'HOURS') {
        //def jenkinsUserIds = common.getJenkinsUserIds()
        def img = docker.image("tcpcloud/salt-models-testing:nightly")
        img.pull()
-       img.inside("--hostname ${masterName} --ulimit nofile=4096:8192 --cpus=2") {
+       img.inside("-u root:root --hostname ${masterName} --ulimit nofile=4096:8192 --cpus=2") {
            stage("Prepare salt env") {
               if(MODEL_GIT_REF != "" && MODEL_GIT_URL != "") {
                   checkouted = gerrit.gerritPatchsetCheckout(MODEL_GIT_URL, MODEL_GIT_REF, "HEAD", CREDENTIALS_ID)
