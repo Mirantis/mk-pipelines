@@ -42,7 +42,11 @@ stage("Mirror") {
          currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
          throw e
       } finally {
-         common.sendNotification(currentBuild.result,"",["slack, email"],["failed"],env["JOB_NAME"],env["BUILD_NUMBER"],env["BUILD_URL"],"MCP jenkins",env["RECIPIENTS"])
+         if(env.getEnvironment().containsKey("NOTIFICATION_RECIPIENTS")){
+           common.sendNotification(currentBuild.result,"",["slack", "email"], ["failed"], env["JOB_NAME"], env["BUILD_NUMBER"], env["BUILD_URL"], "MCP jenkins", env["NOTIFICATION_RECIPIENTS"])
+         }else{
+           common.sendNotification(currentBuild.result, "", ["slack"])
+         }
       }
     }
   }
