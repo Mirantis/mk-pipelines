@@ -91,8 +91,11 @@ timeout(time: 12, unit: 'HOURS') {
                 // Restart supervisor-vrouter.
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'service.restart', ['supervisor-vrouter'], null, true, 300)
 
-                // Apply salt,collectd to update information about current network interfaces.
-                salt.enforceState(pepperEnv, targetLiveAll, 'salt,collectd', true)
+                // Apply salt and collectd if is present to update information about current network interfaces.
+                salt.enforceState(pepperEnv, targetLiveAll, 'salt', true)
+                if(!salt.getPillar(pepperEnv, minions[0], "collectd")['return'][0].values()[0].isEmpty()) {
+                    salt.enforceState(pepperEnv, targetLiveAll, 'collectd', true)
+                }
             }
 
         } catch (Throwable e) {
