@@ -105,7 +105,7 @@ timeout(time: 12, unit: 'HOURS') {
         try {
           saltVersion = SALT_VERSION
             } catch (MissingPropertyException e) {
-          saltVersion = "latest"
+          saltVersion = "" // default value is empty string, means latest
         }
         withEnv(["SALT_VERSION=${saltVersion}"]) {
           sh("make clean && make test")
