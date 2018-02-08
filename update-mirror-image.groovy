@@ -70,16 +70,16 @@ timeout(time: 12, unit: 'HOURS') {
             if(UPDATE_DOCKER_REGISTRY.toBoolean()){
                 stage('Update Docker images'){
                     common.infoMsg("Updating Docker images.")
-                    salt.enforceState(venvPepper, '*apt*', ['docker.client.registry'], true)
+                    salt.enforceState(venvPepper, '*apt*', 'docker.client.registry')
                     if(CLEANUP_DOCKER_CACHE.toBoolean()){
-                        salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['docker system prune --all --force'], null, true)
+                        salt.cmdRun(venvPepper, '*apt*', 'docker system prune --all --force')
                     }
                 }
             }
             if(UPDATE_PYPI.toBoolean()){
                 stage('Update PyPi packages'){
                     common.infoMsg("Updating PyPi packages.")
-                    salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['pip2pi /srv/pypi_mirror/packages/ -r /srv/pypi_mirror/requirements.txt'], null, true)
+                    salt.cmdRun(venvPepper, '*apt*', 'pip2pi /srv/pypi_mirror/packages/ -r /srv/pypi_mirror/requirements.txt')
                 }
             }
             if(UPDATE_GIT.toBoolean()){
@@ -91,7 +91,7 @@ timeout(time: 12, unit: 'HOURS') {
             if(UPDATE_IMAGES.toBoolean()){
                 stage('Update VM images'){
                     common.infoMsg("Updating VM images.")
-                    salt.runSaltProcessStep(venvPepper, '*apt*', 'cmd.run', ['/srv/scripts/update-images.sh'], null, true)
+                    salt.runSaltProcessStep(venvPepper, '*apt*', '/srv/scripts/update-images.sh')
                 }
             }
         } catch (Throwable e) {

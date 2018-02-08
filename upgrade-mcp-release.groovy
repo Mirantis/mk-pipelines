@@ -22,7 +22,7 @@ timeout(time: 12, unit: 'HOURS') {
             stage("Update Reclass"){
                 common.infoMsg("Updating reclass model")
                 salt.cmdRun(venvPepper, "I@salt:master", 'cd /srv/salt/reclass && git pull -r && git submodule update', false)
-                salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'cmd.run', ['reclass-salt --top'], null, true)
+                salt.cmdRun(venvPepper, 'I@salt:master', 'reclass-salt --top')
                 salt.enforceState(venvPepper, "I@salt:master", 'reclass', true)
             }
 

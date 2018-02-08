@@ -24,23 +24,20 @@ timeout(time: 12, unit: 'HOURS') {
         stage("Enforce kubernetes.control") {
             common.infoMsg('Enforcing kubernetes.control on I@kubernetes:master')
 
-            salt.runSaltProcessStep(
+            salt.enforceState(
                 master,
                 'I@kubernetes:master',
-                'state.sls',
-                ['kubernetes.control'],
+                'kubernetes.control'
             )
         }
 
         stage("setup-components") {
             common.infoMsg('Setting up components')
 
-            salt.runSaltProcessStep(
+            salt.cmdRun(
                 master,
                 'I@kubernetes:master',
-                'cmd.run',
-                ['/bin/bash -c \'find /srv/kubernetes/ -type d | grep -v jobs | while read i; do ls $i/*.yml &>/dev/null && (set -x; hyperkube kubectl apply -f $i || echo Command failed; set +x); done;\'']
-            )
+                '/bin/bash -c \'find /srv/kubernetes/ -type d | grep -v jobs | while read i; do ls $i/*.yml &>/dev/null && (set -x; hyperkube kubectl apply -f $i || echo Command failed; set +x); done;\'')
 
         }
 

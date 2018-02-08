@@ -181,7 +181,7 @@ timeout(time: 12, unit: 'HOURS') {
                 }
                 // XXX: Workaround to have `/var/lib/jenkins` on all
                 // nodes where are jenkins_slave services are created.
-                salt.runSaltProcessStep(pepperEnv, 'I@docker:swarm', 'cmd.run', ['mkdir -p /var/lib/jenkins'])
+                salt.cmdRun(pepperEnv, 'I@docker:swarm', "mkdir -p /var/lib/jenkins")
             }
 
             stage("Configure CI/CD services") {
