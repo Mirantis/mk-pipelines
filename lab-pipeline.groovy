@@ -248,8 +248,8 @@ node {
                     orchestrate.installOpenstackNetwork(saltMaster)
                 }
 
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
-                salt.runSaltProcessStep(saltMaster, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
+                salt.cmdRun(saltMaster, 'I@keystone:server', '. /root/keystonerc; neutron net-list')
+                salt.cmdRun(saltMaster, 'I@keystone:server', '. /root/keystonerc; nova net-list')
             }
 
             if (salt.testTarget(saltMaster, 'I@ironic:conductor')){

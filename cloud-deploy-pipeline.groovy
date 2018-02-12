@@ -388,8 +388,8 @@ timeout(time: 12, unit: 'HOURS') {
                         orchestrate.installOpenstackNetwork(venvPepper)
                     }
 
-                    salt.runSaltProcessStep(venvPepper, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; neutron net-list'])
-                    salt.runSaltProcessStep(venvPepper, 'I@keystone:server', 'cmd.run', ['. /root/keystonerc; nova net-list'])
+                    salt.cmdRun(venvPepper, 'I@keystone:server', '. /root/keystonerc; neutron net-list')
+                    salt.cmdRun(venvPepper, 'I@keystone:server', '. /root/keystonerc; nova net-list')
                 }
 
                 if (salt.testTarget(venvPepper, 'I@ironic:conductor')){
