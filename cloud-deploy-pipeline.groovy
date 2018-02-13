@@ -380,6 +380,11 @@ timeout(time: 12, unit: 'HOURS') {
                     orchestrate.installOpenstackControl(venvPepper)
                 }
 
+                // Workaround for PROD-17765 issue to prevent crashes of keystone.role_present state.
+                // More details: https://mirantis.jira.com/browse/PROD-17765
+                salt.runSaltProcessStep(venvPepper, 'I@keystone:client', 'service.restart', ['salt-minion'])
+                salt.minionsReachable(venvPepper, 'I@salt:master and *01*', 'I@keystone:client', null, 10, 6)
+
                 stage('Install OpenStack network') {
 
                     if (common.checkContains('STACK_INSTALL', 'contrail')) {
