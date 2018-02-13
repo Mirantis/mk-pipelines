@@ -29,6 +29,7 @@
  *   RALLY_CONFIG_BRANCH         Git branch which will be used during the checkout
  *   RALLY_SCENARIOS             Path to file or directory with rally scenarios
  *   RALLY_TASK_ARGS_FILE        Path to file with rally tests arguments
+ *   REPORT_DIR                  Path for reports outside docker image
  *   TEST_K8S_API_SERVER         Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE  Path to docker image with conformance e2e tests
  *   TEST_K8S_NODE               Kubernetes node to run tests from
@@ -69,11 +70,18 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Run Rally tests') {
                 if (RUN_RALLY_TESTS.toBoolean() == true) {
+                    def report_dir = '/root/qa_results'
+                    try {
+                         if(REPORT_DIR != ""){
+                             report_dir = REPORT_DIR
+                         }
+                    } catch (MissingPropertyException e) {
+                    }
                     def rally_variables = ["floating_network=${FLOATING_NETWORK}",
                                            "rally_image=${RALLY_IMAGE}",
                                            "rally_flavor=${RALLY_FLAVOR}",
                                            "availability_zone=${AVAILABILITY_ZONE}"]
-                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables)
+                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables, report_dir)
                 } else {
                     common.infoMsg("Skipping Rally tests")
                 }
