@@ -26,14 +26,17 @@ timeout(time: 12, unit: 'HOURS') {
   node() {
     try{
       stage("promote") {
-        lock("aptly-api") {
-          for (storage in storages) {
-
-            if (storage == "local") {
-              storage = ""
+        if(_userCanRunPromote(SOURCE, TARGET)){
+          lock("aptly-api") {
+            for (storage in storages) {
+              if (storage == "local") {
+                storage = ""
+              }
+              aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY, '-d --timeout 600', DUMP_PUBLISH.toBoolean(), storage)
             }
-            aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY, '-d --timeout 600', DUMP_PUBLISH.toBoolean(), storage)
           }
+        }else{
+            throw new Exception(String.format("You don't have permissions to make aptly promote from source:%s to target:%s ", SOURCE, TARGET))
         }
       }
     } catch (Throwable e) {
@@ -47,4 +50,14 @@ timeout(time: 12, unit: 'HOURS') {
        currentBuild.description = currentBuild.description ? _extra_descr + " " + currentBuild.description : _extra_descr
     }
   }
+}
+
+def _userCanRunPromote(source, target){
+     if(source.contains("stable") || target.contains("stable")){
+         // promote from or to stable is restricted to users in aptly-promote-users LDAP group
+         def jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
+         return jenkinsUtils.currentUserInGroups(["mcp-cicd-admins", "aptly-promote-stable-users"])
+     }
+     // other types of promote are allowed to everyone
+     return true;
 }
