@@ -181,8 +181,8 @@ timeout(time: 12, unit: 'HOURS') {
           // list of cluster names can be explicitly given
           if (testClusterNames != null && testClusterNames != "") {
             common.infoMsg("TEST_CLUSTER_NAMES param found, using explicitly defined cluster names: ${testClusterNames}")
-            def clusterNameRegex = testClusterNames.tokenize(",").join("|")
-            infraYMLs = sh(script:"set +x;find ./classes/ -regextype posix-egrep -regex '.*cluster/(${clusterNameRegex}){1}/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: false).tokenize()
+            def clusterNameRegex = testClusterNames.tokenize(",").collect{it.trim()}.join("|")
+            infraYMLs = sh(script:"set +x;find ./classes/ -regextype posix-egrep -regex '.*cluster/(${clusterNameRegex}){1}/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
           } else {
             common.infoMsg("TEST_CLUSTER_NAMES param not found, all clusters with enabled tests will be tested")
             // else we want to test all cluster levels found
