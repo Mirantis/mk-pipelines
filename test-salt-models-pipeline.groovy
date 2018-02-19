@@ -1,17 +1,17 @@
-
 /**
  *  Test salt models pipeline
- *  DEFAULT_GIT_REF
- *  DEFAULT_GIT_URL
- *  CREDENTIALS_ID
- *  EXTRA_FORMULAS
- *  SYSTEM_GIT_URL
- *  SYSTEM_GIT_REF
- *  MAX_CPU_PER_JOB
- *  LEGACY_TEST_MODE
- *  RECLASS_IGNORE_CLASS_NOTFOUND
- *  APT_REPOSITORY
- *  APT_REPOSITORY_GPG
+ *  DEFAULT_GIT_URL default git url (will be used if pipeline run is not triggered by gerrit)
+ *  DEFAULT_GIT_RED default git ref (branch,tag,...) (will be used if pipeline run is not triggered by gerrit)
+ *  CREDENTIALS_ID Jenkins credetials id for git checkout
+ *  EXTRA_FORMULAS extra formulas list for passing to salt bootstrap script
+ *  MAX_CPU_PER_JOB max cpu count for one docket test instance
+ *  SYSTEM_GIT_URL reclass system git URL (optional)
+ *  SYSTEM_GIT_REF reclass system git URL (optional)
+ *  TEST_CLUSTER_NAMES list of comma separated cluster names to test (optional, default all cluster levels)
+ *  LEGACY_TEST_MODE legacy test mode flag
+ *  RECLASS_IGNORE_CLASS_NOTFOUND ignore missing class flag for reclass config
+ *  APT_REPOSITORY extra apt repository url
+ *  APT_REPOSITORY_GPG extra apt repository url GPG
  */
 
 def gerrit = new com.mirantis.mk.Gerrit()
@@ -37,6 +37,13 @@ try {
   formulasSource = FORMULAS_SOURCE
 } catch (MissingPropertyException e) {
   formulasSource = "pkg"
+}
+
+def testClusterNames
+try {
+  testClusterNames = TEST_CLUSTER_NAMES
+} catch (MissingPropertyException e) {
+  testClusterNames = ""
 }
 
 def defaultGitRef, defaultGitUrl
@@ -108,8 +115,8 @@ def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, fo
 }
 
 def _clusterTestEnabled(infraYMLConfig){
-  if(infraYMLConfig["parameters"].containsKey("_jenkins")){
-    if(infraYMLConfig["parameters"]["_jenkins"].containsKey("tests_enabled")){
+  if (infraYMLConfig["parameters"].containsKey("_jenkins")) {
+    if (infraYMLConfig["parameters"]["_jenkins"].containsKey("tests_enabled")) {
       return infraYMLConfig["parameters"]["_jenkins"]["tests_enabled"];
     }
   }
@@ -126,7 +133,7 @@ timeout(time: 12, unit: 'HOURS') {
           // test if change aren't already merged
           def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
           // test if gerrit change is already Verified
-          if(gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified", "+")){
+          if (gerrit.patchsetHasApproval(gerritChange.currentPatchSet,"Verified", "+")) {
             common.successMsg("Gerrit change ${GERRIT_CHANGE_NUMBER} patchset ${GERRIT_PATCHSET_NUMBER} already has Verified, skipping tests") // do nothing
           // test WIP contains in commit message
           }else if (gerritChange.commitMessage.contains("WIP")) {
@@ -152,58 +159,79 @@ timeout(time: 12, unit: 'HOURS') {
       }
 
       stage("Check YAML") {
-         sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
+        common.infoMsg("Checking YAML syntax for changed files")
+        def syntaxCheckStatus = sh(script:"set +x;git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;", returnStatus:true)
+        if(syntaxCheckStatus > 0){
+          common.errorMsg("YAML syntax check failed!")
+        }
       }
 
       stage("test-nodes") {
-        if(checkouted) {
+        if (checkouted) {
           def modifiedClusters = null
-          def checkChange = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v classes/cluster", returnStatus: true)
-          if (checkChange == 1) {
-            modifiedClusters = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep classes/cluster/ | awk -F/ '{print \$3}' | uniq", returnStdout: true).tokenize()
-          }
-
-          def infraYMLs = sh(script: "find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
-          def clusterDirectories = sh(script: "ls -d ./classes/cluster/*/ | awk -F/ '{print \$4}'", returnStdout: true).tokenize()
-
-          // create a list of cluster names present in cluster folder
-          def infraList = []
-          for (elt in infraYMLs) {
-            infraList << elt.tokenize('/')[3]
-          }
-
-          // verify we have all valid clusters loaded
-          def commonList = infraList.intersect(clusterDirectories)
-          def differenceList = infraList.plus(clusterDirectories)
-          differenceList.removeAll(commonList)
-
-          if(!differenceList.isEmpty()){
-            common.warningMsg("The following clusters are not valid : ${differenceList} - That means we cannot found cluster_name in init.yml or infra/init.yml")
-          }
-          if (modifiedClusters) {
-            infraYMLs.removeAll { !modifiedClusters.contains(it.tokenize('/')[3]) }
-            common.infoMsg("Testing only modified clusters: ${infraYMLs}")
-          }
-
-          for (int i = 0; i < infraYMLs.size(); i++) {
-            def infraYMLConfig = readYaml(file: infraYMLs[i])
-            if(_clusterTestEnabled(infraYMLConfig)){
-                if(!infraYMLConfig["parameters"].containsKey("_param")){
-                    common.warningMsg("ERROR: Cannot find soft params (_param) in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
-                    continue
-                }
-                def infraParams = infraYMLConfig["parameters"]["_param"];
-                if(!infraParams.containsKey("infra_config_hostname") || !infraParams.containsKey("cluster_name") || !infraParams.containsKey("cluster_domain")){
-                    common.warningMsg("ERROR: Cannot find _param:infra_config_hostname or _param:cluster_name or _param:cluster_domain  in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
-                    continue
-                }
-                def clusterName = infraParams["cluster_name"]
-                def clusterDomain = infraParams["cluster_domain"]
-                def configHostname = infraParams["infra_config_hostname"]
-                def testTarget = String.format("%s.%s", configHostname, clusterDomain)
-
-                futureNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
+          // testing modified cluster is used only if test was triggered by gerrit
+          if (gerritRef) {
+            def checkChange = sh(script: "set +x;git diff-tree --no-commit-id --name-only -r HEAD | grep -v classes/cluster", returnStatus: true)
+            if (checkChange == 1) {
+              modifiedClusters = sh(script: "set +x;git diff-tree --no-commit-id --name-only -r HEAD | grep classes/cluster/ | awk -F/ '{print \$3}' | uniq", returnStdout: true).tokenize()
             }
+          }
+
+          def infraYMLs = []
+          // list of cluster names can be explicitly given
+          if (testClusterNames != null && testClusterNames != "") {
+            common.infoMsg("TEST_CLUSTER_NAMES param found, using explicitly defined cluster names: ${testClusterNames}")
+            def clusterNameRegex = testClusterNames.tokenize(",").join("|")
+            infraYMLs = sh(script:"set +x;find ./classes/ -regextype posix-egrep -regex '.*cluster/(${clusterNameRegex}){1}/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: false).tokenize()
+          } else {
+            common.infoMsg("TEST_CLUSTER_NAMES param not found, all clusters with enabled tests will be tested")
+            // else we want to test all cluster levels found
+            infraYMLs = sh(script: "set +x;find ./classes/ -regex '.*cluster/[-_a-zA-Z0-9]*/[infra/]*init\\.yml' -exec grep -il 'cluster_name' {} \\;", returnStdout: true).tokenize()
+            def clusterDirectories = sh(script: "set +x;ls -d ./classes/cluster/*/ | awk -F/ '{print \$4}'", returnStdout: true).tokenize()
+
+            // create a list of cluster names present in cluster folder
+            def infraList = []
+            for (elt in infraYMLs) {
+              infraList << elt.tokenize('/')[3]
+            }
+
+            // verify we have all valid clusters loaded
+            def commonList = infraList.intersect(clusterDirectories)
+            def differenceList = infraList.plus(clusterDirectories)
+            differenceList.removeAll(commonList)
+
+            if (!differenceList.isEmpty()) {
+              common.warningMsg("The following clusters are not valid : ${differenceList} - That means we cannot found cluster_name in init.yml or infra/init.yml")
+            }
+            if (modifiedClusters) {
+              infraYMLs.removeAll { !modifiedClusters.contains(it.tokenize('/')[3]) }
+              common.infoMsg("Testing only modified clusters: ${infraYMLs}")
+            }
+          }
+          common.infoMsg("Starting salt models test for these clusters " + infraYMLs.collect{ it.tokenize("/")[3] })
+          if (infraYMLs.size() > 0) {
+            for (int i = 0; i < infraYMLs.size(); i++) {
+              def infraYMLConfig = readYaml(file: infraYMLs[i])
+              if (_clusterTestEnabled(infraYMLConfig)) {
+                  if(!infraYMLConfig["parameters"].containsKey("_param")){
+                      common.warningMsg("ERROR: Cannot find soft params (_param) in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
+                      continue
+                  }
+                  def infraParams = infraYMLConfig["parameters"]["_param"];
+                  if(!infraParams.containsKey("infra_config_hostname") || !infraParams.containsKey("cluster_name") || !infraParams.containsKey("cluster_domain")){
+                      common.warningMsg("ERROR: Cannot find _param:infra_config_hostname or _param:cluster_name or _param:cluster_domain  in file " + infraYMLs[i] + " for obtain a cluster info. Skipping test.")
+                      continue
+                  }
+                  def clusterName = infraParams["cluster_name"]
+                  def clusterDomain = infraParams["cluster_domain"]
+                  def configHostname = infraParams["infra_config_hostname"]
+                  def testTarget = String.format("%s.%s", configHostname, clusterDomain)
+
+                  futureNodes << [defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource]
+              }
+            }
+          } else {
+            common.warningMsg("List of found salt model clusters is empty, no tests will be started!")
           }
 
           setupRunner()
