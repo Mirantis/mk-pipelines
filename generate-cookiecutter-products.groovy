@@ -7,7 +7,6 @@
  *   COOKIECUTTER_TEMPLATE_BRANCH       Branch for the template.
  *   COOKIECUTTER_TEMPLATE_CONTEXT      Context parameters for the template generation.
  *   EMAIL_ADDRESS                      Email to send a created tar file
- *   SHARED_RECLASS_URL                 Git repository with shared reclass
  *
 **/
 
@@ -62,12 +61,18 @@ timeout(time: 12, unit: 'HOURS') {
                     sh "rm -rfv .git"
                     sh "git init"
 
-                    if (SHARED_RECLASS_URL != '') {
-                        ssh.agentSh "git submodule add \"${SHARED_RECLASS_URL}\" \"classes/system\""
+                    def sharedReclassUrl = templateContext['default_context']['shared_reclass_url']
+                    if (sharedReclassUrl != '') {
+                        ssh.agentSh "git submodule add \"${sharedReclassUtl}\" \"classes/system\""
 
-                        def mcpVersion = templateContext['default_context']['mcp_version']
-                        if(mcpVersion != "stable" && mcpVersion != "nightly" && mcpVersion != "testing"){
-                            ssh.agentSh "cd \"classes/system\";git fetch --tags;git checkout ${mcpVersion}"
+                        def sharedReclassRefspec = templateContext['default_context']['shared_reclass_refspec']
+                        if(sharedReclassRefspec != '') {
+                            ssh.agentSh "cd \"classes/system\";git fetch ${sharedReclassUrl} ${sharedReclassRefspec}; git checkout FETCH_HEAD"
+                        } else {
+                            def mcpVersion = templateContext['default_context']['mcp_version']
+                            if(mcpVersion != "stable" && mcpVersion != "nightly" && mcpVersion != "testing"){
+                                ssh.agentSh "cd \"classes/system\";git fetch --tags;git checkout ${mcpVersion}"
+                            }
                         }
 
                         git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
