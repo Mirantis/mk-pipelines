@@ -1,6 +1,6 @@
 def common = new com.mirantis.mk.Common()
 def aptly = new com.mirantis.mk.Aptly()
-
+def jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 
 def packages
 try {
@@ -26,7 +26,8 @@ timeout(time: 12, unit: 'HOURS') {
   node() {
     try{
       stage("promote") {
-        if(_userCanRunPromote(SOURCE, TARGET)){
+        // promote is restricted to users in aptly-promote-users LDAP group
+        if(jenkinsUtils.currentUserInGroups(["mcp-cicd-admins", "aptly-promote-users"])){
           lock("aptly-api") {
             for (storage in storages) {
               if (storage == "local") {
@@ -36,7 +37,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
           }
         }else{
-            throw new Exception(String.format("You don't have permissions to make aptly promote from source:%s to target:%s ", SOURCE, TARGET))
+            throw new Exception(String.format("You don't have permissions to make aptly promote from source:%s to target:%s! Only CI/CD and QA team can perform aptly promote.", SOURCE, TARGET))
         }
       }
     } catch (Throwable e) {
@@ -52,12 +53,3 @@ timeout(time: 12, unit: 'HOURS') {
   }
 }
 
-def _userCanRunPromote(source, target){
-     if(source.contains("stable") || target.contains("stable")){
-         // promote from or to stable is restricted to users in aptly-promote-users LDAP group
-         def jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
-         return jenkinsUtils.currentUserInGroups(["mcp-cicd-admins", "aptly-promote-stable-users"])
-     }
-     // other types of promote are allowed to everyone
-     return true;
-}
