@@ -402,6 +402,11 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                 }
 
+                if (salt.testTarget(venvPepper, 'I@manila:share')){
+                    stage('Install OpenStack Manila data and share') {
+                       orchestrate.installManilaShare(venvPepper)
+                    }
+                }
 
                 stage('Install OpenStack compute') {
                     orchestrate.installOpenstackCompute(venvPepper)
