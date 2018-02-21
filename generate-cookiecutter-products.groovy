@@ -63,7 +63,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                     def sharedReclassUrl = templateContext['default_context']['shared_reclass_url']
                     if (sharedReclassUrl != '') {
-                        ssh.agentSh "git submodule add \"${sharedReclassUtl}\" \"classes/system\""
+                        ssh.agentSh "git submodule add \"${sharedReclassUrl}\" \"classes/system\""
 
                         def sharedReclassRefspec = templateContext['default_context']['shared_reclass_refspec']
                         if(sharedReclassRefspec != '') {
