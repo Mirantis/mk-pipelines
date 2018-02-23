@@ -2,13 +2,37 @@
  * Generate cookiecutter cluster by individual products
  *
  * Expected parameters:
- *   COOKIECUTTER_TEMPLATE_CREDENTIALS  Credentials to the Cookiecutter template repo.
- *   COOKIECUTTER_TEMPLATE_URL          Cookiecutter template repo address.
- *   COOKIECUTTER_TEMPLATE_BRANCH       Branch for the template.
  *   COOKIECUTTER_TEMPLATE_CONTEXT      Context parameters for the template generation.
  *   EMAIL_ADDRESS                      Email to send a created tar file
  *
 **/
+
+// Deprecation to avoid unexpected behaviour because it should be passed via initial context.
+// Need to delete this "if" statement at 1 April 2018.
+if(env.COOKIECUTTER_TEMPLATE_CREDENTIALS ||
+   env.COOKIECUTTER_TEMPLATE_URL ||
+   env.COOKIECUTTER_TEMPLATE_BRANCH ||
+   env.COOKIECUTTER_TEMPLATE_PATH ||
+   env.SHARED_RECLASS_URL){
+    println '''
+    DEPRECATION: Please note that the following variables are deprocated:
+    - COOKIECUTTER_TEMPLATE_CREDENTIALS
+    - COOKIECUTTER_TEMPLATE_URL
+    - COOKIECUTTER_TEMPLATE_BRANCH
+    - COOKIECUTTER_TEMPLATE_PATH
+    - SHARED_RECLASS_URL
+    You need to pass the values using the following variables from initial cookiecutter context:
+    - cookiecutter_template_url
+    - cookiecutter_template_branch
+    - shared_reclass_url
+    The following variables are not needed anymore:
+    - COOKIECUTTER_TEMPLATE_CREDENTIALS - cookiecutter-templates repos are accessible for anounimous
+                                        (https://gerrit.mcp.mirantis.net)
+    - COOKIECUTTER_TEMPLATE_PATH - hardcoded to "${env.WORKSPACE}/template"
+    '''
+    currentBuild.result = "FAILURE"
+    return
+}
 
 common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
@@ -25,12 +49,15 @@ timeout(time: 12, unit: 'HOURS') {
 
         try {
             def templateContext = readYaml text: COOKIECUTTER_TEMPLATE_CONTEXT
+            def mcpVersion = templateContext.default_context.mcp_version
+            def sharedReclassUrl = templateContext.default_context.shared_reclass_url
             def clusterDomain = templateContext.default_context.cluster_domain
             def clusterName = templateContext.default_context.cluster_name
             def saltMaster = templateContext.default_context.salt_master_hostname
             def cutterEnv = "${env.WORKSPACE}/cutter"
             def jinjaEnv = "${env.WORKSPACE}/jinja"
             def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
+            def systemEnv = "${modelEnv}/classes/system"
             def targetBranch = "feature/${clusterName}"
             def templateBaseDir = "${env.WORKSPACE}/template"
             def templateDir = "${templateEnv}/template/dir"
@@ -44,40 +71,51 @@ timeout(time: 12, unit: 'HOURS') {
             print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
 
             stage ('Download Cookiecutter template') {
-                if (COOKIECUTTER_TEMPLATE_BRANCH.startsWith('refs/')) {
-                    git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, 'master', COOKIECUTTER_TEMPLATE_CREDENTIALS)
-
+                def cookiecutterTemplateUrl = templateContext.default_context.cookiecutter_template_url
+                def cookiecutterTemplateBranch = templateContext.default_context.cookiecutter_template_branch
+                git.checkoutGitRepository(templateEnv, cookiecutterTemplateUrl, 'master')
+                // Use refspec if exists first of all
+                if (cookiecutterTemplateBranch.toString().startsWith('refs/')) {
                     dir(templateEnv) {
-                        ssh.agentSh("git fetch ${COOKIECUTTER_TEMPLATE_URL} ${COOKIECUTTER_TEMPLATE_BRANCH} && git checkout FETCH_HEAD")
+                        ssh.agentSh("git fetch ${cookiecutterTemplateUrl} ${cookiecutterTemplateBranch} && git checkout FETCH_HEAD")
                     }
                 } else {
-                    git.checkoutGitRepository(templateEnv, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, COOKIECUTTER_TEMPLATE_CREDENTIALS)
+                    // Use mcpVersion git tag if not specified branch for cookiecutter-templates
+                    if (cookiecutterTemplateBranch == '') {
+                        cookiecutterTemplateBranch = mcpVersion
+                        // Don't have nightly/testing/stable for cookiecutter-templates repo, therefore use master
+                        if(mcpVersion == "nightly" || mcpVersion == "testing" || mcpVersion == "stable"){
+                            cookiecutterTemplateBranch = 'master'
+                        }
+                    }
+                    git.changeGitBranch(templateEnv, cookiecutterTemplateBranch)
                 }
-
             }
 
             stage ('Create empty reclass model') {
                 dir(path: modelEnv) {
                     sh "rm -rfv .git"
                     sh "git init"
-
-                    def sharedReclassUrl = templateContext['default_context']['shared_reclass_url']
-                    if (sharedReclassUrl != '') {
-                        ssh.agentSh "git submodule add \"${sharedReclassUrl}\" \"classes/system\""
-
-                        def sharedReclassRefspec = templateContext['default_context']['shared_reclass_refspec']
-                        if(sharedReclassRefspec != '') {
-                            ssh.agentSh "cd \"classes/system\";git fetch ${sharedReclassUrl} ${sharedReclassRefspec}; git checkout FETCH_HEAD"
-                        } else {
-                            def mcpVersion = templateContext['default_context']['mcp_version']
-                            if(mcpVersion != "stable" && mcpVersion != "nightly" && mcpVersion != "testing"){
-                                ssh.agentSh "cd \"classes/system\";git fetch --tags;git checkout ${mcpVersion}"
-                            }
-                        }
-
-                        git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
-                    }
+                    ssh.agentSh("git submodule add ${sharedReclassUrl} ${systemEnv}")
                 }
+                def sharedReclassBranch = templateContext.default_context.shared_reclass_branch
+                // Use refspec if exists first of all
+                if (sharedReclassBranch.toString().startsWith('refs/')) {
+                    dir(systemEnv) {
+                        ssh.agentSh("git fetch ${sharedReclassUrl} ${sharedReclassBranch} && git checkout FETCH_HEAD")
+                    }
+                } else {
+                    // Use mcpVersion git tag if not specified branch for reclass-system
+                    if (sharedReclassBranch == '') {
+                        sharedReclassBranch = mcpVersion
+                        // Don't have nightly/testing/stable for reclass-system repo, therefore use master
+                        if(mcpVersion == "nightly" || mcpVersion == "testing" || mcpVersion == "stable"){
+                            sharedReclassBranch = 'master'
+                        }
+                    }
+                    git.changeGitBranch(systemEnv, sharedReclassBranch)
+                }
+                git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
             }
 
             def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "oss", "stacklight", "ceph"]
@@ -143,7 +181,7 @@ parameters:
             }
 
             stage("Test") {
-                if (SHARED_RECLASS_URL != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
+                if (sharedReclassUrl != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
                     sh("cp -r ${modelEnv} ${testEnv}")
                     saltModelTesting.setupAndTestNode("${saltMaster}.${clusterDomain}", "", testEnv)
                 }
