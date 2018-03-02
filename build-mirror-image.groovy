@@ -10,12 +10,12 @@
  * OS_VERSION - OpenStack version
  * UPLOAD_URL - URL of an WebDAV used to upload the image after creating.
  * VM_AVAILABILITY_ZONE - Availability zone in OpenStack in the VM will be spawned.
- * VM_CONNECT_RETRIES - Number of retries for SSH connection to the VM after it’s spawned after 8 minutes.
  * VM_FLAVOR - Flavor to be used for VM in OpenStack.
  * VM_FLOATING_IP_POOL - Floating IP pool to be used to assign floating IP to the VM.
  * VM_IMAGE - Name of the image to be used for VM in OpenStack.
  * VM_IP - Static IP that is assigned to the VM which belongs to the network used.
  * VM_NETWORK_ID - ID of the network that VM connects to.
+ * EXTRA_VARIABLES - list of key:value variables required by template.json
  *
  */
 
@@ -30,6 +30,8 @@ def rcFile = ""
 def openstackEnv = ""
 def uploadImageStatus = ""
 def uploadMd5Status = ""
+ArrayList extra_vars = job_env.get('EXTRA_VARIABLES', '').readLines()
+def IMAGE_NAME = job_env.get('IMAGE_NAME', "packer-image") + "-" + dateTime
 
 timeout(time: 8, unit: 'HOURS') {
   node("python&&disk-xl") {
@@ -49,7 +51,7 @@ timeout(time: 8, unit: 'HOURS') {
           common.infoMsg("Downloading packer")
           sh "mkdir -p bin"
           dir("bin") {
-            sh "wget -O ${PACKER_ZIP} ${PACKER_URL}"
+            sh "wget --quiet -O ${PACKER_ZIP} ${PACKER_URL}"
             sh "echo \"${PACKER_ZIP_MD5} ${PACKER_ZIP}\" >> md5sum"
             sh "md5sum -c --status md5sum"
             sh "unzip ${PACKER_ZIP}"
@@ -67,20 +69,14 @@ timeout(time: 8, unit: 'HOURS') {
       stage("Build Instance") {
         rcFile = openstack.createOpenstackEnv(OS_URL, OS_CREDENTIALS_ID, OS_PROJECT, "default", "", "default", "2", "")
         dir("${workspace}/${PACKER_TEMPLATES_REPO_NAME}/${BUILD_OS}/") {
-          withEnv(["PATH=${env.PATH}:${workspace}/bin",
-                   "PACKER_LOG_PATH=${workspace}/packer.log",
-                   "PACKER_LOG=1",
-                   "TMPDIR=${workspace}/tmp",
-                   "VM_FLOATING_IP_POOL=${VM_FLOATING_IP_POOL}",
-                   "ssh_keypair_name=mcp-offline-keypair-${dateTime}",
-                   "ssh_private_key_file=${workspace}/id_rsa",
-                   "IMAGE_NAME=${IMAGE_NAME}-${dateTime}"]) {
+          withEnv(extra_vars + ["PATH=${env.PATH}:${workspace}/bin",
+                                "PACKER_LOG_PATH=${workspace}/packer.log",
+                                "PACKER_LOG=1",
+                                "TMPDIR=${workspace}/tmp"]) {
             if (PACKER_DEBUG.toBoolean()) {
               PACKER_ARGS = "${PACKER_ARGS} -debug"
             }
 
-            sh "printenv | sort -u"
-            sh "echo ${EXTRA_VARIABLES} > extra.vars"
             sh "source extra.vars ; packer build -only=${BUILD_ONLY} ${PACKER_ARGS} -parallel=false template.json"
 
             def packerStatus = sh(script: "grep \"Some builds didn't complete successfully and had errors\" ${PACKER_LOG_PATH}", returnStatus: true)
@@ -97,27 +93,27 @@ timeout(time: 8, unit: 'HOURS') {
       }
 
       stage("Publish image") {
-        common.infoMsg("Saving image ${IMAGE_NAME}-${dateTime}")
+        common.infoMsg("Saving image ${IMAGE_NAME}")
         common.retry(3, 5) {
-          openstack.runOpenstackCommand("openstack image save --file ${IMAGE_NAME}-${dateTime}.qcow2 ${IMAGE_NAME}-${dateTime}", rcFile, openstackEnv)
+          openstack.runOpenstackCommand("openstack image save --file ${IMAGE_NAME}.qcow2 ${IMAGE_NAME}", rcFile, openstackEnv)
         }
-        sh "md5sum ${IMAGE_NAME}-${dateTime}.qcow2 > ${IMAGE_NAME}-${dateTime}.qcow2.md5"
+        sh "md5sum ${IMAGE_NAME}.qcow2 > ${IMAGE_NAME}.qcow2.md5"
 
-        common.infoMsg("Uploading image ${IMAGE_NAME}-${dateTime}")
+        common.infoMsg("Uploading image ${IMAGE_NAME}")
         common.retry(3, 5) {
-          uploadImageStatus = sh(script: "curl -f -T ${IMAGE_NAME}-${dateTime}.qcow2 ${UPLOAD_URL}", returnStatus: true)
+          uploadImageStatus = sh(script: "curl -f -T ${IMAGE_NAME}.qcow2 ${UPLOAD_URL}", returnStatus: true)
           if (uploadImageStatus != 0) {
             throw new Exception("Image upload failed")
           }
         }
 
         common.retry(3, 5) {
-          uploadMd5Status = sh(script: "curl -f -T ${IMAGE_NAME}-${dateTime}.qcow2.md5 ${UPLOAD_URL}", returnStatus: true)
+          uploadMd5Status = sh(script: "curl -f -T ${IMAGE_NAME}.qcow2.md5 ${UPLOAD_URL}", returnStatus: true)
           if (uploadMd5Status != 0) {
             throw new Exception("MD5 sum upload failed")
           }
         }
-        currentBuild.description = "<a href='http://ci.mcp.mirantis.net:8085/images/${IMAGE_NAME}-${dateTime}.qcow2'>${IMAGE_NAME}-${dateTime}.qcow2</a>"
+        currentBuild.description = "<a href='http://ci.mcp.mirantis.net:8085/images/${IMAGE_NAME}.qcow2'>${IMAGE_NAME}.qcow2</a>"
       }
 
     } catch (Throwable e) {
@@ -128,8 +124,8 @@ timeout(time: 8, unit: 'HOURS') {
       if (CLEANUP_AFTER) {
         stage("Cleanup") {
           if (openstackServer != "") {
-            openstack.runOpenstackCommand("openstack server delete ${IMAGE_NAME}-${dateTime}", rcFile, openstackEnv)
-            openstack.runOpenstackCommand("openstack image delete ${IMAGE_NAME}-${dateTime}", rcFile, openstackEnv)
+            openstack.runOpenstackCommand("openstack server delete ${IMAGE_NAME}", rcFile, openstackEnv)
+            openstack.runOpenstackCommand("openstack image delete ${IMAGE_NAME}", rcFile, openstackEnv)
           }
           dir(workspace) {
             sh "rm -rf ./*"
