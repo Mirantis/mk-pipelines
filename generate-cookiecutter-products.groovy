@@ -96,7 +96,7 @@ timeout(time: 12, unit: 'HOURS') {
                 dir(path: modelEnv) {
                     sh "rm -rfv .git"
                     sh "git init"
-                    ssh.agentSh("git submodule add ${sharedReclassUrl} ${systemEnv}")
+                    ssh.agentSh("git submodule add ${sharedReclassUrl} 'classes/system'")
                 }
                 def sharedReclassBranch = templateContext.default_context.shared_reclass_branch
                 // Use refspec if exists first of all
