@@ -18,6 +18,7 @@
  *   STACK_CLEANUP_JOB          Name of job for deleting stack
  *
  *   STACK_COMPUTE_COUNT        Number of compute nodes to launch
+ *   STACK_CLUSTER_NAME         The name of cluster model to use
  *   STATIC_MGMT_NETWORK        Check if model contains static IP address definitions for all nodes
  *
  *   AWS_STACK_REGION           CloudFormation AWS region
@@ -192,6 +193,12 @@ timeout(time: 12, unit: 'HOURS') {
                         if (common.validInputParam('EXTRA_FORMULAS')) {
                             common.infoMsg("Setting extra salt-formulas to ${EXTRA_FORMULAS}")
                             envParams.put('cfg_extra_formulas', EXTRA_FORMULAS)
+                        }
+
+                        // add cluster name if specified
+                        if (common.validInputParam('STACK_CLUSTER_NAME')) {
+                            common.infoMsg("Setting cluster_name to ${STACK_CLUSTER_NAME}")
+                            envParams.put('cluster_name', STACK_CLUSTER_NAME)
                         }
 
                         openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv)
