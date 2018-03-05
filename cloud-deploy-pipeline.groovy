@@ -101,7 +101,9 @@ timeout(time: 12, unit: 'HOURS') {
             def workspace = common.getWorkspace()
             venv = "${workspace}/venv"
             venvPepper = "${workspace}/venvPepper"
-
+            if(common.validInputParam("STACK_DELETE") && STACK_DELETE.toBoolean()){
+                common.warningMsg("You running stack with STACK_DELETE option enabled, deployed stack will be removed at the end!")
+            }
             //
             // Prepare machines
             //
