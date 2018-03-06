@@ -25,13 +25,13 @@ def openstack = new com.mirantis.mk.Openstack()
 def git = new com.mirantis.mk.Git()
 def date = new Date()
 def dateTime = date.format("ddMMyyyy-HHmmss")
-def openstackServer = ""
 def rcFile = ""
 def openstackEnv = ""
 def uploadImageStatus = ""
 def uploadMd5Status = ""
-ArrayList extra_vars = job_env.get('EXTRA_VARIABLES', '').readLines()
-def IMAGE_NAME = job_env.get('IMAGE_NAME', "packer-image") + "-" + dateTime
+def creds
+ArrayList extra_vars = EXTRA_VARIABLES.readLines()
+IMAGE_NAME = IMAGE_NAME + "-" + dateTime
 
 timeout(time: 8, unit: 'HOURS') {
   node("python&&disk-xl") {
@@ -40,7 +40,6 @@ timeout(time: 8, unit: 'HOURS') {
       openstackEnv = "${workspace}/venv"
 
       stage("Prepare env") {
-        checkout scm
         if (!fileExists("${workspace}/tmp")) {
           sh "mkdir -p ${workspace}/tmp"
         }
@@ -64,27 +63,27 @@ timeout(time: 8, unit: 'HOURS') {
 
         openstack.setupOpenstackVirtualenv(openstackEnv, OS_VERSION)
         git.checkoutGitRepository(PACKER_TEMPLATES_REPO_NAME, PACKER_TEMPLATES_REPO_URL, PACKER_TEMPLATES_BRANCH)
+        creds = common.getPasswordCredentials(OS_CREDENTIALS_ID)
       }
 
       stage("Build Instance") {
-        rcFile = openstack.createOpenstackEnv(OS_URL, OS_CREDENTIALS_ID, OS_PROJECT, "default", "", "default", "2", "")
         dir("${workspace}/${PACKER_TEMPLATES_REPO_NAME}/${BUILD_OS}/") {
           withEnv(extra_vars + ["PATH=${env.PATH}:${workspace}/bin",
                                 "PACKER_LOG_PATH=${workspace}/packer.log",
                                 "PACKER_LOG=1",
-                                "TMPDIR=${workspace}/tmp"]) {
+                                "TMPDIR=${workspace}/tmp",
+                                "OS_USERNAME=${creds.username}",
+                                "OS_PASSWORD=${creds.password.toString()}"]) {
             if (PACKER_DEBUG.toBoolean()) {
               PACKER_ARGS = "${PACKER_ARGS} -debug"
             }
 
-            sh "source extra.vars ; packer build -only=${BUILD_ONLY} ${PACKER_ARGS} -parallel=false template.json"
+            sh "packer build -only=${BUILD_ONLY} ${PACKER_ARGS} -parallel=false template.json"
 
             def packerStatus = sh(script: "grep \"Some builds didn't complete successfully and had errors\" ${PACKER_LOG_PATH}", returnStatus: true)
             // grep returns 0 if find something
             if (packerStatus != 0) {
-              if (buildTypes.contains("openstack")) {
-                common.infoMsg("Openstack instance complete")
-              }
+              common.infoMsg("Openstack instance complete")
             } else {
               throw new Exception("Packer build failed")
             }
@@ -94,6 +93,8 @@ timeout(time: 8, unit: 'HOURS') {
 
       stage("Publish image") {
         common.infoMsg("Saving image ${IMAGE_NAME}")
+        rcFile = openstack.createOpenstackEnv(workspace, OS_URL, OS_CREDENTIALS_ID, OS_PROJECT, "default", "", "default", "2", "")
+
         common.retry(3, 5) {
           openstack.runOpenstackCommand("openstack image save --file ${IMAGE_NAME}.qcow2 ${IMAGE_NAME}", rcFile, openstackEnv)
         }
@@ -122,25 +123,16 @@ timeout(time: 8, unit: 'HOURS') {
       throw e
     } finally {
       if (CLEANUP_AFTER) {
-        stage("Cleanup") {
-          if (openstackServer != "") {
-            openstack.runOpenstackCommand("openstack server delete ${IMAGE_NAME}", rcFile, openstackEnv)
-            openstack.runOpenstackCommand("openstack image delete ${IMAGE_NAME}", rcFile, openstackEnv)
-          }
           dir(workspace) {
             sh "rm -rf ./*"
           }
-        }
-
       } else {
         common.infoMsg("Env has not been cleanup!")
         common.infoMsg("Packer private key:")
         dir("${workspace}/${PACKER_TEMPLATES_REPO_NAME}/${BUILD_OS}/") {
           sh "cat os_${BUILD_OS}.pem"
         }
-
       }
     }
-
   }
 }
