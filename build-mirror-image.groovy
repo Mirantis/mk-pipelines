@@ -72,6 +72,7 @@ timeout(time: 8, unit: 'HOURS') {
                                 "PACKER_LOG_PATH=${workspace}/packer.log",
                                 "PACKER_LOG=1",
                                 "TMPDIR=${workspace}/tmp",
+                                "IMAGE_NAME=${IMAGE_NAME}",
                                 "OS_USERNAME=${creds.username}",
                                 "OS_PASSWORD=${creds.password.toString()}"]) {
             if (PACKER_DEBUG.toBoolean()) {
