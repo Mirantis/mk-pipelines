@@ -145,7 +145,7 @@ def vcpTestUpgrade(pepperEnv) {
     salt.enforceState(pepperEnv, 'I@xtrabackup:server', 'xtrabackup')
     salt.enforceState(pepperEnv, 'I@xtrabackup:client', 'openssh.client')
     salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
-    salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh'")
+    salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh -f -s'")
 
     def databases = salt.cmdRun(pepperEnv, 'I@mysql:client','salt-call mysql.db_list | grep upgrade | awk \'/-/ {print \$2}\'')
     if(databases && databases != ""){
@@ -249,7 +249,7 @@ def vcpRealUpgrade(pepperEnv) {
     }
 
     if ((OPERATING_SYSTEM_RELEASE_UPGRADE.toBoolean() == true) && (SKIP_VM_RELAUNCH.toBoolean() == false)) {
-        salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh'")
+        salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh -f -s'")
 
         salt.enforceState(pepperEnv, 'I@salt:control', 'salt.control')
 

@@ -25,6 +25,16 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Ask for manual confirmation') {
                 input message: "Are you sure you have the correct backups ready? Do you really want to continue to restore Cassandra?"
             }
+            try {
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'], null, true)
+            } catch (Exception er) {
+                common.warningMsg('neutron-server service already stopped')
+            }
+            try {
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['supervisor-config'], null, true)
+            } catch (Exception er) {
+                common.warningMsg('Supervisor-config service already stopped')
+            }
             // Cassandra restore section
             try {
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['supervisor-database'], null, true)
@@ -70,6 +80,7 @@ timeout(time: 12, unit: 'HOURS') {
             sleep(5)
 
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.restart', ['supervisor-database'], null, true)
+            salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'], null, true)
 
             // wait until contrail-status is up
             salt.commandStatus(pepperEnv, 'I@opencontrail:control', "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)

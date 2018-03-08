@@ -1,0 +1,1519 @@
+/**
+ * Update packages on given nodes
+ *
+ * Expected parameters:
+ *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API.
+ *   SALT_MASTER_URL            Full Salt API address [https://10.10.10.1:8000].
+ *   SNAPSHOT_NAME              Snapshot name
+ *   CFG_NODE_PROVIDER          Physical machine name hosting Salt-Master VM (ex. kvm01*)
+ *   INTERACTIVE                Ask interactive questions during pipeline run (bool)
+ *   PER_NODE                   Target nodes will be managed one by one (bool)
+ *   ROLLBACK_BY_REDEPLOY       Omit taking live snapshots. Rollback is planned to be done by redeployment (bool)
+ *   STOP_SERVICES              Stop API services before update (bool)
+ *   TARGET_UPDATES             Comma separated list of nodes to update (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
+ *   TARGET_ROLLBACKS           Comma separated list of nodes to update (Valid values are ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cmp,kvm,osd,gtw-physical)
+ *   TARGET_MERGES              Comma separated list of nodes to update (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid)
+ *   CTL_TARGET                 Salt targeted CTL nodes (ex. ctl*)
+ *   PRX_TARGET                 Salt targeted PRX nodes (ex. prx*)
+ *   MSG_TARGET                 Salt targeted MSG nodes (ex. msg*)
+ *   DBS_TARGET                 Salt targeted DBS nodes (ex. dbs*)
+ *   LOG_TARGET                 Salt targeted LOG nodes (ex. log*)
+ *   MON_TARGET                 Salt targeted MON nodes (ex. mon*)
+ *   MTR_TARGET                 Salt targeted MTR nodes (ex. mtr*)
+ *   NTW_TARGET                 Salt targeted NTW nodes (ex. ntw*)
+ *   NAL_TARGET                 Salt targeted NAL nodes (ex. nal*)
+ *   CMN_TARGET                 Salt targeted CMN nodes (ex. cmn*)
+ *   RGW_TARGET                 Salt targeted RGW nodes (ex. rgw*)
+ *   CID_TARGET                 Salt targeted CID nodes (ex. cid*)
+ *   CMP_TARGET                 Salt targeted physical compute nodes (ex. cmp001*)
+ *   KVM_TARGET                 Salt targeted physical KVM nodes (ex. kvm01*)
+ *   CEPH_OSD_TARGET            Salt targeted physical Ceph OSD nodes (ex. osd001*)
+ *   GTW_TARGET                 Salt targeted physical GTW nodes (ex. gtw01*)
+ *   REBOOT                     Reboot nodes after update (bool)
+ *   ROLLBACK_PKG_VERSIONS      Space separated list of pkgs=versions to rollback to (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
+ *   PURGE_PKGS                 Space separated list of pkgs=versions to be purged (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
+ *   REMOVE_PKGS                Space separated list of pkgs=versions to be removed (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
+ *   RESTORE_GALERA             Restore Galera DB (bool)
+ *   RESTORE_CONTRAIL_DB        Restore Cassandra and Zookeeper DBs for OpenContrail (bool)
+ *
+**/
+def common = new com.mirantis.mk.Common()
+def salt = new com.mirantis.mk.Salt()
+def python = new com.mirantis.mk.Python()
+def virsh = new com.mirantis.mk.Virsh()
+
+def updates = TARGET_UPDATES.tokenize(",").collect{it -> it.trim()}
+def rollbacks = TARGET_ROLLBACKS.tokenize(",").collect{it -> it.trim()}
+def merges = TARGET_MERGES.tokenize(",").collect{it -> it.trim()}
+
+def pepperEnv = "pepperEnv"
+def minions
+def result
+def packages
+def command
+def commandKwargs
+
+def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def commandKwargs
+    def distUpgrade
+    def pkgs
+    def out
+
+    salt.enforceState(pepperEnv, target, 'linux.system.repo')
+
+    stage("List package upgrades") {
+        common.infoMsg("Listing all the packages that have a new update available on ${target}")
+        pkgs = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, target, 'pkg.list_upgrades', [], null, true))
+        if(targetPackages != "" && targetPackages != "*"){
+            common.infoMsg("Note that only the ${targetPackages} would be installed from the above list of available updates on the ${target}")
+        }
+    }
+
+    if (INTERACTIVE.toBoolean()) {
+        stage("Confirm live package upgrades on ${target}") {
+            if (targetPackages=="") {
+                def userInput = input(
+                 id: 'userInput', message: 'Insert package names for update', parameters: [
+                 [$class: 'TextParameterDefinition', defaultValue: pkgs.keySet().join(",").toString(), description: 'Package names (or *)', name: 'packages']
+                ])
+                if (userInput!= "" && userInput!= "*") {
+                    targetPackages = userInput
+                }
+            } else {
+                input message: "Approve live package upgrades on ${target} nodes?"
+            }
+        }
+    } else {
+        targetPackages = pkgs.keySet().join(",").toString()
+    }
+
+    if (targetPackages != "") {
+        // list installed versions of pkgs that will be upgraded
+        def installedPkgs = []
+        def newPkgs = []
+        def targetPkgList = targetPackages.tokenize(',')
+        for (pkg in targetPkgList) {
+            def version
+            try {
+                def pkgsDetails = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, target, 'pkg.info_installed', [pkg], null, true))
+                version = pkgsDetails.get(pkg).get('version')
+            } catch (Exception er) {
+                common.infoMsg("${pkg} not installed yet")
+            }
+            if (version?.trim()) {
+                installedPkgs.add(pkg + '=' + version)
+            } else {
+                newPkgs.add(pkg)
+            }
+        }
+        common.warningMsg("the following list of pkgs will be upgraded")
+        common.warningMsg(installedPkgs.join(" "))
+        common.warningMsg("the following list of pkgs will be newly installed")
+        common.warningMsg(newPkgs.join(" "))
+        // set variables
+        command = "pkg.install"
+        packages = targetPackages
+        commandKwargs = ['only_upgrade': 'true','force_yes': 'true']
+
+    }else {
+        command = "pkg.upgrade"
+        commandKwargs = ['dist_upgrade': 'true']
+        distUpgrade = true
+        packages = null
+    }
+
+    // todo exception to cfg or cicd
+    stage("stop services on ${target}") {
+        if ((STOP_SERVICES.toBoolean()) && (targetType != 'cicd')) {
+            if (targetType == 'contrail') {
+                stopContrailServices(pepperEnv, target)
+            } else {
+                def probe = salt.getFirstMinion(pepperEnv, "${target}")
+                stopServices(pepperEnv, probe, target)
+            }
+        }
+    }
+
+    stage('Apply package upgrades') {
+        // salt master pkg
+        if (targetType == 'I@salt:master') {
+            common.warningMsg('salt-master pkg upgrade, rerun the pipeline if disconnected')
+            salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ['salt-master'], null, true, 5)
+            salt.minionsReachable(pepperEnv, 'I@salt:master', '*')
+        }
+        // salt minion pkg
+        salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ['salt-minion'], null, true, 5)
+        salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+        common.infoMsg('Performing pkg upgrades ... ')
+        common.retry(3){
+            out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, true, packages, commandKwargs)
+            salt.printSaltCommandResult(out)
+        }
+        def osRelease = salt.getGrain(pepperEnv, target, 'lsb_distrib_codename')
+        if (osRelease.toString().toLowerCase().contains('trusty')) {
+            args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --force-yes -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" '
+        } else {
+            args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q -f --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" '
+        }
+        if (out.toString().contains('errors:')) {
+            try {
+                if (packages?.trim()) {
+                    packages = packages.replaceAll(',', ' ')
+                    common.retry(3){
+                        out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' install ' + packages])
+                    }
+                } else {
+                    if (distUpgrade) {
+                        common.retry(3){
+                            out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' dist-upgrade'])
+                        }
+                    } else {
+                        common.retry(3){
+                            out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' upgrade'])
+                        }
+                    }                    }
+                if (out.toString().contains('E: ')) {
+                    common.errorMsg(out)
+                    if (INTERACTIVE.toBoolean()) {
+                        input message: "Pkgs update failed to be updated on ${target}. Please fix it manually."
+                    } else {
+                        salt.printSaltCommandResult(out)
+                        throw new Exception("Pkgs update failed")
+                    }
+                }
+            } catch (Exception e) {
+                common.errorMsg(out)
+                common.errorMsg(e)
+                if (INTERACTIVE.toBoolean()) {
+                    input message: "Pkgs update failed to be updated on ${target}. Please fix it manually."
+                } else {
+                    throw new Exception("Pkgs update failed")
+                }
+            }
+        }
+    }
+}
+
+def rollbackPkgs(pepperEnv, target, targetType = "", targetPackages="") {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def probe = salt.getFirstMinion(pepperEnv, "${target}")
+    def distUpgrade
+    def pkgs
+    def out
+
+    salt.enforceState(pepperEnv, target, 'linux.system.repo')
+
+    if (ROLLBACK_PKG_VERSIONS == "") {
+        stage("List package upgrades") {
+            common.infoMsg("Listing all the packages that have a new update available on ${target}")
+            pkgs = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, target, 'pkg.list_upgrades', [], null, true))
+            if(targetPackages != "" && targetPackages != "*"){
+                common.infoMsg("Note that only the ${targetPackages} would be installed from the above list of available updates on the ${target}")
+            }
+        }
+
+        if (INTERACTIVE.toBoolean()) {
+            stage("Confirm live package upgrades on ${target}") {
+                if(targetPackages==""){
+                    timeout(time: 2, unit: 'HOURS') {
+                        def userInput = input(
+                         id: 'userInput', message: 'Insert package names for update', parameters: [
+                         [$class: 'TextParameterDefinition', defaultValue: pkgs.keySet().join(",").toString(), description: 'Package names (or *)', name: 'packages']
+                        ])
+                        if(userInput!= "" && userInput!= "*"){
+                            targetPackages = userInput
+                        }
+                    }
+                }else{
+                    timeout(time: 2, unit: 'HOURS') {
+                       input message: "Approve live package upgrades on ${target} nodes?"
+                    }
+                }
+            }
+        } else {
+            targetPackages = pkgs.keySet().join(",").toString()
+        }
+    } else {
+        targetPackages = ROLLBACK_PKG_VERSIONS
+    }
+
+    if (targetPackages != "") {
+        // set variables
+        packages = targetPackages
+    } else {
+        distUpgrade = true
+        packages = null
+    }
+
+    stage("stop services on ${target}") {
+        try {
+            if (INTERACTIVE.toBoolean()) {
+                input message: "Click PROCEED to interactively stop services on ${target}. Otherwise click ABORT to skip stopping them and continue."
+            }
+        } catch (Exception er) {
+            common.infoMsg('skipping stopping services')
+            return
+        }
+        if (STOP_SERVICES.toBoolean()) {
+            stopServices(pepperEnv, probe, target)
+        }
+    }
+
+    stage('Apply package downgrades') {
+        args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" '
+        common.infoMsg('Performing pkgs purge/remove ... ')
+        try {
+            if (PURGE_PKGS != "") {
+                def purgePackages = PURGE_PKGS.replaceAll(',', ' ')
+                common.retry(3){
+                    out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' purge ' + purgePackages])
+                }
+            }
+            if (REMOVE_PKGS != "") {
+                def removePackages = REMOVE_PKGS.replaceAll(',', ' ')
+                common.retry(3){
+                    out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' remove ' + removePackages])
+                }
+            }
+            if (out.toString().contains('E: ')) {
+                common.errorMsg(out)
+                if (INTERACTIVE.toBoolean()) {
+                    input message: "Pkgs ${packages} purge failed on ${target}. Please fix it manually."
+                } else {
+                    salt.printSaltCommandResult(out)
+                    throw new Exception("Pkgs {packages} purge failed")
+                }
+            }
+        } catch (Exception e) {
+            common.errorMsg(out)
+            common.errorMsg(e)
+            if (INTERACTIVE.toBoolean()) {
+                input message: "Pkgs {packages} purge on ${target}. Please fix it manually."
+            } else {
+                throw new Exception("Pkgs {packages} purge failed")
+            }
+        }
+
+        common.infoMsg('Performing pkg downgrades ... ')
+        try {
+            packages = packages.replaceAll(',', ' ')
+            if (packages?.trim()) {
+                packages = packages.replaceAll(',', ' ')
+                common.retry(3){
+                    out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' install salt-minion'], null, true, 5)
+                }
+                salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+                common.retry(3){
+                    out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' install ' + packages])
+                }
+            } else {
+                if (distUpgrade) {
+                    common.retry(3){
+                        out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' dist-upgrade'])
+                    }
+                } else {
+                    common.retry(3){
+                        out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' upgrade'])
+                    }
+                }
+            }
+            if (out.toString().contains('E: ')) {
+                common.errorMsg(out)
+                if (INTERACTIVE.toBoolean()) {
+                    input message: "Pkgs rollback failed on ${target}. Please fix it manually."
+                } else {
+                    salt.printSaltCommandResult(out)
+                    throw new Exception("Pkgs rollback failed")
+                }
+            }
+        } catch (Exception e) {
+            common.errorMsg(out)
+            common.errorMsg(e)
+            if (INTERACTIVE.toBoolean()) {
+                input message: "Pkgs rollback failed on ${target}. Please fix it manually."
+            } else {
+                throw new Exception("Pkgs rollback failed")
+            }
+        }
+    }
+}
+
+def getCfgNodeProvider(pepperEnv, master_name) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    if (!CFG_NODE_PROVIDER?.trim()) {
+        kvms = salt.getMinions(pepperEnv, 'I@salt:control')
+        for (kvm in kvms) {
+            try {
+                vms = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, kvm, 'virt.list_active_vms', [], null, true))
+                if (vms.toString().contains(master_name)) {
+                    CFG_NODE_PROVIDER = kvm
+                    //break
+                }
+            } catch (Exception er) {
+                common.infoMsg("${master_name} not present on ${kvm}")
+            }
+        }
+    }
+}
+
+/*
+def rollbackSaltMaster(pepperEnv, target, path='/var/lib/libvirt/images') {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    try {
+        input message: "PART1 - Are you sure to rollback ${target}? To rollback click on PROCEED. To skip rollback PART1 click on ABORT."
+    } catch (Exception er) {
+        common.infoMsg("skipping rollback of ${target}")
+        return
+    }
+    def domain = salt.getDomainName(pepperEnv)
+    def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
+    getCfgNodeProvider(pepperEnv, master)
+    try {
+        try {
+            salt.getReturnValues(salt.cmdRun(pepperEnv, CFG_NODE_PROVIDER, "ls -la ${path}/${master}.${domain}.xml"))
+            common.errorMsg('Pipeline is about to disconnect from salt-api. You will have to rerun the pipeline with ROLLBACK_CFG checked and skip PART1 to finish rollback.')
+            salt.cmdRun(pepperEnv, CFG_NODE_PROVIDER, "virsh destroy ${master}.${domain}; virsh define ${path}/${master}.${domain}.xml; virsh start ${master}.${domain} ")
+        } catch (Exception er) {
+            common.errorMsg(er)
+            input message: "Rollback for ${target} failed. Rollback manually."
+        }
+    } catch (Exception er) {
+        common.errorMsg(er)
+        input message: "Rollback for ${target} failed. Rollback manually."
+    }
+}
+
+def finishSaltMasterRollback(pepperEnv, target, path='/var/lib/libvirt/images') {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def virsh = new com.mirantis.mk.Virsh()
+    try {
+        input message: "PART2 - Are you sure to finalize ${target} rollback? Click on PROCEED. To skip rollback click on ABORT."
+    } catch (Exception er) {
+        common.infoMsg("skipping finalize rollback of ${target}")
+        return
+    }
+    salt.minionsReachable(pepperEnv, 'I@salt:master', '*')
+    def domain = salt.getDomainName(pepperEnv)
+    def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
+    getCfgNodeProvider(pepperEnv, master)
+    try {
+        virsh.liveSnapshotAbsent(pepperEnv, CFG_NODE_PROVIDER, master, SNAPSHOT_NAME, path)
+        // purge and setup previous repos
+        salt.enforceState(pepperEnv, target, 'linux.system.repo')
+    } catch (Exception e) {
+        common.errorMsg(e)
+        input message: "Check what failed after ${target} rollback. Do you want to PROCEED?"
+    }
+}*/
+
+def stopServices(pepperEnv, probe, target) {
+    def openstack = new com.mirantis.mk.Openstack()
+    def services = []
+    services.add('keepalived')
+    services.add('nginx')
+    services.add('haproxy')
+    services.add('nova-api')
+    services.add('cinder')
+    services.add('glance')
+    services.add('heat')
+    services.add('neutron')
+    services.add('apache2')
+    services.add('rabbitmq-server')
+    if (INTERACTIVE.toBoolean()) {
+        openstack.stopServices(pepperEnv, probe, target, services, true)
+    } else {
+        openstack.stopServices(pepperEnv, probe, target, services)
+    }
+}
+
+// must be stopped separately due to OC on Trusty
+def stopContrailServices(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def services = []
+    services.add('keepalived')
+    services.add('haproxy')
+    services.add('supervisor-control')
+    services.add('supervisor-config')
+    services.add('supervisor-database')
+    services.add('zookeeper')
+    services.add('ifmap-server')
+    for (s in services) {
+        try {
+            salt.runSaltProcessStep(pepperEnv, target, 'service.stop', [s], null, true)
+        } catch (Exception er) {
+            common.infoMsg(er)
+        }
+    }
+}
+
+def highstate(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+
+    stage("Apply highstate on ${target} nodes") {
+        try {
+            common.retry(3){
+                //salt.enforceHighstate(pepperEnv, target)
+            }
+        } catch (Exception e) {
+            common.errorMsg(e)
+            if (INTERACTIVE.toBoolean()) {
+                input message: "Highstate failed on ${target}. Fix it manually or run rollback on ${target}."
+            } else {
+                throw new Exception("highstate failed")
+            }
+        }
+    }
+    // optionally reboot
+    if (REBOOT.toBoolean()) {
+        stage("Reboot ${target} nodes") {
+            salt.runSaltProcessStep(pepperEnv, target, 'system.reboot', null, null, true, 5)
+            sleep(10)
+            salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+        }
+    }
+}
+
+def rollback(pepperEnv, tgt, generalTarget) {
+    def common = new com.mirantis.mk.Common()
+    try {
+        if (INTERACTIVE.toBoolean()) {
+            input message: "Are you sure to rollback ${generalTarget}? To rollback click on PROCEED. To skip rollback click on ABORT."
+        }
+    } catch (Exception er) {
+        common.infoMsg('skipping rollback')
+        return
+    }
+    try {
+        rollbackLiveSnapshot(pepperEnv, tgt, generalTarget)
+    } catch (Exception err) {
+        common.errorMsg(err)
+        if (INTERACTIVE.toBoolean()) {
+            input message: "Rollback for ${tgt} failed please fix it manually before clicking PROCEED."
+        } else {
+            throw new Exception("Rollback failed for ${tgt}")
+        }
+    }
+}
+
+def liveSnapshot(pepperEnv, tgt, generalTarget) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def virsh = new com.mirantis.mk.Virsh()
+    def domain = salt.getDomainName(pepperEnv)
+    def target_hosts = salt.getMinionsSorted(pepperEnv, "${tgt}")
+    common.warningMsg(target_hosts)
+    //def nodeCount = 1
+    for (t in target_hosts) {
+        def target = salt.stripDomainName(t)
+        def nodeCount = target[4]
+        common.warningMsg(nodeCount)
+        def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+        virsh.liveSnapshotPresent(pepperEnv, nodeProvider, target, SNAPSHOT_NAME)
+        //nodeCount++
+    }
+}
+
+def mergeSnapshot(pepperEnv, tgt, generalTarget='') {
+    def salt = new com.mirantis.mk.Salt()
+    def virsh = new com.mirantis.mk.Virsh()
+    def domain = salt.getDomainName(pepperEnv)
+    def target_hosts = salt.getMinionsSorted(pepperEnv, "${tgt}")
+    def nodeCount = 1
+    for (t in target_hosts) {
+        if (tgt == 'I@salt:master') {
+            def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
+            getCfgNodeProvider(pepperEnv, master)
+            virsh.liveSnapshotMerge(pepperEnv, CFG_NODE_PROVIDER, master, SNAPSHOT_NAME)
+        } else {
+            def target = salt.stripDomainName(t)
+            def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+            virsh.liveSnapshotMerge(pepperEnv, nodeProvider, target, SNAPSHOT_NAME)
+        }
+        nodeCount++
+    }
+}
+
+
+
+def rollbackLiveSnapshot(pepperEnv, tgt, generalTarget) {
+    def salt = new com.mirantis.mk.Salt()
+    def virsh = new com.mirantis.mk.Virsh()
+    def common = new com.mirantis.mk.Common()
+    def domain = salt.getDomainName(pepperEnv)
+    def target_hosts = salt.getMinionsSorted(pepperEnv, "${tgt}")
+    // first destroy all vms
+    def nodeCount = 1
+    for (t in target_hosts) {
+        def target = salt.stripDomainName(t)
+        def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+        salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.destroy', ["${target}.${domain}"], null, true)
+        nodeCount++
+    }
+    nodeCount = 1
+    // rollback vms
+    for (t in target_hosts) {
+        def target = salt.stripDomainName(t)
+        def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+        virsh.liveSnapshotRollback(pepperEnv, nodeProvider, target, SNAPSHOT_NAME)
+        nodeCount++
+    }
+    try {
+        salt.minionsReachable(pepperEnv, 'I@salt:master', tgt)
+        // purge and setup previous repos
+        salt.enforceState(pepperEnv, tgt, 'linux.system.repo')
+    } catch (Exception e) {
+        common.errorMsg(e)
+        if (INTERACTIVE.toBoolean()) {
+            input message: "Salt state linux.system.repo on ${tgt} failed. Do you want to PROCEED?."
+        } else {
+            throw new Exception("Salt state linux.system.repo on ${tgt} failed")
+        }
+    }
+}
+
+def removeNode(pepperEnv, tgt, generalTarget) {
+    def salt = new com.mirantis.mk.Salt()
+    def virsh = new com.mirantis.mk.Virsh()
+    def common = new com.mirantis.mk.Common()
+    def domain = salt.getDomainName(pepperEnv)
+    def target_hosts = salt.getMinionsSorted(pepperEnv, "${tgt}")
+    // first destroy all vms
+    def nodeCount = 1
+    for (t in target_hosts) {
+        def target = salt.stripDomainName(t)
+        def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+        salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.destroy', ["${target}.${domain}"], null, true)
+        salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.undefine', ["${target}.${domain}"], null, true)
+        try {
+            salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ${target}.${domain} -y")
+        } catch (Exception e) {
+            common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
+        }
+        nodeCount++
+    }
+}
+
+def backupCeph(pepperEnv, tgt) {
+    def salt = new com.mirantis.mk.Salt()
+    salt.enforceState(pepperEnv, 'I@ceph:backup:server', 'ceph.backup')
+    salt.enforceState(pepperEnv, "I@ceph:backup:client and ${tgt}", 'ceph.backup')
+    salt.cmdRun(pepperEnv, "I@ceph:backup:client and ${tgt}", "su root -c '/usr/local/bin/ceph-backup-runner-call.sh -s'")
+}
+
+def backupGalera(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    salt.enforceState(pepperEnv, 'I@xtrabackup:server', ['linux.system.repo', 'xtrabackup'])
+    salt.enforceState(pepperEnv, 'I@xtrabackup:client', ['linux.system.repo', 'openssh.client'])
+    salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
+    salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c '/usr/local/bin/innobackupex-runner.sh -s -f'")
+}
+
+// cluster galera - wsrep_cluster_size
+def clusterGalera(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    try {
+        salt.runSaltProcessStep(pepperEnv, 'I@galera:slave', 'service.stop', ['mysql'])
+    } catch (Exception er) {
+        common.warningMsg('Mysql service already stopped')
+    }
+    try {
+        salt.runSaltProcessStep(pepperEnv, 'I@galera:master', 'service.stop', ['mysql'])
+    } catch (Exception er) {
+        common.warningMsg('Mysql service already stopped')
+    }
+    try {
+        salt.cmdRun(pepperEnv, 'I@galera:slave', "rm /var/lib/mysql/ib_logfile*")
+    } catch (Exception er) {
+        common.warningMsg('Files are not present')
+    }
+    salt.cmdRun(pepperEnv, 'I@galera:master', "sed -i '/gcomm/c\\wsrep_cluster_address=\"gcomm://\"' /etc/mysql/my.cnf")
+    salt.runSaltProcessStep(pepperEnv, 'I@galera:master', 'service.start', ['mysql'])
+    // wait until mysql service on galera master is up
+    try {
+        salt.commandStatus(pepperEnv, 'I@galera:master', 'service mysql status', 'running')
+    } catch (Exception er) {
+        if (INTERACTIVE.toBoolean()) {
+            input message: "Database is not running please fix it first and only then click on PROCEED."
+        } else {
+            throw new Exception("Database is not running correctly")
+        }
+    }
+    salt.runSaltProcessStep(pepperEnv, 'I@galera:slave', 'service.start', ['mysql'])
+}
+
+def restoreGalera(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def openstack = new com.mirantis.mk.Openstack()
+    salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "rm -rf /var/lib/mysql/*")
+    openstack.restoreGaleraDb(pepperEnv)
+}
+
+def backupZookeeper(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    salt.enforceState(pepperEnv, 'I@zookeeper:backup:server', 'zookeeper.backup')
+    salt.enforceState(pepperEnv, 'I@zookeeper:backup:client', 'zookeeper.backup')
+    try {
+        salt.cmdRun(pepperEnv, 'I@opencontrail:control', "su root -c '/usr/local/bin/zookeeper-backup-runner.sh -s'")
+    } catch (Exception er) {
+        throw new Exception('Zookeeper failed to backup. Please fix it before continuing.')
+    }
+}
+
+def backupCassandra(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+
+    salt.enforceState(pepperEnv, 'I@cassandra:backup:server', 'cassandra.backup')
+    salt.enforceState(pepperEnv, 'I@cassandra:backup:client', 'cassandra.backup')
+    try {
+        salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', "su root -c '/usr/local/bin/cassandra-backup-runner-call.sh -s'")
+    } catch (Exception er) {
+        throw new Exception('Cassandra failed to backup. Please fix it before continuing.')
+    }
+}
+
+def backupContrail(pepperEnv) {
+    backupZookeeper(pepperEnv)
+    backupCassandra(pepperEnv)
+}
+
+// cassandra and zookeeper
+def restoreContrailDb(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    build job: "deploy-zookeeper-restore", parameters: [
+      [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
+      [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: SALT_MASTER_URL]
+    ]
+    build job: "deploy-cassandra-db-restore", parameters: [
+      [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
+      [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: SALT_MASTER_URL]
+    ]
+}
+
+def verifyAPIs(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    salt.cmdRun(pepperEnv, target, '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
+
+}
+
+def verifyGalera(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def out = salt.getReturnValues(salt.cmdRun(pepperEnv, 'I@galera:master', 'salt-call mysql.status | grep -A1 wsrep_cluster_size'))
+
+    if ((!out.toString().contains('wsrep_cluster_size')) || (out.toString().contains('0'))) {
+        if (INTERACTIVE.toBoolean()) {
+            input message: "Galera is not working as expected. Please check it and fix it first before clicking on PROCEED."
+        } else {
+            common.errorMsg(out)
+            throw new Exception("Galera is not working as expected")
+        }
+    }
+}
+
+def verifyContrail(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    salt.commandStatus(pepperEnv, target, "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)
+}
+
+
+def verifyService(pepperEnv, target, service) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+    for (t in targetHosts) {
+        try {
+            salt.commandStatus(pepperEnv, t, "service ${service} status", 'running')
+        } catch (Exception er) {
+            common.errorMsg(er)
+            if (INTERACTIVE.toBoolean()) {
+                input message: "${service} service is not running correctly on ${t}. Please fix it first manually and only then click on PROCEED."
+            } else {
+                throw new Exception("${service} service is not running correctly on ${t}")
+            }
+        }
+    }
+}
+
+def verifyCeph(pepperEnv, target, type) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+    for (t in targetHosts) {
+        def hostname = salt.getReturnValues(salt.getPillar(pepperEnv, t, 'linux:network:hostname'))
+        try {
+            salt.commandStatus(pepperEnv, t, "systemctl status ceph-${type}${hostname}", 'running')
+        } catch (Exception er) {
+            common.errorMsg(er)
+            if (INTERACTIVE.toBoolean()) {
+                input message: "Ceph-${type}${hostname} service is not running correctly on ${t}. Please fix it first manually and only then click on PROCEED."
+            } else {
+                throw new Exception("Ceph-${type}${hostname} service is not running correctly on ${t}")
+            }
+        }
+    }
+}
+
+def verifyCephOsds(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+    for (t in targetHosts) {
+        def osd_ids = []
+        // get list of osd disks of the host
+        salt.runSaltProcessStep(pepperEnv, t, 'saltutil.sync_grains', [], null, true, 5)
+        def cephGrain = salt.getGrain(pepperEnv, t, 'ceph')
+        if(cephGrain['return'].isEmpty()){
+            throw new Exception("Ceph salt grain cannot be found!")
+        }
+        common.print(cephGrain)
+        def ceph_disks = cephGrain['return'][0].values()[0].values()[0]['ceph_disk']
+        for (i in ceph_disks) {
+            def osd_id = i.getKey().toString()
+            osd_ids.add('osd.' + osd_id)
+            print("Will check osd." + osd_id)
+        }
+        for (i in osd_ids) {
+            try {
+                salt.commandStatus(pepperEnv, t, "ceph osd tree | grep -w ${i}", 'up')
+            } catch (Exception er) {
+                common.errorMsg(er)
+                if (INTERACTIVE.toBoolean()) {
+                    input message: "Ceph ${i} is not running correctly on ${t}. Please fix it first manually and only then click on PROCEED."
+                } else {
+                    throw new Exception("Ceph ${i} is not running correctly on ${t}")
+                }
+            }
+        }
+    }
+}
+
+
+timeout(time: 12, unit: 'HOURS') {
+    node() {
+        try {
+
+            stage('Setup virtualenv for Pepper') {
+                python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            }
+
+            // TODO, add possibility to update just specific components like kernel, openstack, contrail, ovs, rabbitmq, galera, etc.
+
+            /*
+                * Update section
+            */
+            if (updates.contains("cfg")) {
+                def target = 'I@salt:master'
+                if (salt.testTarget(pepperEnv, target)) {
+                    def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
+                    getCfgNodeProvider(pepperEnv, master)
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        virsh.liveSnapshotPresent(pepperEnv, CFG_NODE_PROVIDER, master, SNAPSHOT_NAME)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t, target)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                }
+            }
+
+            if (updates.contains("ctl")) {
+                def target = CTL_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'ctl'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyAPIs(pepperEnv, target)
+                }
+            }
+
+            if (updates.contains("prx")) {
+                def target = PRX_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'prx'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'nginx')
+                }
+            }
+
+            if (updates.contains("msg")) {
+                def target = MSG_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'msg'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'rabbitmq-server')
+                }
+            }
+
+            if (updates.contains("dbs")) {
+                def target = DBS_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    backupGalera(pepperEnv)
+                    salt.runSaltProcessStep(pepperEnv, target, 'service.stop', ['keepalived'], null, true)
+                    salt.runSaltProcessStep(pepperEnv, target, 'service.stop', ['haproxy'], null, true)
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'dbs'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (REBOOT.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        // one by one update
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyGalera(pepperEnv)
+                }
+            }
+
+            if (updates.contains("ntw")) {
+                def target = NTW_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    backupContrail(pepperEnv)
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'ntw'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t, 'contrail')
+                            highstate(pepperEnv, t)
+                            verifyContrail(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target, 'contrail')
+                        highstate(pepperEnv, target)
+                        verifyContrail(pepperEnv, target)
+                    }
+                }
+            }
+
+            if (updates.contains("nal")) {
+                def target = NAL_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'nal'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t, 'contrail')
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target, 'contrail')
+                        highstate(pepperEnv, target)
+                    }
+                    verifyContrail(pepperEnv, target)
+                }
+            }
+
+            if (updates.contains("gtw-virtual")) {
+                def target = GTW_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'gtw'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'neutron-dhcp-agent')
+                }
+            }
+
+            if (updates.contains("cmn")) {
+                def target = CMN_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'cmn'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    } else {
+                        backupCeph(pepperEnv)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyCeph(pepperEnv, target, 'mon@')
+                }
+            }
+
+            if (updates.contains("rgw")) {
+                def target = RGW_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'rgw'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyCeph(pepperEnv, target, 'radosgw@rgw.')
+                }
+            }
+
+            if (updates.contains("log")) {
+                def target = LOG_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'log'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                }
+            }
+
+            if (updates.contains("mon")) {
+                def target = MON_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'mon'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                }
+            }
+
+            if (updates.contains("mtr")) {
+                def target = MTR_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'mtr'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                }
+            }
+
+            if (updates.contains("cid")) {
+                def target = CID_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        def generalTarget = 'cid'
+                        liveSnapshot(pepperEnv, target, generalTarget)
+                    }
+                    updatePkgs(pepperEnv, target, 'cicd')
+                    highstate(pepperEnv, target)
+                    verifyService(pepperEnv, target, 'docker')
+                }
+            }
+
+            //
+            //physical machines update CMP_TARGET
+            //
+            if (updates.contains("cmp")) {
+                def target = CMP_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'nova-compute')
+                }
+            }
+
+            if (updates.contains("kvm")) {
+                def target = KVM_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'libvirt-bin')
+                }
+            }
+
+            if (updates.contains("osd")) {
+                def target = CEPH_OSD_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyCephOsds(pepperEnv, target)
+                }
+            }
+
+            if (updates.contains("gtw-physical")) {
+                def target = GTW_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            updatePkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        updatePkgs(pepperEnv, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'neutron-dhcp-agent')
+                }
+            }
+
+            /*
+                * Rollback section
+            */
+          /*  if (rollbacks.contains("ctl")) {
+                if (salt.testTarget(pepperEnv, 'I@salt:master')) {
+                    stage('ROLLBACK_CFG') {
+                        input message: "To rollback CFG nodes run the following commands on kvm nodes hosting the CFG nodes: virsh destroy cfg0X.domain; virsh define /var/lib/libvirt/images/cfg0X.domain.xml; virsh start cfg0X.domain; virsh snapshot-delete cfg0X.domain --metadata ${SNAPSHOT_NAME}; rm /var/lib/libvirt/images/cfg0X.domain.${SNAPSHOT_NAME}.qcow2; rm /var/lib/libvirt/images/cfg0X.domain.xml; At the end restart 'docker' service on all cicd nodes and run 'linux.system.repo' Salt states on cicd nodes. After running the previous commands current pipeline job will be killed."
+                        //rollbackSaltMaster(pepperEnv, 'I@salt:master')
+                        //finishSaltMasterRollback(pepperEnv, 'I@salt:master')
+                    }
+                }
+            } */
+
+            if (rollbacks.contains("ctl")) {
+                def target = CTL_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'ctl')
+                        verifyAPIs(pepperEnv, target)
+                    } else {
+                        removeNode(pepperEnv, target, 'ctl')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("prx")) {
+                def target = PRX_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'prx')
+                        verifyService(pepperEnv, target, 'nginx')
+                    } else {
+                        removeNode(pepperEnv, target, 'prx')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("msg")) {
+                def target = MSG_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'msg')
+                        salt.enforceState(pepperEnv, target, 'rabbitmq')
+                        verifyService(pepperEnv, target, 'rabbitmq-server')
+                    } else {
+                        removeNode(pepperEnv, target, 'msg')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("dbs")) {
+                def target = DBS_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'dbs')
+                        clusterGalera(pepperEnv)
+                        verifyGalera(pepperEnv)
+                    } else {
+                        removeNode(pepperEnv, target, 'dbs')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("ntw")) {
+                def target = NTW_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'ntw')
+                        verifyContrail(pepperEnv, target)
+                    } else {
+                        removeNode(pepperEnv, target, 'ntw')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("nal")) {
+                def target = NAL_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'nal')
+                        verifyContrail(pepperEnv, target)
+                    } else {
+                        removeNode(pepperEnv, target, 'nal')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("gtw-virtual")) {
+                def target = GTW_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'gtw')
+                        verifyService(pepperEnv, target, 'neutron-dhcp-agent')
+                    } else {
+                        removeNode(pepperEnv, target, 'gtw')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("cmn")) {
+                def target = CMN_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'cmn')
+                        verifyCeph(pepperEnv, target, 'mon@')
+                    } else {
+                        removeNode(pepperEnv, target, 'cmn')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("rgw")) {
+                def target = RGW_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'rgw')
+                        verifyCeph(pepperEnv, target, 'radosgw@rgw.')
+                    } else {
+                        removeNode(pepperEnv, target, 'rgw')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("log")) {
+                def target = LOG_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'log')
+                    } else {
+                        removeNode(pepperEnv, target, 'log')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("mon")) {
+                def target = MON_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'mon')
+                    } else {
+                        removeNode(pepperEnv, target, 'mon')
+                    }
+                }
+            }
+
+            if (rollbacks.contains("mtr")) {
+                def target = MTR_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
+                        rollback(pepperEnv, target, 'mtr')
+                    } else {
+                        removeNode(pepperEnv, target, 'mtr')
+                    }
+                }
+            }
+            /*
+            if (ROLLBACK_CID.toBoolean()) {
+                def target = 'cid*'
+                if (salt.testTarget(pepperEnv, target)) {
+                    stage('ROLLBACK_CID') {
+                        input message: "To rollback CICD nodes run the following commands on kvm nodes hosting the cicd nodes: virsh destroy cid0X.domain; virsh define /var/lib/libvirt/images/cid0X.domain.xml; virsh start cid0X.domain; virsh snapshot-delete cid0X.domain --metadata ${SNAPSHOT_NAME}; rm /var/lib/libvirt/images/cid0X.domain.${SNAPSHOT_NAME}.qcow2; rm /var/lib/libvirt/images/cid0X.domain.xml; At the end restart 'docker' service on all cicd nodes and run 'linux.system.repo' Salt states on cicd nodes. After running the previous commands current pipeline job will be killed."
+                    }
+                }
+            } */
+
+            //
+            //physical machines rollback CMP_TARGET
+            //
+            if (rollbacks.contains("cmp")) {
+                def target = CMP_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            rollbackPkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        rollbackPkgs(pepperEnv, target, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'nova-compute')
+                }
+            }
+
+            if (rollbacks.contains("kvm")) {
+                def target = KVM_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            rollbackPkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        rollbackPkgs(pepperEnv, target, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'libvirt-bin')
+                }
+            }
+
+            if (rollbacks.contains("osd")) {
+                def target = CEPH_OSD_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            rollbackPkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        rollbackPkgs(pepperEnv, target, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyCephOsds(pepperEnv, target)
+                }
+            }
+
+            if (rollbacks.contains("gtw-physical")) {
+                def target = GTW_TARGET
+                if (salt.testTarget(pepperEnv, target)) {
+                    if (PER_NODE.toBoolean()) {
+                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+                        for (t in targetHosts) {
+                            rollbackPkgs(pepperEnv, t)
+                            highstate(pepperEnv, t)
+                        }
+                    } else {
+                        rollbackPkgs(pepperEnv, target, target)
+                        highstate(pepperEnv, target)
+                    }
+                    verifyService(pepperEnv, target, 'neutron-dhcp-agent')
+                }
+            }
+
+            /*
+                * Merge snapshots section
+            */
+            if (merges.contains("cfg")) {
+                if (salt.testTarget(pepperEnv, 'I@salt:master')) {
+                    mergeSnapshot(pepperEnv, 'I@salt:master')
+                }
+            }
+
+            if (merges.contains("ctl")) {
+                if (salt.testTarget(pepperEnv, CTL_TARGET)) {
+                    mergeSnapshot(pepperEnv, CTL_TARGET, 'ctl')
+                }
+            }
+
+            if (merges.contains("prx")) {
+                if (salt.testTarget(pepperEnv, PRX_TARGET)) {
+                    mergeSnapshot(pepperEnv, PRX_TARGET, 'prx')
+                }
+            }
+
+            if (merges.contains("msg")) {
+                if (salt.testTarget(pepperEnv, MSG_TARGET)) {
+                    mergeSnapshot(pepperEnv, MSG_TARGET, 'msg')
+                }
+            }
+
+            if (merges.contains("dbs")) {
+                if (salt.testTarget(pepperEnv, DBS_TARGET)) {
+                    mergeSnapshot(pepperEnv, DBS_TARGET, 'dbs')
+                }
+            }
+
+            if (merges.contains("ntw")) {
+                if (salt.testTarget(pepperEnv, NTW_TARGET)) {
+                    mergeSnapshot(pepperEnv, NTW_TARGET, 'ntw')
+                }
+            }
+
+            if (merges.contains("nal")) {
+                if (salt.testTarget(pepperEnv, NAL_TARGET)) {
+                    mergeSnapshot(pepperEnv, NAL_TARGET, 'nal')
+                }
+            }
+
+            if (merges.contains("gtw-virtual")) {
+                if (salt.testTarget(pepperEnv, GTW_TARGET)) {
+                    mergeSnapshot(pepperEnv, GTW_TARGET, 'gtw')
+                }
+            }
+
+            if (merges.contains("cmn")) {
+                if (salt.testTarget(pepperEnv, CMN_TARGET)) {
+                    mergeSnapshot(pepperEnv, CMN_TARGET, 'cmn')
+                }
+            }
+
+            if (merges.contains("rgw")) {
+                if (salt.testTarget(pepperEnv, RGW_TARGET)) {
+                    mergeSnapshot(pepperEnv, RGW_TARGET, 'rgw')
+                }
+            }
+
+            if (merges.contains("log")) {
+                if (salt.testTarget(pepperEnv, LOG_TARGET)) {
+                    mergeSnapshot(pepperEnv, LOG_TARGET. 'log')
+                }
+            }
+
+            if (merges.contains("mon")) {
+                if (salt.testTarget(pepperEnv, MON_TARGET)) {
+                    mergeSnapshot(pepperEnv, MON_TARGET, 'mon')
+                }
+            }
+
+            if (merges.contains("mtr")) {
+                if (salt.testTarget(pepperEnv, MTR_TARGET)) {
+                    mergeSnapshot(pepperEnv, MTR_TARGET, 'mtr')
+                }
+            }
+
+            if (merges.contains("cid")) {
+                if (salt.testTarget(pepperEnv, CID_TARGET)) {
+                    mergeSnapshot(pepperEnv, CID_TARGET, 'cid')
+                }
+            }
+
+            if (RESTORE_GALERA.toBoolean()) {
+                restoreGalera(pepperEnv)
+            }
+
+            if (RESTORE_CONTRAIL_DB.toBoolean()) {
+                restoreContrailDb(pepperEnv)
+            }
+
+        } catch (Throwable e) {
+            // If there was an error or exception thrown, the build failed
+            currentBuild.result = "FAILURE"
+            currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+            throw e
+        }
+    }
+}
