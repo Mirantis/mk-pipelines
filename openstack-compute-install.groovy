@@ -98,6 +98,11 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
+        stage("Install monitoring") {
+            salt.enforceState(pepperEnv, targetLiveAll, 'prometheus')
+            salt.enforceState(pepperEnv, 'I@prometheus', 'prometheus')
+        }
+
         } catch (Throwable e) {
             // If there was an error or exception thrown, the build failed
             currentBuild.result = "FAILURE"

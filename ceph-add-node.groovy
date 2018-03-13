@@ -73,5 +73,8 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.enforceState(pepperEnv, 'I@ceph:radosgw', ['keepalived', 'haproxy', 'ceph.radosgw'], true)
             }
         }
+
+        salt.enforceState(pepperEnv, HOST, 'prometheus')
+        salt.enforceState(pepperEnv, 'I@prometheus', 'prometheus')
     }
 }
