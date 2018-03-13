@@ -22,9 +22,12 @@ try {
 } catch (MissingPropertyException e) {
     storages = ['local']
 }
+
+def insufficientPermissions = false
+
 timeout(time: 12, unit: 'HOURS') {
   node() {
-    try{
+    try {
       stage("promote") {
         // promote is restricted to users in aptly-promote-users LDAP group
         if(jenkinsUtils.currentUserInGroups(["mcp-cicd-admins", "aptly-promote-users"])){
@@ -37,18 +40,26 @@ timeout(time: 12, unit: 'HOURS') {
             }
           }
         }else{
+            insufficientPermissions = true
             throw new Exception(String.format("You don't have permissions to make aptly promote from source:%s to target:%s! Only CI/CD and QA team can perform aptly promote.", SOURCE, TARGET))
         }
       }
     } catch (Throwable e) {
        // If there was an error or exception thrown, the build failed
-       currentBuild.result = "FAILURE"
-       currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+       if (insufficientPermissions) {
+         currentBuild.result = "ABORTED"
+         currentBuild.description = "Promote aborted due to insufficient permissions"
+       } else {
+         currentBuild.result = "FAILURE"
+         currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+       }
        throw e
     } finally {
-       common.sendNotification(currentBuild.result,"",["slack"])
-       def _extra_descr = "${SOURCE}=>${TARGET}:\n${COMPONENTS} ${packages}"
-       currentBuild.description = currentBuild.description ? _extra_descr + " " + currentBuild.description : _extra_descr
+       if (!insufficientPermissions) {
+         common.sendNotification(currentBuild.result,"",["slack"])
+         def _extra_descr = "${SOURCE}=>${TARGET}:\n${COMPONENTS} ${packages}"
+         currentBuild.description = currentBuild.description ? _extra_descr + " " + currentBuild.description : _extra_descr
+       }
     }
   }
 }
