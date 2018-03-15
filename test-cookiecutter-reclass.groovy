@@ -96,7 +96,7 @@ def testModel(modelFile, testEnv) {
     while (nbTry < 5) {
         nbTry++
         try {
-            saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", clusterName, EXTRA_FORMULAS, testEnv, formulasRevision=DISTRIB_REVISION)
+            saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", clusterName, EXTRA_FORMULAS, testEnv, "pkg", DISTRIB_REVISION)
             break
         } catch (Exception e) {
             if (e.getMessage() == "script returned exit code 124") {
