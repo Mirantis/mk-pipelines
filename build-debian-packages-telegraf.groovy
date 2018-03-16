@@ -47,8 +47,8 @@ timeout(time: 12, unit: 'HOURS') {
                 }
                 stage("build package") {
                     img.inside{
-                        sh("""wget https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz &&
-                            tar xf go1.9.2.linux-amd64.tar.gz &&
+                        sh("""wget https://storage.googleapis.com/golang/go1.9.4.linux-amd64.tar.gz &&
+                            tar xf go1.9.4.linux-amd64.tar.gz &&
                             export GOROOT=\$PWD/go &&
                             export PATH=\$PATH:\$GOROOT/bin &&
                             export GOPATH=\$PWD &&
