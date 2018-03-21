@@ -39,6 +39,7 @@ timeout(time: 12, unit: 'HOURS') {
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
                 validate.runBasicContainer(saltMaster, TEMPEST_TARGET_NODE, TEST_IMAGE)
                 sh "rm -rf ${artifacts_dir}"
+                salt.cmdRun(saltMaster, TEMPEST_TARGET_NODE, "rm -rf ${remote_artifacts_dir}")
                 salt.cmdRun(saltMaster, TEMPEST_TARGET_NODE, "mkdir -p ${remote_artifacts_dir}")
                 validate.configureContainer(saltMaster, TEMPEST_TARGET_NODE, PROXY, TOOLS_REPO, TEMPEST_REPO)
             }
