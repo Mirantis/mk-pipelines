@@ -26,7 +26,7 @@ try {
 def insufficientPermissions = false
 
 timeout(time: 12, unit: 'HOURS') {
-  node() {
+  node("docker&&hardware") {
     try {
       stage("promote") {
         // promote is restricted to users in aptly-promote-users LDAP group
