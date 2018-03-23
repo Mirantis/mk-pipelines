@@ -579,7 +579,17 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Finalize') {
                 if (common.checkContains('STACK_INSTALL', 'finalize')) {
-                    salt.runSaltProcessStep(venvPepper, '*', 'state.apply', [], null, true)
+                    def gluster_compound = 'I@glusterfs:server'
+                    // Enforce highstate asynchronous only on the nodes which are not glusterfs servers
+                    salt.enforceHighstate(venvPepper, '* and not ' + gluster_compound)
+                    // Iterate over nonempty set of gluster servers and apply highstates one by one
+                    // TODO: switch to batch once salt 2017.7+ would be used
+                    def glusterMinions = salt.getMinionsSorted(venvPepper, gluster_compound)
+                    if ( !glusterMinions.isEmpty() ) {
+                        for ( target in glusterMinions ) {
+                            salt.enforceHighstate(venvPepper, target)
+                        }
+                    }
                 }
 
                 outputsPretty = common.prettify(outputs)
