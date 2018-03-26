@@ -53,7 +53,9 @@ timeout(time: 12, unit: 'HOURS') {
         }
         stage("publish") {
             aptly.snapshotRepo(APTLY_URL, APTLY_REPO, timestamp)
-            aptly.publish(APTLY_URL)
+            retry(2){
+              aptly.publish(APTLY_URL)
+            }
         }
        }
        } catch (Throwable e) {

@@ -36,7 +36,9 @@ timeout(time: 12, unit: 'HOURS') {
               if (storage == "local") {
                 storage = ""
               }
-              aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY, '-d --timeout 600', DUMP_PUBLISH.toBoolean(), storage)
+              retry(2){
+                aptly.promotePublish(APTLY_URL, SOURCE, TARGET, RECREATE, components, packages, DIFF_ONLY, '-d --timeout 600', DUMP_PUBLISH.toBoolean(), storage)
+              }
             }
           }
         }else{
