@@ -11,8 +11,8 @@
  *   ROLLBACK_BY_REDEPLOY       Omit taking live snapshots. Rollback is planned to be done by redeployment (bool)
  *   STOP_SERVICES              Stop API services before update (bool)
  *   TARGET_UPDATES             Comma separated list of nodes to update (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
- *   TARGET_ROLLBACKS           Comma separated list of nodes to update (Valid values are ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cmp,kvm,osd,gtw-physical)
- *   TARGET_MERGES              Comma separated list of nodes to update (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid)
+ *   TARGET_ROLLBACKS           Comma separated list of nodes to rollback (Valid values are ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cmp,kvm,osd,gtw-physical)
+ *   TARGET_MERGES              Comma separated list of nodes to merge (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid)
  *   CTL_TARGET                 Salt targeted CTL nodes (ex. ctl*)
  *   PRX_TARGET                 Salt targeted PRX nodes (ex. prx*)
  *   MSG_TARGET                 Salt targeted MSG nodes (ex. msg*)
@@ -28,11 +28,11 @@
  *   CMP_TARGET                 Salt targeted physical compute nodes (ex. cmp001*)
  *   KVM_TARGET                 Salt targeted physical KVM nodes (ex. kvm01*)
  *   CEPH_OSD_TARGET            Salt targeted physical Ceph OSD nodes (ex. osd001*)
- *   GTW_TARGET                 Salt targeted physical GTW nodes (ex. gtw01*)
+ *   GTW_TARGET                 Salt targeted physical or virtual GTW nodes (ex. gtw01*)
  *   REBOOT                     Reboot nodes after update (bool)
- *   ROLLBACK_PKG_VERSIONS      Space separated list of pkgs=versions to rollback to (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
- *   PURGE_PKGS                 Space separated list of pkgs=versions to be purged (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
- *   REMOVE_PKGS                Space separated list of pkgs=versions to be removed (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
+ *   ROLLBACK_PKG_VERSIONS      Space separated list of pkgs=versions to rollback to on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
+ *   PURGE_PKGS                 Space separated list of pkgs=versions to be purged on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
+ *   REMOVE_PKGS                Space separated list of pkgs=versions to be removed on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
  *   RESTORE_GALERA             Restore Galera DB (bool)
  *   RESTORE_CONTRAIL_DB        Restore Cassandra and Zookeeper DBs for OpenContrail (bool)
  *
@@ -539,6 +539,7 @@ def mergeSnapshot(pepperEnv, tgt, generalTarget='') {
         }
         nodeCount++
     }
+    salt.minionsReachable(pepperEnv, 'I@salt:master', tgt)
 }
 
 
@@ -599,6 +600,12 @@ def removeNode(pepperEnv, tgt, generalTarget) {
         }
         nodeCount++
     }
+}
+
+def saltMasterBackup(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+    salt.enforceState(pepperEnv, 'I@salt:master', 'backupninja')
+    salt.cmdRun(pepperEnv, 'I@salt:master', "su root -c 'backupninja -n --run /etc/backup.d/200.backup.rsync'")
 }
 
 def backupCeph(pepperEnv, tgt) {
@@ -823,6 +830,8 @@ timeout(time: 12, unit: 'HOURS') {
                     getCfgNodeProvider(pepperEnv, master)
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
                         virsh.liveSnapshotPresent(pepperEnv, CFG_NODE_PROVIDER, master, SNAPSHOT_NAME)
+                    } else {
+                        saltMasterBackup(pepperEnv)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
@@ -997,7 +1006,7 @@ timeout(time: 12, unit: 'HOURS') {
                         def generalTarget = 'cmn'
                         liveSnapshot(pepperEnv, target, generalTarget)
                     } else {
-                        backupCeph(pepperEnv)
+                        backupCeph(pepperEnv, target)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
@@ -1181,7 +1190,7 @@ timeout(time: 12, unit: 'HOURS') {
             /*
                 * Rollback section
             */
-          /*  if (rollbacks.contains("ctl")) {
+          /*  if (rollbacks.contains("cfg")) {
                 if (salt.testTarget(pepperEnv, 'I@salt:master')) {
                     stage('ROLLBACK_CFG') {
                         input message: "To rollback CFG nodes run the following commands on kvm nodes hosting the CFG nodes: virsh destroy cfg0X.domain; virsh define /var/lib/libvirt/images/cfg0X.domain.xml; virsh start cfg0X.domain; virsh snapshot-delete cfg0X.domain --metadata ${SNAPSHOT_NAME}; rm /var/lib/libvirt/images/cfg0X.domain.${SNAPSHOT_NAME}.qcow2; rm /var/lib/libvirt/images/cfg0X.domain.xml; At the end restart 'docker' service on all cicd nodes and run 'linux.system.repo' Salt states on cicd nodes. After running the previous commands current pipeline job will be killed."
@@ -1426,54 +1435,66 @@ timeout(time: 12, unit: 'HOURS') {
             if (merges.contains("ctl")) {
                 if (salt.testTarget(pepperEnv, CTL_TARGET)) {
                     mergeSnapshot(pepperEnv, CTL_TARGET, 'ctl')
+                    verifyService(pepperEnv, CTL_TARGET, 'nova-api')
                 }
             }
 
             if (merges.contains("prx")) {
                 if (salt.testTarget(pepperEnv, PRX_TARGET)) {
                     mergeSnapshot(pepperEnv, PRX_TARGET, 'prx')
+                    verifyService(pepperEnv, PRX_TARGET, 'nginx')
                 }
             }
 
             if (merges.contains("msg")) {
                 if (salt.testTarget(pepperEnv, MSG_TARGET)) {
                     mergeSnapshot(pepperEnv, MSG_TARGET, 'msg')
+                    verifyService(pepperEnv, MSG_TARGET, 'rabbitmq-server')
                 }
             }
 
             if (merges.contains("dbs")) {
                 if (salt.testTarget(pepperEnv, DBS_TARGET)) {
                     mergeSnapshot(pepperEnv, DBS_TARGET, 'dbs')
+                    verifyGalera(pepperEnv)
+                    backupGalera(pepperEnv)
                 }
             }
 
             if (merges.contains("ntw")) {
                 if (salt.testTarget(pepperEnv, NTW_TARGET)) {
                     mergeSnapshot(pepperEnv, NTW_TARGET, 'ntw')
+                    verifyContrail(pepperEnv, NTW_TARGET)
+                    backupContrail(pepperEnv)
                 }
             }
 
             if (merges.contains("nal")) {
                 if (salt.testTarget(pepperEnv, NAL_TARGET)) {
                     mergeSnapshot(pepperEnv, NAL_TARGET, 'nal')
+                    verifyContrail(pepperEnv, NAL_TARGET)
                 }
             }
 
             if (merges.contains("gtw-virtual")) {
                 if (salt.testTarget(pepperEnv, GTW_TARGET)) {
                     mergeSnapshot(pepperEnv, GTW_TARGET, 'gtw')
+                    verifyService(pepperEnv, GTW_TARGET, 'neutron-dhcp-agent')
                 }
             }
 
             if (merges.contains("cmn")) {
                 if (salt.testTarget(pepperEnv, CMN_TARGET)) {
                     mergeSnapshot(pepperEnv, CMN_TARGET, 'cmn')
+                    verifyCeph(pepperEnv, CMN_TARGET, 'mon@')
+                    backupCeph(pepperEnv, CMN_TARGET)
                 }
             }
 
             if (merges.contains("rgw")) {
                 if (salt.testTarget(pepperEnv, RGW_TARGET)) {
                     mergeSnapshot(pepperEnv, RGW_TARGET, 'rgw')
+                    verifyCeph(pepperEnv, RGW_TARGET, 'radosgw@rgw.')
                 }
             }
 
@@ -1498,15 +1519,18 @@ timeout(time: 12, unit: 'HOURS') {
             if (merges.contains("cid")) {
                 if (salt.testTarget(pepperEnv, CID_TARGET)) {
                     mergeSnapshot(pepperEnv, CID_TARGET, 'cid')
+                    verifyService(pepperEnv, CID_TARGET, 'docker')
                 }
             }
 
             if (RESTORE_GALERA.toBoolean()) {
                 restoreGalera(pepperEnv)
+                verifyGalera(pepperEnv)
             }
 
             if (RESTORE_CONTRAIL_DB.toBoolean()) {
                 restoreContrailDb(pepperEnv)
+                // verification is already present in restore pipelines
             }
 
         } catch (Throwable e) {
