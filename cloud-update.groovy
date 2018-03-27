@@ -709,7 +709,7 @@ def restoreContrailDb(pepperEnv) {
     ]
 }
 
-def verifyAPIs(pepperEnv) {
+def verifyAPIs(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
     salt.cmdRun(pepperEnv, target, '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
@@ -913,13 +913,11 @@ timeout(time: 12, unit: 'HOURS') {
                 def target = DBS_TARGET
                 if (salt.testTarget(pepperEnv, target)) {
                     backupGalera(pepperEnv)
-                    salt.runSaltProcessStep(pepperEnv, target, 'service.stop', ['keepalived'], null, true)
-                    salt.runSaltProcessStep(pepperEnv, target, 'service.stop', ['haproxy'], null, true)
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
                         def generalTarget = 'dbs'
                         liveSnapshot(pepperEnv, target, generalTarget)
                     }
-                    if (REBOOT.toBoolean()) {
+                    if (REBOOT.toBoolean() || PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         // one by one update
                         for (t in targetHosts) {
