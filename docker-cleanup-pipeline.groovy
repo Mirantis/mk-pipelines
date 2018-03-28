@@ -28,7 +28,7 @@ timeout(time: 12, unit: 'HOURS') {
           """, false)
     }
     stage("Run docker system prune"){
-      salt.cmdRun(pepperEnv, 'I@jenkins:slave', "docker system prune -f")
+      salt.cmdRun(pepperEnv, 'I@jenkins:slave', "docker system prune -f", false) // dont verify the result
     }
   }
 }
