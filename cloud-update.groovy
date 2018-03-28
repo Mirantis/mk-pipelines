@@ -460,7 +460,7 @@ def highstate(pepperEnv, target) {
     stage("Apply highstate on ${target} nodes") {
         try {
             common.retry(3){
-                //salt.enforceHighstate(pepperEnv, target)
+                salt.enforceHighstate(pepperEnv, target)
             }
         } catch (Exception e) {
             common.errorMsg(e)
@@ -712,21 +712,40 @@ def restoreContrailDb(pepperEnv) {
 def verifyAPIs(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
-    salt.cmdRun(pepperEnv, target, '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
-
+    def out = salt.cmdRun(pepperEnv, target, '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
+    if (out.toString().toLowerCase().contains('error')) {
+        common.errorMsg(out)
+        if (INTERACTIVE.toBoolean()) {
+            input message: "APIs are not working as expected. Please fix it manually."
+        } else {
+            throw new Exception("APIs are not working as expected")
+        }
+    }
 }
 
-def verifyGalera(pepperEnv) {
+def verifyGalera(pepperEnv, target, count=0, maxRetries=200) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
-    def out = salt.getReturnValues(salt.cmdRun(pepperEnv, 'I@galera:master', 'salt-call mysql.status | grep -A1 wsrep_cluster_size'))
-
-    if ((!out.toString().contains('wsrep_cluster_size')) || (out.toString().contains('0'))) {
-        if (INTERACTIVE.toBoolean()) {
-            input message: "Galera is not working as expected. Please check it and fix it first before clicking on PROCEED."
+    def out
+    while(count < maxRetries) {
+        try {
+            out = salt.getReturnValues(salt.cmdRun(pepperEnv, target, 'salt-call mysql.status | grep -A1 wsrep_cluster_size'))
+        } catch (Exception er) {
+            common.infoMsg(er)
+        }
+        if ((!out.toString().contains('wsrep_cluster_size')) || (out.toString().contains('0'))) {
+            count++
+            if (count == maxRetries) {
+                if (INTERACTIVE.toBoolean()) {
+                    input message: "Galera is not working as expected. Please check it and fix it first before clicking on PROCEED."
+                } else {
+                    common.errorMsg(out)
+                    throw new Exception("Galera is not working as expected")
+                }
+            }
+            sleep(time: 500, unit: 'MILLISECONDS')
         } else {
-            common.errorMsg(out)
-            throw new Exception("Galera is not working as expected")
+            break
         }
     }
 }
@@ -919,16 +938,16 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                     if (REBOOT.toBoolean() || PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-                        // one by one update
                         for (t in targetHosts) {
                             updatePkgs(pepperEnv, t)
                             highstate(pepperEnv, t)
+                            verifyGalera(pepperEnv, t)
                         }
                     } else {
                         updatePkgs(pepperEnv, target)
                         highstate(pepperEnv, target)
+                        verifyGalera(pepperEnv, target)
                     }
-                    verifyGalera(pepperEnv)
                 }
             }
 
@@ -1241,7 +1260,7 @@ timeout(time: 12, unit: 'HOURS') {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
                         rollback(pepperEnv, target, 'dbs')
                         clusterGalera(pepperEnv)
-                        verifyGalera(pepperEnv)
+                        verifyGalera(pepperEnv, target)
                     } else {
                         removeNode(pepperEnv, target, 'dbs')
                     }
@@ -1454,7 +1473,7 @@ timeout(time: 12, unit: 'HOURS') {
             if (merges.contains("dbs")) {
                 if (salt.testTarget(pepperEnv, DBS_TARGET)) {
                     mergeSnapshot(pepperEnv, DBS_TARGET, 'dbs')
-                    verifyGalera(pepperEnv)
+                    verifyGalera(pepperEnv, DBS_TARGET)
                     backupGalera(pepperEnv)
                 }
             }
@@ -1523,7 +1542,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (RESTORE_GALERA.toBoolean()) {
                 restoreGalera(pepperEnv)
-                verifyGalera(pepperEnv)
+                verifyGalera(pepperEnv, DBS_TARGET)
             }
 
             if (RESTORE_CONTRAIL_DB.toBoolean()) {
