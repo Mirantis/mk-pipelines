@@ -12,7 +12,7 @@
  *   STOP_SERVICES              Stop API services before update (bool)
  *   TARGET_UPDATES             Comma separated list of nodes to update (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
  *   TARGET_ROLLBACKS           Comma separated list of nodes to rollback (Valid values are ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cmp,kvm,osd,gtw-physical)
- *   TARGET_MERGES              Comma separated list of nodes to merge (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid)
+ *   TARGET_SNAPSHOT_MERGES     Comma separated list of nodes to merge live snapshot for (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid)
  *   CTL_TARGET                 Salt targeted CTL nodes (ex. ctl*)
  *   PRX_TARGET                 Salt targeted PRX nodes (ex. prx*)
  *   MSG_TARGET                 Salt targeted MSG nodes (ex. msg*)
@@ -44,7 +44,7 @@ def virsh = new com.mirantis.mk.Virsh()
 
 def updates = TARGET_UPDATES.tokenize(",").collect{it -> it.trim()}
 def rollbacks = TARGET_ROLLBACKS.tokenize(",").collect{it -> it.trim()}
-def merges = TARGET_MERGES.tokenize(",").collect{it -> it.trim()}
+def merges = TARGET_SNAPSHOT_MERGES.tokenize(",").collect{it -> it.trim()}
 
 def pepperEnv = "pepperEnv"
 def minions
