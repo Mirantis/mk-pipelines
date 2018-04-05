@@ -10,6 +10,9 @@
  *   PER_NODE                   Target nodes will be managed one by one (bool)
  *   ROLLBACK_BY_REDEPLOY       Omit taking live snapshots. Rollback is planned to be done by redeployment (bool)
  *   STOP_SERVICES              Stop API services before update (bool)
+ *   TARGET_KERNEL_UPDATES      Comma separated list of nodes to update kernel if newer version is available (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
+ *   TARGET_REBOOT              Comma separated list of nodes to reboot after update or physical machine rollback (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
+ *   TARGET_HIGHSTATE           Comma separated list of nodes to run Salt Highstate on after update or physical machine rollback (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
  *   TARGET_UPDATES             Comma separated list of nodes to update (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
  *   TARGET_ROLLBACKS           Comma separated list of nodes to rollback (Valid values are ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cmp,kvm,osd,gtw-physical)
  *   TARGET_SNAPSHOT_MERGES     Comma separated list of nodes to merge live snapshot for (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid)
@@ -29,7 +32,6 @@
  *   KVM_TARGET                 Salt targeted physical KVM nodes (ex. kvm01*)
  *   CEPH_OSD_TARGET            Salt targeted physical Ceph OSD nodes (ex. osd001*)
  *   GTW_TARGET                 Salt targeted physical or virtual GTW nodes (ex. gtw01*)
- *   REBOOT                     Reboot nodes after update (bool)
  *   ROLLBACK_PKG_VERSIONS      Space separated list of pkgs=versions to rollback to on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
  *   PURGE_PKGS                 Space separated list of pkgs=versions to be purged on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
  *   REMOVE_PKGS                Space separated list of pkgs=versions to be removed on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
@@ -56,8 +58,9 @@ def commandKwargs
 def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
+    def kernelUpdates = TARGET_KERNEL_UPDATES.tokenize(",").collect{it -> it.trim()}
+    def distUpgrade = false
     def commandKwargs
-    def distUpgrade
     def pkgs
     def out
 
@@ -65,7 +68,11 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
 
     stage("List package upgrades") {
         common.infoMsg("Listing all the packages that have a new update available on ${target}")
-        pkgs = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, target, 'pkg.list_upgrades', [], null, true))
+        if (kernelUpdates.contains(targetType)) {
+            pkgs = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, target, 'pkg.list_upgrades', [], null, true))
+        } else {
+            pkgs = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, target, 'pkg.list_upgrades', ['dist_upgrade=False'], null, true))
+        }
         if(targetPackages != "" && targetPackages != "*"){
             common.infoMsg("Note that only the ${targetPackages} would be installed from the above list of available updates on the ${target}")
         }
@@ -91,27 +98,29 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
 
     if (targetPackages != "") {
         // list installed versions of pkgs that will be upgraded
-        def installedPkgs = []
-        def newPkgs = []
-        def targetPkgList = targetPackages.tokenize(',')
-        for (pkg in targetPkgList) {
-            def version
-            try {
-                def pkgsDetails = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, target, 'pkg.info_installed', [pkg], null, true))
-                version = pkgsDetails.get(pkg).get('version')
-            } catch (Exception er) {
-                common.infoMsg("${pkg} not installed yet")
+        if (targetType == 'kvm' || targetType == 'cmp' || targetType == 'osd' || targetType == 'gtw-physical') {
+            def installedPkgs = []
+            def newPkgs = []
+            def targetPkgList = targetPackages.tokenize(',')
+            for (pkg in targetPkgList) {
+                def version
+                try {
+                    def pkgsDetails = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, target, 'pkg.info_installed', [pkg], null, true))
+                    version = pkgsDetails.get(pkg).get('version')
+                } catch (Exception er) {
+                    common.infoMsg("${pkg} not installed yet")
+                }
+                if (version?.trim()) {
+                    installedPkgs.add(pkg + '=' + version)
+                } else {
+                    newPkgs.add(pkg)
+                }
             }
-            if (version?.trim()) {
-                installedPkgs.add(pkg + '=' + version)
-            } else {
-                newPkgs.add(pkg)
-            }
+            common.warningMsg("the following list of pkgs will be upgraded")
+            common.warningMsg(installedPkgs.join(" "))
+            common.warningMsg("the following list of pkgs will be newly installed")
+            common.warningMsg(newPkgs.join(" "))
         }
-        common.warningMsg("the following list of pkgs will be upgraded")
-        common.warningMsg(installedPkgs.join(" "))
-        common.warningMsg("the following list of pkgs will be newly installed")
-        common.warningMsg(newPkgs.join(" "))
         // set variables
         command = "pkg.install"
         packages = targetPackages
@@ -119,15 +128,16 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
 
     }else {
         command = "pkg.upgrade"
-        commandKwargs = ['dist_upgrade': 'true']
-        distUpgrade = true
+        if (kernelUpdates.contains(targetType)) {
+            commandKwargs = ['dist_upgrade': 'true']
+            distUpgrade = true
+        }
         packages = null
     }
 
-    // todo exception to cfg or cicd
     stage("stop services on ${target}") {
-        if ((STOP_SERVICES.toBoolean()) && (targetType != 'cicd')) {
-            if (targetType == 'contrail') {
+        if ((STOP_SERVICES.toBoolean()) && (targetType != 'cid')) {
+            if (targetType == 'ntw' || targetType == 'nal') {
                 stopContrailServices(pepperEnv, target)
             } else {
                 def probe = salt.getFirstMinion(pepperEnv, "${target}")
@@ -138,7 +148,7 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
 
     stage('Apply package upgrades') {
         // salt master pkg
-        if (targetType == 'I@salt:master') {
+        if (targetType == 'cfg') {
             common.warningMsg('salt-master pkg upgrade, rerun the pipeline if disconnected')
             salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ['salt-master'], null, true, 5)
             salt.minionsReachable(pepperEnv, 'I@salt:master', '*')
@@ -453,26 +463,30 @@ def stopContrailServices(pepperEnv, target) {
     }
 }
 
-def highstate(pepperEnv, target) {
+def highstate(pepperEnv, target, type) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
-
-    stage("Apply highstate on ${target} nodes") {
-        try {
-            common.retry(3){
-                salt.enforceHighstate(pepperEnv, target)
-            }
-        } catch (Exception e) {
-            common.errorMsg(e)
-            if (INTERACTIVE.toBoolean()) {
-                input message: "Highstate failed on ${target}. Fix it manually or run rollback on ${target}."
-            } else {
-                throw new Exception("highstate failed")
+    def highstates = TARGET_HIGHSTATE.tokenize(",").collect{it -> it.trim()}
+    def reboots = TARGET_REBOOT.tokenize(",").collect{it -> it.trim()}
+    // optionally run highstate
+    if (highstates.contains(type)) {
+        stage("Apply highstate on ${target} nodes") {
+            try {
+                common.retry(3){
+                    salt.enforceHighstate(pepperEnv, target)
+                }
+            } catch (Exception e) {
+                common.errorMsg(e)
+                if (INTERACTIVE.toBoolean()) {
+                    input message: "Highstate failed on ${target}. Fix it manually or run rollback on ${target}."
+                } else {
+                    throw new Exception("highstate failed")
+                }
             }
         }
     }
     // optionally reboot
-    if (REBOOT.toBoolean()) {
+    if (reboots.contains(type)) {
         stage("Reboot ${target} nodes") {
             salt.runSaltProcessStep(pepperEnv, target, 'system.reboot', null, null, true, 5)
             sleep(10)
@@ -592,7 +606,7 @@ def removeNode(pepperEnv, tgt, generalTarget) {
         def target = salt.stripDomainName(t)
         def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
         salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.destroy', ["${target}.${domain}"], null, true)
-        salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.undefine', ["${target}.${domain}"], null, true)
+        //salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.undefine', ["${target}.${domain}"], null, true)
         try {
             salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ${target}.${domain} -y")
         } catch (Exception e) {
@@ -844,6 +858,7 @@ timeout(time: 12, unit: 'HOURS') {
             */
             if (updates.contains("cfg")) {
                 def target = 'I@salt:master'
+                def type = 'cfg'
                 if (salt.testTarget(pepperEnv, target)) {
                     def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
                     getCfgNodeProvider(pepperEnv, master)
@@ -855,32 +870,32 @@ timeout(time: 12, unit: 'HOURS') {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t, target)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                 }
             }
 
             if (updates.contains("ctl")) {
                 def target = CTL_TARGET
+                def type = 'ctl'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'ctl'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyAPIs(pepperEnv, target)
                 }
@@ -888,20 +903,20 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("prx")) {
                 def target = PRX_TARGET
+                def type = 'prx'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'prx'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'nginx')
                 }
@@ -909,20 +924,20 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("msg")) {
                 def target = MSG_TARGET
+                def type = 'msg'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'msg'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'rabbitmq-server')
                 }
@@ -930,22 +945,22 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("dbs")) {
                 def target = DBS_TARGET
+                def type = 'dbs'
                 if (salt.testTarget(pepperEnv, target)) {
                     backupGalera(pepperEnv)
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'dbs'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (REBOOT.toBoolean() || PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                             verifyGalera(pepperEnv, t)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                         verifyGalera(pepperEnv, target)
                     }
                 }
@@ -953,22 +968,22 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("ntw")) {
                 def target = NTW_TARGET
+                def type = 'ntw'
                 if (salt.testTarget(pepperEnv, target)) {
                     backupContrail(pepperEnv)
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'ntw'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t, 'contrail')
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                             verifyContrail(pepperEnv, t)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target, 'contrail')
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                         verifyContrail(pepperEnv, target)
                     }
                 }
@@ -976,20 +991,20 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("nal")) {
                 def target = NAL_TARGET
+                def type = 'nal'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'nal'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t, 'contrail')
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target, 'contrail')
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyContrail(pepperEnv, target)
                 }
@@ -997,20 +1012,20 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("gtw-virtual")) {
                 def target = GTW_TARGET
+                def type = 'gtw-virtual'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'gtw'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'neutron-dhcp-agent')
                 }
@@ -1018,22 +1033,22 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("cmn")) {
                 def target = CMN_TARGET
+                def type = 'cmn'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'cmn'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     } else {
                         backupCeph(pepperEnv, target)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyCeph(pepperEnv, target, 'mon@')
                 }
@@ -1041,20 +1056,20 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("rgw")) {
                 def target = RGW_TARGET
+                def type = 'rgw'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'rgw'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyCeph(pepperEnv, target, 'radosgw@rgw.')
                 }
@@ -1062,73 +1077,73 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("log")) {
                 def target = LOG_TARGET
+                def type = 'log'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'log'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                 }
             }
 
             if (updates.contains("mon")) {
                 def target = MON_TARGET
+                def type = 'mon'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'mon'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                 }
             }
 
             if (updates.contains("mtr")) {
                 def target = MTR_TARGET
+                def type = 'mtr'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'mtr'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                 }
             }
 
             if (updates.contains("cid")) {
                 def target = CID_TARGET
+                def type = 'cid'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        def generalTarget = 'cid'
-                        liveSnapshot(pepperEnv, target, generalTarget)
+                        liveSnapshot(pepperEnv, target, type)
                     }
-                    updatePkgs(pepperEnv, target, 'cicd')
-                    highstate(pepperEnv, target)
+                    updatePkgs(pepperEnv, target, type)
+                    highstate(pepperEnv, target, type)
                     verifyService(pepperEnv, target, 'docker')
                 }
             }
@@ -1138,16 +1153,17 @@ timeout(time: 12, unit: 'HOURS') {
             //
             if (updates.contains("cmp")) {
                 def target = CMP_TARGET
+                def type = 'cmp'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'nova-compute')
                 }
@@ -1155,16 +1171,17 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("kvm")) {
                 def target = KVM_TARGET
+                def type = 'kvm'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'libvirt-bin')
                 }
@@ -1172,16 +1189,17 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("osd")) {
                 def target = CEPH_OSD_TARGET
+                def type = 'osd'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyCephOsds(pepperEnv, target)
                 }
@@ -1189,16 +1207,17 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (updates.contains("gtw-physical")) {
                 def target = GTW_TARGET
+                def type = 'gtw-physical'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            updatePkgs(pepperEnv, t, type)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
-                        updatePkgs(pepperEnv, target)
-                        highstate(pepperEnv, target)
+                        updatePkgs(pepperEnv, target, type)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'neutron-dhcp-agent')
                 }
@@ -1374,16 +1393,17 @@ timeout(time: 12, unit: 'HOURS') {
             //
             if (rollbacks.contains("cmp")) {
                 def target = CMP_TARGET
+                def type = 'cmp'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
                             rollbackPkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
                         rollbackPkgs(pepperEnv, target, target)
-                        highstate(pepperEnv, target)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'nova-compute')
                 }
@@ -1391,16 +1411,17 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (rollbacks.contains("kvm")) {
                 def target = KVM_TARGET
+                def type = 'kvm'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
                             rollbackPkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
                         rollbackPkgs(pepperEnv, target, target)
-                        highstate(pepperEnv, target)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'libvirt-bin')
                 }
@@ -1408,16 +1429,17 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (rollbacks.contains("osd")) {
                 def target = CEPH_OSD_TARGET
+                def type = 'osd'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
                             rollbackPkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
                         rollbackPkgs(pepperEnv, target, target)
-                        highstate(pepperEnv, target)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyCephOsds(pepperEnv, target)
                 }
@@ -1425,16 +1447,17 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (rollbacks.contains("gtw-physical")) {
                 def target = GTW_TARGET
+                def type = 'gtw-physical'
                 if (salt.testTarget(pepperEnv, target)) {
                     if (PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
                             rollbackPkgs(pepperEnv, t)
-                            highstate(pepperEnv, t)
+                            highstate(pepperEnv, t, type)
                         }
                     } else {
                         rollbackPkgs(pepperEnv, target, target)
-                        highstate(pepperEnv, target)
+                        highstate(pepperEnv, target, type)
                     }
                     verifyService(pepperEnv, target, 'neutron-dhcp-agent')
                 }
