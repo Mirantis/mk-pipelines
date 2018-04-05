@@ -10,6 +10,7 @@
  *  TEST_CLUSTER_NAMES list of comma separated cluster names to test (optional, default all cluster levels)
  *  LEGACY_TEST_MODE legacy test mode flag
  *  RECLASS_IGNORE_CLASS_NOTFOUND ignore missing class flag for reclass config
+ *  RECLASS_VERSION Version of reclass to be used (branch, ...)
  *  APT_REPOSITORY extra apt repository url
  *  APT_REPOSITORY_GPG extra apt repository url GPG
  */
