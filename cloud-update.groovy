@@ -47,6 +47,7 @@ def virsh = new com.mirantis.mk.Virsh()
 def updates = TARGET_UPDATES.tokenize(",").collect{it -> it.trim()}
 def rollbacks = TARGET_ROLLBACKS.tokenize(",").collect{it -> it.trim()}
 def merges = TARGET_SNAPSHOT_MERGES.tokenize(",").collect{it -> it.trim()}
+def reboots = TARGET_REBOOT.tokenize(",").collect{it -> it.trim()}
 
 def pepperEnv = "pepperEnv"
 def minions
@@ -138,10 +139,10 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
     stage("stop services on ${target}") {
         if ((STOP_SERVICES.toBoolean()) && (targetType != 'cid')) {
             if (targetType == 'ntw' || targetType == 'nal') {
-                stopContrailServices(pepperEnv, target)
+                contrailServices(pepperEnv, target, 'stop')
             } else {
                 def probe = salt.getFirstMinion(pepperEnv, "${target}")
-                stopServices(pepperEnv, probe, target)
+                services(pepperEnv, probe, target, 'stop')
             }
         }
     }
@@ -268,7 +269,7 @@ def rollbackPkgs(pepperEnv, target, targetType = "", targetPackages="") {
             return
         }
         if (STOP_SERVICES.toBoolean()) {
-            stopServices(pepperEnv, probe, target)
+            services(pepperEnv, probe, target, 'stop')
         }
     }
 
@@ -422,43 +423,54 @@ def finishSaltMasterRollback(pepperEnv, target, path='/var/lib/libvirt/images') 
     }
 }*/
 
-def stopServices(pepperEnv, probe, target) {
-    def openstack = new com.mirantis.mk.Openstack()
-    def services = []
-    services.add('keepalived')
-    services.add('nginx')
-    services.add('haproxy')
-    services.add('nova-api')
-    services.add('cinder')
-    services.add('glance')
-    services.add('heat')
-    services.add('neutron')
-    services.add('apache2')
-    services.add('rabbitmq-server')
-    if (INTERACTIVE.toBoolean()) {
-        openstack.stopServices(pepperEnv, probe, target, services, true)
+def services(pepperEnv, probe, target, action='stop') {
+    def services = ["keepalived","haproxy","nginx","nova-api","cinder","glance","heat","neutron","apache2","rabbitmq-server"]
+    if (action == 'stop') {
+        def openstack = new com.mirantis.mk.Openstack()
+        openstack.stopServices(pepperEnv, probe, target, services, INTERACTIVE.toBoolean())
     } else {
-        openstack.stopServices(pepperEnv, probe, target, services)
+        def salt = new com.mirantis.mk.Salt()
+        for (s in services) {
+            def outputServicesStr = salt.getReturnValues(salt.cmdRun(pepperEnv, "${probe}*", "service --status-all | grep ${s} | awk \'{print \$4}\'"))
+            def servicesList = outputServicesStr.tokenize("\n").init() //init() returns the items from the Iterable excluding the last item
+            if (servicesList) {
+                for (name in servicesList) {
+                    if (!name.contains('Salt command')) {
+                        salt.runSaltProcessStep(pepperEnv, "${target}*", 'service.start', ["${name}"])
+                    }
+                }
+            }
+        }
     }
 }
 
-// must be stopped separately due to OC on Trusty
-def stopContrailServices(pepperEnv, target) {
+// must be treated separately due to OC on Trusty
+def contrailServices(pepperEnv, target, action='stop') {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
     def services = []
-    services.add('keepalived')
-    services.add('haproxy')
-    services.add('supervisor-control')
-    services.add('supervisor-config')
-    services.add('supervisor-database')
-    services.add('zookeeper')
-    services.add('ifmap-server')
+    if (action == 'stop') {
+        services.add('supervisor-control')
+        services.add('supervisor-config')
+        services.add('supervisor-database')
+        services.add('zookeeper')
+        services.add('ifmap-server')
+        services.add('haproxy')
+        services.add('keepalived')
+    } else {
+        services.add('keepalived')
+        services.add('haproxy')
+        services.add('ifmap-server')
+        services.add('zookeeper')
+        services.add('supervisor-database')
+        services.add('supervisor-config')
+        services.add('supervisor-control')
+    }
     for (s in services) {
         try {
-            salt.runSaltProcessStep(pepperEnv, target, 'service.stop', [s], null, true)
+            salt.runSaltProcessStep(pepperEnv, target, "service.${action}", [s], null, true)
         } catch (Exception er) {
-            common.infoMsg(er)
+            common.warningMsg(er)
         }
     }
 }
@@ -483,6 +495,13 @@ def highstate(pepperEnv, target, type) {
                     throw new Exception("highstate failed")
                 }
             }
+        }
+    } else if (!reboots.contains(type) && STOP_SERVICES.toBoolean() && type != 'cid') {
+        if (type == 'ntw' || type == 'nal') {
+            contrailServices(pepperEnv, target, 'start')
+        } else {
+            def probe = salt.getFirstMinion(pepperEnv, "${target}")
+            services(pepperEnv, probe, target, 'start')
         }
     }
     // optionally reboot
@@ -543,7 +562,7 @@ def mergeSnapshot(pepperEnv, tgt, generalTarget='') {
     def nodeCount = 1
     for (t in target_hosts) {
         if (tgt == 'I@salt:master') {
-            def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
+            def master = salt.getReturnValues(salt.getPillar(pepperEnv, t, 'linux:network:hostname'))
             getCfgNodeProvider(pepperEnv, master)
             virsh.liveSnapshotMerge(pepperEnv, CFG_NODE_PROVIDER, master, SNAPSHOT_NAME)
         } else {
@@ -951,7 +970,7 @@ timeout(time: 12, unit: 'HOURS') {
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
                         liveSnapshot(pepperEnv, target, type)
                     }
-                    if (REBOOT.toBoolean() || PER_NODE.toBoolean()) {
+                    if (reboots.contains(type) || PER_NODE.toBoolean()) {
                         def targetHosts = salt.getMinionsSorted(pepperEnv, target)
                         for (t in targetHosts) {
                             updatePkgs(pepperEnv, t, type)
