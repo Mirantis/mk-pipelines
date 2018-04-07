@@ -75,6 +75,6 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         salt.enforceState(pepperEnv, HOST, 'prometheus')
-        salt.enforceState(pepperEnv, 'I@prometheus', 'prometheus')
+        salt.enforceState(pepperEnv, 'I@prometheus:server', 'prometheus')
     }
 }
