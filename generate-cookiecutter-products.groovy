@@ -222,9 +222,13 @@ parameters:
                 smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
                 smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
                 smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
+                smc['MCP_VERSION'] = "${mcpVersion}"
                 if (templateContext['default_context']['local_repositories'] == 'True'){
+                    def localRepoIP = templateContext['default_context']['local_repo_url']
+                    smc['MCP_SALT_REPO_KEY'] = "http://${localRepoIP}/public.gpg"
+                    smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}/ubuntu-xenial"
                     smc['PIPELINES_FROM_ISO'] = 'false'
-                    smc['PIPELINE_REPO_URL'] = 'http://' + templateContext['default_context']['aptly_server_deploy_address'] + ':8088'
+                    smc['PIPELINE_REPO_URL'] = "http://${localRepoIP}:8088"
                 }
                 if (templateContext['default_context']['upstream_proxy_enabled'] == 'True'){
                     if (templateContext['default_context']['upstream_proxy_auth_enabled'] == 'True'){
