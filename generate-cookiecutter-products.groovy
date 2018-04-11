@@ -205,8 +205,16 @@ parameters:
 
                 // download create-config-drive
                 // FIXME: that should be refactored, to use git clone - to be able download it from custom repo.
-                def config_drive_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/config-drive/create_config_drive.sh"
-                def user_data_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/config-drive/master_config.sh"
+                def mcpCommonScriptsBranch = templateContext.default_context.mcp_common_scripts_branch
+                if (mcpCommonScriptsBranch == '') {
+                    mcpCommonScriptsBranch = mcpVersion
+                    // Don't have nightly for mcp-common-scripts repo, therefore use master
+                    if(mcpVersion == "nightly"){
+                        mcpCommonScriptsBranch = 'master'
+                    }
+                }
+                def config_drive_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${mcpCommonScriptsBranch}/config-drive/create_config_drive.sh"
+                def user_data_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${mcpCommonScriptsBranch}/config-drive/master_config.sh"
 
                 sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
                 sh "wget -O user_data.sh ${user_data_script_url}"
