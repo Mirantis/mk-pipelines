@@ -7,33 +7,6 @@
  *
 **/
 
-// Deprecation to avoid unexpected behaviour because it should be passed via initial context.
-// Need to delete this "if" statement at 1 April 2018.
-if(env.COOKIECUTTER_TEMPLATE_CREDENTIALS ||
-   env.COOKIECUTTER_TEMPLATE_URL ||
-   env.COOKIECUTTER_TEMPLATE_BRANCH ||
-   env.COOKIECUTTER_TEMPLATE_PATH ||
-   env.SHARED_RECLASS_URL){
-    println '''
-    DEPRECATION: Please note that the following variables are deprocated:
-    - COOKIECUTTER_TEMPLATE_CREDENTIALS
-    - COOKIECUTTER_TEMPLATE_URL
-    - COOKIECUTTER_TEMPLATE_BRANCH
-    - COOKIECUTTER_TEMPLATE_PATH
-    - SHARED_RECLASS_URL
-    You need to pass the values using the following variables from initial cookiecutter context:
-    - cookiecutter_template_url
-    - cookiecutter_template_branch
-    - shared_reclass_url
-    The following variables are not needed anymore:
-    - COOKIECUTTER_TEMPLATE_CREDENTIALS - cookiecutter-templates repos are accessible for anounimous
-                                        (https://gerrit.mcp.mirantis.net)
-    - COOKIECUTTER_TEMPLATE_PATH - hardcoded to "${env.WORKSPACE}/template"
-    '''
-    currentBuild.result = "FAILURE"
-    return
-}
-
 common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
