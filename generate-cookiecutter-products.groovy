@@ -210,6 +210,7 @@ parameters:
                     smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}/ubuntu-xenial"
                     smc['PIPELINES_FROM_ISO'] = 'false'
                     smc['PIPELINE_REPO_URL'] = "http://${localRepoIP}:8088"
+                    smc['LOCAL_REPOS'] = 'true'
                 }
                 if (templateContext['default_context']['upstream_proxy_enabled'] == 'True'){
                     if (templateContext['default_context']['upstream_proxy_auth_enabled'] == 'True'){
