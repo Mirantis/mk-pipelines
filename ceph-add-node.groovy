@@ -74,7 +74,15 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
 
-        salt.enforceState(pepperEnv, HOST, 'prometheus')
-        salt.enforceState(pepperEnv, 'I@prometheus:server', 'prometheus')
+        stage("Update/Install monitoring") {
+            //Collect Grains
+            salt.enforceState(pepperEnv, HOST, 'salt.minion.grains')
+            salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.refresh_modules')
+            salt.runSaltProcessStep(pepperEnv, HOST, 'mine.update')
+            sleep(5)
+
+            salt.enforceState(pepperEnv, HOST, 'prometheus')
+            salt.enforceState(pepperEnv, 'I@prometheus:server', 'prometheus')
+        }
     }
 }
