@@ -19,12 +19,7 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
-        stage('Start restore') {
-            // # actual upgrade
-
-            stage('Ask for manual confirmation') {
-                input message: "Are you sure you have the correct backups ready? Do you really want to continue to restore Cassandra?"
-            }
+        stage('Restore') {
             try {
                 salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'], null, true)
             } catch (Exception er) {
@@ -68,10 +63,12 @@ timeout(time: 12, unit: 'HOURS') {
 
             // wait until supervisor-database service is up
             salt.commandStatus(pepperEnv, 'I@cassandra:backup:client', 'service supervisor-database status', 'running')
-            sleep(5)
+            sleep(60)
+
             // performs restore
-            salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', "su root -c 'salt-call state.sls cassandra'")
+            salt.enforceState(pepperEnv, 'I@cassandra:backup:client', "cassandra.backup")
             salt.runSaltProcessStep(pepperEnv, 'I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
+            sleep(5)
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and not I@cassandra:backup:client', 'system.reboot', null, null, true, 5)
 
             // wait until supervisor-database service is up

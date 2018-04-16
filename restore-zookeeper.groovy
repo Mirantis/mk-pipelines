@@ -19,13 +19,7 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
-        stage('Start restore') {
-            // # actual upgrade
-
-            stage('Ask for manual confirmation') {
-                input message: "Are you sure you have the correct backups ready? Do you really want to continue to restore Zookeeper?"
-            }
-            // Zookeeper restore section
+        stage('Restore') {
             try {
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['supervisor-config'], null, true)
             } catch (Exception er) {
@@ -69,7 +63,7 @@ timeout(time: 12, unit: 'HOURS') {
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
 
             // performs restore
-            salt.cmdRun(pepperEnv, 'I@opencontrail:control', "su root -c 'salt-call state.sls zookeeper'")
+            salt.enforceState(pepperEnv, 'I@opencontrail:control', "zookeeper.backup")
 
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.start', ['zookeeper'], null, true)
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.start', ['supervisor-config'], null, true)
