@@ -16,6 +16,10 @@
  *   DOCKER_IMAGES
  *   GIT_CREDENTIALS
  *   GIT_REPO_LIST
+ *   EMAIL_NOTIFY
+ *   NOTIFY_RECIPIENTS
+ *   NOTIFY_TEXT
+ *
  */
 
 common = new com.mirantis.mk.Common()
@@ -51,31 +55,14 @@ def triggerMirrorRepoJob(snapshotId, snapshotName) {
   ]
 }
 
-def gitRepoAddTag(repoURL, repoName, tag, credentials, ref = "HEAD"){
-    git.checkoutGitRepository(repoName, repoURL, "master", credentials)
-    dir(repoName) {
-        def checkTag = sh(script: "git tag -l ${tag}", returnStdout: true)
-        if(checkTag == ""){
-            sh "git tag -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
-        }else{
-            def currentTagRef = sh(script: "git rev-list -n 1 ${tag}", returnStdout: true)
-            if(currentTagRef.equals(ref)){
-                common.infoMsg("Tag is already on the right ref")
-                return
-            }
-            else{
-                sshagent([credentials]) {
-                    sh "git push --delete origin ${tag}"
-                }
-                sh "git tag --delete ${tag}"
-                sh "git tag -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
-            }
-        }
-        sshagent([credentials]) {
-            sh "git push origin ${tag}"
-        }
-    }
+def triggerGitTagJob(gitRepoList, gitCredentials, tag) {
+  build job: "tag-git-repos", parameters: [
+    [$class: 'StringParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
+    [$class: 'StringParameterValue', name: 'GIT_CREDENTIALS', value: gitCredentials],
+    [$class: 'StringParameterValue', name: 'TAG', value: tag]
+  ]
 }
+
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
@@ -100,18 +87,13 @@ timeout(time: 12, unit: 'HOURS') {
                 if(RELEASE_GIT.toBoolean())
                 {
                     common.infoMsg("Promoting Git repositories")
-                    def repos = GIT_REPO_LIST.tokenize('\n')
-                    def repoUrl, repoName, repoCommit, repoArray
-                    for (repo in repos){
-                        if(repo.trim().indexOf(' ') == -1){
-                            throw new IllegalArgumentException("Wrong format of repository and commit input")
-                        }
-                        repoArray = repo.trim().tokenize(' ')
-                        repoName = repoArray[0]
-                        repoUrl = repoArray[1]
-                        repoCommit = repoArray[2]
-                        gitRepoAddTag(repoUrl, repoName, TARGET_REVISION, GIT_CREDENTIALS, repoCommit)
-                    }
+                    triggerGitTagJob(GIT_REPO_LIST, GIT_CREDENTIALS, TARGET_REVISION)
+
+                }
+                if (EMAIL_NOTIFY.toBoolean()) {
+                    emailext(to: NOTIFY_RECIPIENTS,
+                        body: NOTIFY_TEXT,
+                        subject: "MCP Promotion has been done")
                 }
             }
         } catch (Throwable e) {
