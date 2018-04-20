@@ -201,6 +201,13 @@ timeout(time: 12, unit: 'HOURS') {
                             envParams.put('cluster_name', STACK_CLUSTER_NAME)
                         }
 
+                        if (common.validInputParam('STACK_COMPUTE_COUNT')) {
+                            if (STACK_COMPUTE_COUNT.toInteger() > 0){
+                                common.infoMsg("Setting cluster_node_count to ${STACK_COMPUTE_COUNT}")
+                                envParams.put('cluster_node_count', STACK_COMPUTE_COUNT)
+                            }
+                        }
+
                         openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv)
                     }
 
