@@ -56,7 +56,7 @@ def triggerMirrorRepoJob(snapshotId, snapshotName) {
 }
 
 def triggerGitTagJob(gitRepoList, gitCredentials, tag) {
-  build job: "tag-git-repos", parameters: [
+  build job: "tag-git-repos-stable", parameters: [
     [$class: 'StringParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
     [$class: 'StringParameterValue', name: 'GIT_CREDENTIALS', value: gitCredentials],
     [$class: 'StringParameterValue', name: 'TAG', value: tag]
