@@ -16,6 +16,9 @@
  *
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
  *   SALT_MASTER_URL            URL of Salt master
+ *
+ * optional parameters for overwriting soft params
+ *   SALT_OVERRIDES              YAML with overrides for Salt deployment
  */
 
 common = new com.mirantis.mk.Common()
@@ -24,6 +27,7 @@ aws = new com.mirantis.mk.Aws()
 orchestrate = new com.mirantis.mk.Orchestrate()
 python = new com.mirantis.mk.Python()
 salt = new com.mirantis.mk.Salt()
+
 
 // Define global variables
 def venv
@@ -84,6 +88,17 @@ timeout(time: 12, unit: 'HOURS') {
                 // Setup virtualenv for pepper
                 python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             }
+
+            // Set up override params
+            if (common.validInputParam('SALT_OVERRIDES')) {
+                stage('Set Salt overrides') {
+                    salt.setSaltOverrides(venvPepper,  SALT_OVERRIDES)
+                }
+            }
+
+            //
+            // Install
+            //
 
             stage('Install core infrastructure') {
                 def staticMgmtNetwork = false
