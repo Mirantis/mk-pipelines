@@ -16,6 +16,12 @@ def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 
+def getNodeProvider(pepperEnv, name) {
+    def salt = new com.mirantis.mk.Salt()
+    def kvm = salt.getKvmMinionId(pepperEnv)
+    return salt.getReturnValues(salt.getPillar(pepperEnv, "${kvm}", "salt:control:cluster:internal:node:${name}:provider"))
+}
+
 def stopServices(pepperEnv, probe, target, type) {
     def openstack = new com.mirantis.mk.Openstack()
     def services = []
@@ -86,7 +92,7 @@ def vcpTestUpgrade(pepperEnv) {
 
     if (SKIP_VM_RELAUNCH.toBoolean() == false) {
 
-        def upgNodeProvider = salt.getNodeProvider(pepperEnv, test_upgrade_node)
+        def upgNodeProvider = getNodeProvider(pepperEnv, test_upgrade_node)
 
         salt.runSaltProcessStep(pepperEnv, "${upgNodeProvider}", 'virt.destroy', ["${test_upgrade_node}.${domain}"])
         salt.runSaltProcessStep(pepperEnv, "${upgNodeProvider}", 'virt.undefine', ["${test_upgrade_node}.${domain}"])
