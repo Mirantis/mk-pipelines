@@ -107,10 +107,17 @@ def vcpTestUpgrade(pepperEnv) {
         salt.runSaltProcessStep(pepperEnv, "${test_upgrade_node}*", 'saltutil.sync_all', [])
     }
 
+    stateRun(pepperEnv, "${test_upgrade_node}*", ['linux.network.proxy'])
+    try {
+        salt.runSaltProcessStep(pepperEnv, "${test_upgrade_node}*", 'state.sls', ["salt.minion.base"], null, true, 60)
+    } catch (Exception e) {
+        common.warningMsg(e)
+    }
+
     stateRun(pepperEnv, "${test_upgrade_node}*", ['linux', 'openssh'])
 
     try {
-        salt.runSaltProcessStep(master, "${test_upgrade_node}*", 'state.sls', ["salt.minion"], null, true, 60)
+        salt.runSaltProcessStep(pepperEnv, "${test_upgrade_node}*", 'state.sls', ["salt.minion"], null, true, 60)
     } catch (Exception e) {
         common.warningMsg(e)
     }
@@ -263,6 +270,13 @@ def vcpRealUpgrade(pepperEnv) {
     // salt '*' saltutil.sync_all
     salt.runSaltProcessStep(pepperEnv, upgrade_general_target, 'saltutil.sync_all', [])
 
+    stateRun(pepperEnv, upgrade_general_target, ['linux.network.proxy'])
+    try {
+        salt.runSaltProcessStep(pepperEnv, upgrade_general_target, 'state.sls', ["salt.minion.base"], null, true, 60)
+    } catch (Exception e) {
+        common.warningMsg(e)
+    }
+
     if (OPERATING_SYSTEM_RELEASE_UPGRADE.toBoolean() == false) {
 
         try {
@@ -302,7 +316,7 @@ def vcpRealUpgrade(pepperEnv) {
             common.warningMsg(e)
         }
         try {
-            salt.runSaltProcessStep(master, upgrade_general_target, 'state.sls', ["salt.minion"], null, true, 60)
+            salt.runSaltProcessStep(pepperEnv, upgrade_general_target, 'state.sls', ["salt.minion"], null, true, 60)
         } catch (Exception e) {
             common.warningMsg(e)
         }

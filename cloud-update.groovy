@@ -352,76 +352,26 @@ def rollbackPkgs(pepperEnv, target, targetType = "", targetPackages="") {
     }
 }
 
-def getCfgNodeProvider(pepperEnv, master_name) {
+def getNodeProvider(pepperEnv, nodeName, type='') {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
-    if (!CFG_NODE_PROVIDER?.trim()) {
-        kvms = salt.getMinions(pepperEnv, 'I@salt:control')
-        for (kvm in kvms) {
-            try {
-                vms = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, kvm, 'virt.list_active_vms', [], null, true))
-                if (vms.toString().contains(master_name)) {
+    def kvms = salt.getMinions(pepperEnv, 'I@salt:control')
+    for (kvm in kvms) {
+        try {
+            vms = salt.getReturnValues(salt.runSaltProcessStep(pepperEnv, kvm, 'virt.list_domains', [], null, true))
+            if (vms.toString().contains(nodeName)) {
+                if (type == 'master' && !CFG_NODE_PROVIDER?.trim()) {
                     CFG_NODE_PROVIDER = kvm
+                } else {
+                    return kvm
                     //break
                 }
-            } catch (Exception er) {
-                common.infoMsg("${master_name} not present on ${kvm}")
             }
-        }
-    }
-}
-
-/*
-def rollbackSaltMaster(pepperEnv, target, path='/var/lib/libvirt/images') {
-    def salt = new com.mirantis.mk.Salt()
-    def common = new com.mirantis.mk.Common()
-    try {
-        input message: "PART1 - Are you sure to rollback ${target}? To rollback click on PROCEED. To skip rollback PART1 click on ABORT."
-    } catch (Exception er) {
-        common.infoMsg("skipping rollback of ${target}")
-        return
-    }
-    def domain = salt.getDomainName(pepperEnv)
-    def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
-    getCfgNodeProvider(pepperEnv, master)
-    try {
-        try {
-            salt.getReturnValues(salt.cmdRun(pepperEnv, CFG_NODE_PROVIDER, "ls -la ${path}/${master}.${domain}.xml"))
-            common.errorMsg('Pipeline is about to disconnect from salt-api. You will have to rerun the pipeline with ROLLBACK_CFG checked and skip PART1 to finish rollback.')
-            salt.cmdRun(pepperEnv, CFG_NODE_PROVIDER, "virsh destroy ${master}.${domain}; virsh define ${path}/${master}.${domain}.xml; virsh start ${master}.${domain} ")
         } catch (Exception er) {
-            common.errorMsg(er)
-            input message: "Rollback for ${target} failed. Rollback manually."
+            common.infoMsg("${nodeName} not present on ${kvm}")
         }
-    } catch (Exception er) {
-        common.errorMsg(er)
-        input message: "Rollback for ${target} failed. Rollback manually."
     }
 }
-
-def finishSaltMasterRollback(pepperEnv, target, path='/var/lib/libvirt/images') {
-    def salt = new com.mirantis.mk.Salt()
-    def common = new com.mirantis.mk.Common()
-    def virsh = new com.mirantis.mk.Virsh()
-    try {
-        input message: "PART2 - Are you sure to finalize ${target} rollback? Click on PROCEED. To skip rollback click on ABORT."
-    } catch (Exception er) {
-        common.infoMsg("skipping finalize rollback of ${target}")
-        return
-    }
-    salt.minionsReachable(pepperEnv, 'I@salt:master', '*')
-    def domain = salt.getDomainName(pepperEnv)
-    def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
-    getCfgNodeProvider(pepperEnv, master)
-    try {
-        virsh.liveSnapshotAbsent(pepperEnv, CFG_NODE_PROVIDER, master, SNAPSHOT_NAME, path)
-        // purge and setup previous repos
-        salt.enforceState(pepperEnv, target, 'linux.system.repo')
-    } catch (Exception e) {
-        common.errorMsg(e)
-        input message: "Check what failed after ${target} rollback. Do you want to PROCEED?"
-    }
-}*/
 
 def services(pepperEnv, probe, target, action='stop') {
     def services = ["keepalived","haproxy","nginx","nova-api","cinder","glance","heat","neutron","apache2","rabbitmq-server"]
@@ -543,14 +493,10 @@ def liveSnapshot(pepperEnv, tgt, generalTarget) {
     def domain = salt.getDomainName(pepperEnv)
     def target_hosts = salt.getMinionsSorted(pepperEnv, "${tgt}")
     common.warningMsg(target_hosts)
-    //def nodeCount = 1
     for (t in target_hosts) {
         def target = salt.stripDomainName(t)
-        def nodeCount = target[4]
-        common.warningMsg(nodeCount)
-        def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+        def nodeProvider = getNodeProvider(pepperEnv, t)
         virsh.liveSnapshotPresent(pepperEnv, nodeProvider, target, SNAPSHOT_NAME)
-        //nodeCount++
     }
 }
 
@@ -559,18 +505,16 @@ def mergeSnapshot(pepperEnv, tgt, generalTarget='') {
     def virsh = new com.mirantis.mk.Virsh()
     def domain = salt.getDomainName(pepperEnv)
     def target_hosts = salt.getMinionsSorted(pepperEnv, "${tgt}")
-    def nodeCount = 1
     for (t in target_hosts) {
         if (tgt == 'I@salt:master') {
             def master = salt.getReturnValues(salt.getPillar(pepperEnv, t, 'linux:network:hostname'))
-            getCfgNodeProvider(pepperEnv, master)
+            getNodeProvider(pepperEnv, master, 'master')
             virsh.liveSnapshotMerge(pepperEnv, CFG_NODE_PROVIDER, master, SNAPSHOT_NAME)
         } else {
             def target = salt.stripDomainName(t)
-            def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+            def nodeProvider = getNodeProvider(pepperEnv, t)
             virsh.liveSnapshotMerge(pepperEnv, nodeProvider, target, SNAPSHOT_NAME)
         }
-        nodeCount++
     }
     salt.minionsReachable(pepperEnv, 'I@salt:master', tgt)
 }
@@ -584,20 +528,16 @@ def rollbackLiveSnapshot(pepperEnv, tgt, generalTarget) {
     def domain = salt.getDomainName(pepperEnv)
     def target_hosts = salt.getMinionsSorted(pepperEnv, "${tgt}")
     // first destroy all vms
-    def nodeCount = 1
     for (t in target_hosts) {
         def target = salt.stripDomainName(t)
-        def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+        def nodeProvider = getNodeProvider(pepperEnv, t)
         salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.destroy', ["${target}.${domain}"], null, true)
-        nodeCount++
     }
-    nodeCount = 1
     // rollback vms
     for (t in target_hosts) {
         def target = salt.stripDomainName(t)
-        def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+        def nodeProvider = getNodeProvider(pepperEnv, t)
         virsh.liveSnapshotRollback(pepperEnv, nodeProvider, target, SNAPSHOT_NAME)
-        nodeCount++
     }
     try {
         salt.minionsReachable(pepperEnv, 'I@salt:master', tgt)
@@ -620,10 +560,9 @@ def removeNode(pepperEnv, tgt, generalTarget) {
     def domain = salt.getDomainName(pepperEnv)
     def target_hosts = salt.getMinionsSorted(pepperEnv, "${tgt}")
     // first destroy all vms
-    def nodeCount = 1
     for (t in target_hosts) {
         def target = salt.stripDomainName(t)
-        def nodeProvider = salt.getNodeProvider(pepperEnv, "${generalTarget}0${nodeCount}")
+        def nodeProvider = getNodeProvider(pepperEnv, t)
         salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.destroy', ["${target}.${domain}"], null, true)
         //salt.runSaltProcessStep(pepperEnv, "${nodeProvider}*", 'virt.undefine', ["${target}.${domain}"], null, true)
         try {
@@ -631,7 +570,6 @@ def removeNode(pepperEnv, tgt, generalTarget) {
         } catch (Exception e) {
             common.warningMsg('does not match any accepted, unaccepted or rejected keys. They were probably already removed. We should continue to run')
         }
-        nodeCount++
     }
 }
 
@@ -880,7 +818,7 @@ timeout(time: 12, unit: 'HOURS') {
                 def type = 'cfg'
                 if (salt.testTarget(pepperEnv, target)) {
                     def master = salt.getReturnValues(salt.getPillar(pepperEnv, target, 'linux:network:hostname'))
-                    getCfgNodeProvider(pepperEnv, master)
+                    getNodeProvider(pepperEnv, master, 'master')
                     if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
                         virsh.liveSnapshotPresent(pepperEnv, CFG_NODE_PROVIDER, master, SNAPSHOT_NAME)
                     } else {
