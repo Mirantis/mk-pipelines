@@ -230,10 +230,9 @@ def vcpRealUpgrade(pepperEnv) {
             stopServices(pepperEnv, node, tgt, general_target)
         }
 
-        def node_count = 1
         for (t in target_hosts) {
             def target = salt.stripDomainName(t)
-            def nodeProvider = salt.getNodeProvider(pepperEnv, "${general_target}0${node_count}")
+            def nodeProvider = salt.getNodeProvider(pepperEnv, t)
             if ((OPERATING_SYSTEM_RELEASE_UPGRADE.toBoolean() == true) && (SKIP_VM_RELAUNCH.toBoolean() == false)) {
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"])
                 sleep(2)
@@ -251,7 +250,6 @@ def vcpRealUpgrade(pepperEnv) {
             } else if (OPERATING_SYSTEM_RELEASE_UPGRADE.toBoolean() == false) {
                 virsh.liveSnapshotPresent(pepperEnv, nodeProvider, target, snapshotName)
             }
-            node_count++
         }
     }
 
@@ -482,10 +480,9 @@ def vcpRollback(pepperEnv) {
             general_target = 'ctl'
         }
 
-        def node_count = 1
         for (t in target_hosts) {
             def target = salt.stripDomainName(t)
-            def nodeProvider = salt.getNodeProvider(pepperEnv, "${general_target}0${node_count}")
+            def nodeProvider = salt.getNodeProvider(pepperEnv, t)
             salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.destroy', ["${target}.${domain}"])
             sleep(2)
             if (OPERATING_SYSTEM_RELEASE_UPGRADE.toBoolean() == true) {
@@ -501,7 +498,6 @@ def vcpRollback(pepperEnv) {
                 salt.runSaltProcessStep(pepperEnv, "${nodeProvider}", 'virt.start', ["${target}.${domain}"])
                 virsh.liveSnapshotAbsent(pepperEnv, nodeProvider, target, snapshotName)
             }
-            node_count++
         }
     }
 
