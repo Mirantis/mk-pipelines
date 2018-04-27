@@ -7,6 +7,8 @@
  * IMAGE_TAGS - Image tags
  * DOCKERFILE_PATH - Relative path to docker file in image repo
  * REGISTRY_URL - Docker registry URL (can be empty)
+ * ARTIFACTORY_URL - URL to artifactory
+ * ARTIFACTORY_NAMESPACE - Artifactory namespace (oss, cicd,...)
  * REGISTRY_CREDENTIALS_ID - Docker hub credentials id
  *
 **/
@@ -15,6 +17,7 @@ def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def git = new com.mirantis.mk.Git()
 def dockerLib = new com.mirantis.mk.Docker()
+def artifactory = new com.mirantis.mcp.MCPArtifactory()
 timeout(time: 12, unit: 'HOURS') {
   node("docker") {
     def workspace = common.getWorkspace()
@@ -28,7 +31,6 @@ timeout(time: 12, unit: 'HOURS') {
         buildArgs = []
       }
       def dockerApp
-      docker.withRegistry(REGISTRY_URL, REGISTRY_CREDENTIALS_ID) {
         stage("checkout") {
            git.checkoutGitRepository('.', IMAGE_GIT_URL, IMAGE_BRANCH, IMAGE_CREDENTIALS_ID)
         }
@@ -58,12 +60,30 @@ timeout(time: 12, unit: 'HOURS') {
           }
         }
         stage("upload to docker hub"){
-          for(int i=0;i<imageTagsList.size();i++){
-            common.infoMsg("Uploading image ${IMAGE_NAME} with tag ${imageTagsList[i]}")
-            dockerApp.push(imageTagsList[i])
+          docker.withRegistry(REGISTRY_URL, REGISTRY_CREDENTIALS_ID) {
+            for(int i=0;i<imageTagsList.size();i++){
+              common.infoMsg("Uploading image ${IMAGE_NAME} with tag ${imageTagsList[i]} to dockerhub")
+              dockerApp.push(imageTagsList[i])
+            }
           }
         }
-      }
+        stage("upload to artifactory"){
+          if(common.validInputParam("ARTIFACTORY_URL") && common.validInputParam("ARTIFACTORY_NAMESPACE")) {
+             def artifactoryServer = Artifactory.server("mcp-ci")
+             def shortImageName = IMAGE_NAME
+             if (IMAGE_NAME.contains("/")) {
+                shortImageName = IMAGE_NAME.tokenize("/")[1]
+             }
+             for (imageTag in imageTagsList) {
+               sh "docker tag ${IMAGE_NAME} ${ARTIFACTORY_URL}/mirantis/${ARTIFACTORY_NAMESPACE}/${shortImageName}:${imageTag}"
+               artifactory.uploadImageToArtifactory(artifactoryServer, ARTIFACTORY_URL,
+                                                 "mirantis/${ARTIFACTORY_NAMESPACE}/${shortImageName}",
+                                                 imageTag, "docker-dev-local")
+             }
+          }else{
+            common.warningMsg("ARTIFACTORY_URL not given, upload to artifactory skipped")
+          }
+        }
     } catch (Throwable e) {
        // If there was an error or exception thrown, the build failed
        currentBuild.result = "FAILURE"
@@ -74,3 +94,4 @@ timeout(time: 12, unit: 'HOURS') {
     }
   }
 }
+
