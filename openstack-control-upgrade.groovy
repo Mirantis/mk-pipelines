@@ -104,7 +104,7 @@ def vcpTestUpgrade(pepperEnv) {
         }
 
         // salt 'kvm02*' state.sls salt.control
-        salt.enforceState(pepperEnv, "${upgNodeProvider}", 'salt.control')
+        stateRun(pepperEnv, "${upgNodeProvider}", 'salt.control')
         // wait until upg node is registered in salt-key
         salt.minionPresent(pepperEnv, 'I@salt:master', test_upgrade_node)
         // salt '*' saltutil.refresh_pillar
@@ -135,16 +135,17 @@ def vcpTestUpgrade(pepperEnv) {
     } catch (Exception e) {
         common.warningMsg('salt-minion was restarted. We should continue to run')
     }
+    salt.runSaltProcessStep(master, '( I@galera:master or I@galera:slave ) and I@backupninja:client', 'saltutil.sync_grains')
+    salt.runSaltProcessStep(master, '( I@galera:master or I@galera:slave ) and I@backupninja:client', 'mine.flush')
+    salt.runSaltProcessStep(master, '( I@galera:master or I@galera:slave ) and I@backupninja:client', 'mine.update')
+    salt.enforceState(pepperEnv, '( I@galera:master or I@galera:slave ) and I@backupninja:client', 'backupninja')
     try {
         salt.enforceState(pepperEnv, 'I@backupninja:server', ['salt.minion'])
     } catch (Exception e) {
         common.warningMsg('salt-minion was restarted. We should continue to run')
     }
-    // salt '*' state.apply salt.minion.grains
-    //salt.enforceState(pepperEnv, '*', 'salt.minion.grains')
-    // salt -C 'I@backupninja:server' state.sls backupninja
+
     salt.enforceState(pepperEnv, 'I@backupninja:server', 'backupninja')
-    salt.enforceState(pepperEnv, '( I@galera:master or I@galera:slave ) and I@backupninja:client', 'backupninja')
     salt.runSaltProcessStep(pepperEnv, '( I@galera:master or I@galera:slave ) and I@backupninja:client', 'ssh.rm_known_host', ["root", "${backupninja_backup_host}"])
     try {
         salt.cmdRun(pepperEnv, '( I@galera:master or I@galera:slave ) and I@backupninja:client', "arp -d ${backupninja_backup_host}")
