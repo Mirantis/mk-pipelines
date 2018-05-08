@@ -4,6 +4,8 @@
  *  DEFAULT_GIT_URL
  *  CREDENTIALS_ID
  *  KITCHEN_TESTS_PARALLEL
+ *  RUN_TEST_IN_DOCKER     If true, run test stage in docker
+ *  SMOKE_TEST_DOCKER_IMG  Docker image for run test (default "ubuntu:16.04")
  */
 common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
@@ -108,7 +110,28 @@ timeout(time: 12, unit: 'HOURS') {
           saltVersion = "" // default value is empty string, means latest
         }
         withEnv(["SALT_VERSION=${saltVersion}"]) {
-          sh("make clean && make test")
+          boolean run_test_in_docker = (env.RUN_TEST_IN_DOCKER ?: false).asBoolean()
+          if (run_test_in_docker) {
+            def dockerLib = new com.mirantis.mk.Docker()
+            def img = dockerLib.getImage(env.SMOKE_TEST_DOCKER_IMG, "ubuntu:16.04")
+            def workspace = common.getWorkspace()
+            img.inside("-u root:root -v ${workspace}/:/formula/") {
+              sh("""cd /etc/apt/ && echo > sources.list \
+              && echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial main restricted universe multiverse" >> sources.list \
+              && echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial-updates main restricted universe multiverse" >> sources.list \
+              && echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial-backports main restricted universe multiverse" >> sources.list \
+              && echo 'Acquire::Languages "none";' > apt.conf.d/docker-no-languages \
+              && echo 'Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";' > apt.conf.d/docker-gzip-indexes \
+              && echo 'APT::Get::Install-Recommends "false"; APT::Get::Install-Suggests "false";' > apt.conf.d/docker-recommends \
+              && apt-get update \
+              && apt-get install -y git-core wget curl apt-transport-https \
+              && apt-get install -y python-pip python3-pip python-virtualenv python3-virtualenv python-yaml autoconf build-essential""")
+              sh("cd /formula/ && make clean && make test")
+            }
+          } else {
+            common.warningMsg("Those tests should be always be run in clean env! Recommends to use docker env!")
+            sh("make clean && make test")
+          }
         }
       }
     }
