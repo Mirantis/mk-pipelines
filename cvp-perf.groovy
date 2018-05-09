@@ -42,6 +42,7 @@ node() {
             validate.addFiles(saltMaster, TARGET_NODE, remote_artifacts_dir, artifacts_dir)
             archiveArtifacts artifacts: "${artifacts_dir}/*"
             junit "${artifacts_dir}/*.xml"
+            perfReport configType: 'PRT', graphType: 'PRT', sourceDataFiles: "${artifacts_dir}/docker-rally.xml"
         }
     } catch (Throwable e) {
         // If there was an error or exception thrown, the build failed
