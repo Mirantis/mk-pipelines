@@ -15,23 +15,7 @@ git = new com.mirantis.mk.Git()
 def gitRepoAddTag(repoURL, repoName, tag, credentials, ref = "HEAD"){
     git.checkoutGitRepository(repoName, repoURL, "master", credentials)
     dir(repoName) {
-        def checkTag = sh(script: "git tag -l ${tag}", returnStdout: true)
-        if(checkTag == ""){
-            sh "git tag -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
-        }else{
-            def currentTagRef = sh(script: "git rev-list -n 1 ${tag}", returnStdout: true)
-            if(currentTagRef.equals(ref)){
-                common.infoMsg("Tag is already on the right ref")
-                return
-            }
-            else{
-                sshagent([credentials]) {
-                    sh "git push --delete origin ${tag}"
-                }
-                sh "git tag --delete ${tag}"
-                sh "git tag -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
-            }
-        }
+        sh "git tag -f -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
         sshagent([credentials]) {
             sh "git push origin ${tag}"
         }
