@@ -69,16 +69,20 @@ timeout(time: 12, unit: 'HOURS') {
         }
         stage("upload to artifactory"){
           if(common.validInputParam("ARTIFACTORY_URL") && common.validInputParam("ARTIFACTORY_NAMESPACE")) {
-             def artifactoryServer = Artifactory.server("mcp-ci")
+             def artifactoryName = "mcp-ci";
+             def artifactoryServer = Artifactory.server(artifactoryName)
              def shortImageName = IMAGE_NAME
              if (IMAGE_NAME.contains("/")) {
                 shortImageName = IMAGE_NAME.tokenize("/")[1]
              }
              for (imageTag in imageTagsList) {
                sh "docker tag ${IMAGE_NAME} ${ARTIFACTORY_URL}/mirantis/${ARTIFACTORY_NAMESPACE}/${shortImageName}:${imageTag}"
-               artifactory.uploadImageToArtifactory(artifactoryServer, ARTIFACTORY_URL,
-                                                 "mirantis/${ARTIFACTORY_NAMESPACE}/${shortImageName}",
-                                                 imageTag, "docker-dev-local")
+               for(artifactoryRepo in ["docker-dev-local", "docker-prod-local"]){
+                 common.infoMsg("Uploading image ${IMAGE_NAME} with tag ${imageTag} to artifactory ${artifactoryName} using repo ${artifactoryRepo}")
+                 artifactory.uploadImageToArtifactory(artifactoryServer, ARTIFACTORY_URL,
+                                                   "mirantis/${ARTIFACTORY_NAMESPACE}/${shortImageName}",
+                                                   imageTag, artifactoryRepo)
+               }
              }
           }else{
             common.warningMsg("ARTIFACTORY_URL not given, upload to artifactory skipped")
