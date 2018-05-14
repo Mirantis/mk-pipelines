@@ -65,7 +65,7 @@ timeout(time: 12, unit: 'HOURS') {
                 aws.createStack(venv, aws_env_vars, template_file, STACK_NAME, stack_params)
 
                 // wait for stack to be ready
-                aws.waitForStatus(venv, aws_env_vars, STACK_NAME, 'CREATE_COMPLETE')
+                aws.waitForStatus(["venv_path": venv, "env_vars": aws_env_vars, "stack_name": STACK_NAME, "state": 'CREATE_COMPLETE', "max_timeout": 2400])
 
                 // get outputs
                 saltMasterHost = aws.getOutputs(venv, aws_env_vars, STACK_NAME, 'SaltMasterIP')
