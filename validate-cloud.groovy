@@ -70,13 +70,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Run Rally tests') {
                 if (RUN_RALLY_TESTS.toBoolean() == true) {
-                    def report_dir = '/root/qa_results'
-                    try {
-                         if(REPORT_DIR != ""){
-                             report_dir = REPORT_DIR
-                         }
-                    } catch (MissingPropertyException e) {
-                    }
+                    def report_dir = env.REPORT_DIR ?: '/root/qa_results'
                     def rally_variables = ["floating_network=${FLOATING_NETWORK}",
                                            "rally_image=${RALLY_IMAGE}",
                                            "rally_flavor=${RALLY_FLAVOR}",
