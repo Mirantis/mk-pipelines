@@ -223,7 +223,7 @@ parameters:
                 }
 
                 for (i in common.entries(smc)) {
-                    sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" user_data.sh"
+                    sh "sed -i 's,export ${i[0]}=.*,export ${i[0]}=${i[1]},' user_data.sh"
                 }
 
                 // create cfg config-drive
