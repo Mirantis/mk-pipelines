@@ -409,7 +409,10 @@ timeout(time: 12, unit: 'HOURS') {
                         orchestrate.installOpenstackNetwork(venvPepper)
                     }
 
-                    salt.cmdRun(venvPepper, 'I@keystone:server', '. /root/keystonercv3; openstack network list')
+                    // Wait for network to come up, 150s should be enough
+                    common.retry(10, 15) {
+                        salt.cmdRun(venvPepper, 'I@keystone:server', '. /root/keystonercv3; openstack network list')
+                    }
                 }
 
                 if (salt.testTarget(venvPepper, 'I@ironic:conductor')){
