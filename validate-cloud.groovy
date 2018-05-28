@@ -35,7 +35,7 @@
  *   TEST_K8S_NODE               Kubernetes node to run tests from
  *   GENERATE_REPORT             If not false, run report generation command
  *   ACCUMULATE_RESULTS          If true, results from the previous build will be used
- *
+ *   JOB_TIMEOUT                 Job timeout in hours
  */
 
 common = new com.mirantis.mk.Common()
@@ -45,7 +45,12 @@ def python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
 def artifacts_dir = 'validation_artifacts/'
-timeout(time: 12, unit: 'HOURS') {
+if (env.JOB_TIMEOUT == ''){
+    job_timeout = 12
+} else {
+    job_timeout = env.JOB_TIMEOUT.toInteger()
+}
+timeout(time: job_timeout, unit: 'HOURS') {
     node() {
         try{
             stage('Setup virtualenv for Pepper') {
