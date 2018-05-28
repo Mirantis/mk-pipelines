@@ -110,7 +110,7 @@ timeout(time: 12, unit: 'HOURS') {
           saltVersion = "" // default value is empty string, means latest
         }
         withEnv(["SALT_VERSION=${saltVersion}"]) {
-          boolean run_test_in_docker = (env.RUN_TEST_IN_DOCKER ?: false).asBoolean()
+          boolean run_test_in_docker = (env.RUN_TEST_IN_DOCKER ?: false).toBoolean()
           if (run_test_in_docker) {
             def dockerLib = new com.mirantis.mk.Docker()
             def img = dockerLib.getImage(env.SMOKE_TEST_DOCKER_IMG, "ubuntu:16.04")
