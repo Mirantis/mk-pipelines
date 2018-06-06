@@ -342,9 +342,8 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
-                    stage('Install Contrail for Kubernetes') {
+                    stage('Install Contrail control') {
                         orchestrate.installContrailNetwork(venvPepper)
-                        orchestrate.installContrailCompute(venvPepper)
                     }
                 }
 
@@ -354,6 +353,12 @@ timeout(time: 12, unit: 'HOURS') {
                     // collect artifacts (kubeconfig)
                     writeFile(file: 'kubeconfig', text: salt.getFileContent(venvPepper, 'I@kubernetes:master and *01*', '/etc/kubernetes/admin-kube-config'))
                     archiveArtifacts(artifacts: 'kubeconfig')
+                }
+
+                if (common.checkContains('STACK_INSTALL', 'contrail')) {
+                    stage('Install Contrail compute') {
+                        orchestrate.installContrailCompute(venvPepper)
+                    }
                 }
 
                 stage('Install Kubernetes computes') {
