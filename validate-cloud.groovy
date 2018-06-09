@@ -15,7 +15,8 @@
  *   TEMPEST_VERSION             Version of Tempest (tag, branch or commit)
  *   RUN_TEMPEST_TESTS           If not false, run Tempest tests
  *   RUN_RALLY_TESTS             If not false, run Rally tests
- *   RUN_K8S_TESTS               If not false, run Kubernetes tests
+ *   K8S_RALLY                   If not false, run Kubernetes Rally tests
+ *   RUN_K8S_TESTS               If not false, run Kubernetes e2e/conformance tests
  *   RUN_SPT_TESTS               If not false, run SPT tests
  *   SPT_SSH_USER                The name of the user which should be used for ssh to nodes
  *   SPT_IMAGE                   The name of the image for SPT tests
@@ -25,6 +26,8 @@
  *   FLOATING_NETWORK            The name of the external(floating) network
  *   RALLY_IMAGE                 The name of the image for Rally tests
  *   RALLY_FLAVOR                The name of the flavor for Rally image
+ *   RALLY_PLUGINS_REPO          Git repository with Rally plugins
+ *   RALLY_PLUGINS_BRANCH        Git branch which will be used during the checkout
  *   RALLY_CONFIG_REPO           Git repository with files for Rally
  *   RALLY_CONFIG_BRANCH         Git branch which will be used during the checkout
  *   RALLY_SCENARIOS             Path to file or directory with rally scenarios
@@ -36,6 +39,7 @@
  *   GENERATE_REPORT             If not false, run report generation command
  *   ACCUMULATE_RESULTS          If true, results from the previous build will be used
  *   JOB_TIMEOUT                 Job timeout in hours
+ *
  */
 
 common = new com.mirantis.mk.Common()
@@ -76,11 +80,20 @@ timeout(time: job_timeout, unit: 'HOURS') {
             stage('Run Rally tests') {
                 if (RUN_RALLY_TESTS.toBoolean() == true) {
                     def report_dir = env.REPORT_DIR ?: '/root/qa_results'
-                    def rally_variables = ["floating_network=${FLOATING_NETWORK}",
-                                           "rally_image=${RALLY_IMAGE}",
-                                           "rally_flavor=${RALLY_FLAVOR}",
-                                           "availability_zone=${AVAILABILITY_ZONE}"]
-                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables, report_dir)
+                    def platform
+                    def rally_variables
+                    if (K8S_RALLY.toBoolean() == false) {
+                      platform = 'openstack'
+                      rally_variables = ["floating_network=${FLOATING_NETWORK}",
+                                         "rally_image=${RALLY_IMAGE}",
+                                         "rally_flavor=${RALLY_FLAVOR}",
+                                         "availability_zone=${AVAILABILITY_ZONE}"]
+                    } else {
+                      platform = 'k8s'
+                      rally_variables = ["plugins_repo":"${RALLY_PLUGINS_REPO}",
+                                         "plugins_branch":"${RALLY_PLUGINS_BRANCH}"]
+                    }
+                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, platform, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables, report_dir)
                 } else {
                     common.infoMsg("Skipping Rally tests")
                 }
@@ -100,7 +113,7 @@ timeout(time: job_timeout, unit: 'HOURS') {
                 }
             }
 
-            stage('Run k8s bootstrap tests') {
+            stage('Run K8S bootstrap tests') {
                 if (RUN_K8S_TESTS.toBoolean() == true) {
                     def image = 'tomkukral/k8s-scripts'
                     def output_file = 'k8s-bootstrap-tests.txt'
@@ -114,7 +127,7 @@ timeout(time: job_timeout, unit: 'HOURS') {
                 }
             }
 
-            stage('Run k8s conformance e2e tests') {
+            stage('Run K8S conformance e2e tests') {
                 if (RUN_K8S_TESTS.toBoolean() == true) {
                     def image = TEST_K8S_CONFORMANCE_IMAGE
                     def output_file = 'report-k8s-e2e-tests.txt'
