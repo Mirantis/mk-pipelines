@@ -6,25 +6,58 @@
  *   SALT_MASTER_URL            Salt API server location
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
  *   MCP_VERSION                Version of MCP to upgrade to
+ *   UPDATE_CLUSTER_MODEL       Update MCP version parameter in cluster model
+ *   UPDATE_PIPELINES           Update pipeline repositories on Gerrit
  *   UPDATE_LOCAL_REPOS         Update local repositories
  */
+
+import hudson.model.*
 
 // Load shared libs
 salt = new com.mirantis.mk.Salt()
 common = new com.mirantis.mk.Common()
 python = new com.mirantis.mk.Python()
+jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 venvPepper = "venvPepper"
+
+def triggerMirrorJob(jobName){
+    params = jenkinsUtils.getJobParameters(jobName)
+    build job: jobName, parameters: [
+        [$class: 'StringParameterValue', name: 'BRANCHES', value: params.get("BRANCHES")],
+        [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: params.get("CREDENTIALS_ID")],
+        [$class: 'StringParameterValue', name: 'SOURCE_URL', value: params.get("SOURCE_URL")],
+        [$class: 'StringParameterValue', name: 'TARGET_URL', value: params.get("TARGET_URL")]
+    ]
+}
 
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
         try {
             python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
+            if(MCP_VERSION == ""){
+                error("You must specify MCP version")
+            }
+
             stage("Update Reclass"){
-                common.infoMsg("Updating reclass model")
-                salt.cmdRun(venvPepper, "I@salt:master", 'cd /srv/salt/reclass && git pull -r && git submodule update', false)
-                salt.cmdRun(venvPepper, 'I@salt:master', 'reclass-salt --top')
-                salt.enforceState(venvPepper, "I@salt:master", 'reclass', true)
+                def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_name").get("return")[0].values()[0]
+                if(UPDATE_CLUSTER_MODEL.toBoolean()){
+                    try{
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/ && git diff-index --quiet HEAD --")
+                    }
+                    catch(Exception ex){
+                        error("You have uncommited changes in your Reclass cluster model repository. Please commit or reset them and rerun the pipeline.")
+                    }
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs sed -i 's/apt_mk_version: .*/apt_mk_version: \"$MCP_VERSION\"/g'")
+                }
+
+                try{
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git diff-index --quiet HEAD --")
+                }
+                catch(Exception ex){
+                    error("You have unstaged changes in your Reclass system model repository. Please reset them and rerun the pipeline.")
+                }
+                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $MCP_VERSION")
             }
 
             if(UPDATE_LOCAL_REPOS.toBoolean()){
@@ -40,6 +73,8 @@ timeout(time: 12, unit: 'HOURS') {
                     else {
                         common.infoMsg("Aptly isn't running as Docker container. Going to use aptly user for executing aptly commands")
                     }
+
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name/cicd/aptly && git checkout $MCP_VERSION")
 
                     if(runningOnDocker){
                         salt.cmdRun(venvPepper, 'I@aptly:server', "aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", true, null, true)
@@ -69,17 +104,49 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            stage("Update APT repos"){
-                common.infoMsg("Updating APT repositories")
-                salt.enforceState(venvPepper, "I@linux:system", 'linux.system.repo', true)
-            }
+            stage("Update Drivetrain"){
+                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i -e 's/[^ ]*[^ ]/$MCP_VERSION/4' /etc/apt/sources.list.d/mcp_salt.list")
+                salt.cmdRun(venvPepper, 'I@salt:master', "apt-get -o Dir::Etc::sourcelist='/etc/apt/sources.list.d/mcp_salt.list' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0' update")
+                salt.cmdRun(venvPepper, 'I@salt:master', "apt-get install -y --allow-downgrades salt-formula-*")
+                salt.fullRefresh(venvPepper, 'I@salt:master')
 
-            stage("Update formulas"){
-                common.infoMsg("Updating salt formulas")
-                salt.cmdRun(venvPepper, "I@salt:master", 'apt-get clean && apt-get update && apt-get install -y salt-formula-*')
+                try{
+                    salt.enforceState(venvPepper, "I@salt:master", 'reclass', true)
+                }
+                catch(Exception ex){
+                    error("Reclass fails rendering. Pay attention to your cluster model.")
+                }
 
-                common.infoMsg("Running salt sync-all")
-                salt.runSaltProcessStep(venvPepper, '*', 'saltutil.sync_all', [], null, true)
+                salt.fullRefresh(venvPepper, '*')
+
+                try{
+                    salt.cmdRun(venvPepper, 'I@salt:master', "reclass-salt --top")
+                }
+                catch(Exception ex){
+                    error("Reclass fails rendering. Pay attention to your cluster model.")
+                }
+
+                if(UPDATE_PIPELINES.toBoolean()){
+                    triggerMirrorJob("git-mirror-downstream-mk-pipelines")
+                    triggerMirrorJob("git-mirror-downstream-pipeline-library")
+                }
+
+                salt.enforceState(venvPepper, "I@jenkins:client", 'jenkins.client', true)
+
+                salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client' state.sls docker.client --async")
+
+                sleep(180)
+
+                common.infoMsg("Checking if Docker containers are up")
+
+                try{
+                    common.retry(10, 30){
+                        salt.cmdRun(venvPepper, 'I@jenkins:client and I@docker:client', "! docker service ls | tail -n +2 | grep -v -E '\\s([0-9])/\\1\\s'")
+                    }
+                }
+                catch(Exception ex){
+                    error("Docker containers for CI/CD services are having troubles with starting.")
+                }
             }
         }
         catch (Throwable e) {
