@@ -43,6 +43,8 @@
  *                                which have to be added during bootstrap.
  *                                Format: repo 1, repo priority 1, repo pin 1; repo 2, repo priority 2, repo pin 2;
 
+ *   SALT_VERSION               Version of Salt  which is going to be installed i.e. 'stable 2016.3' or 'stable 2017.7' etc.
+ *
  * Test settings:
  *   TEST_K8S_API_SERVER     Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE   Path to docker image with conformance e2e tests
@@ -206,6 +208,12 @@ timeout(time: 12, unit: 'HOURS') {
                                 common.infoMsg("Setting cluster_node_count to ${STACK_COMPUTE_COUNT}")
                                 envParams.put('cluster_node_count', STACK_COMPUTE_COUNT)
                             }
+                        }
+
+
+                        if (common.validInputParam('SALT_VERSION')) {
+                            common.infoMsg("Setting salt version to ${SALT_VERSION}")
+                            envParams.put('cfg_saltversion', SALT_VERSION)
                         }
 
                         openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv)
