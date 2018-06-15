@@ -707,13 +707,26 @@ def restoreContrailDb(pepperEnv) {
 def verifyAPIs(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
-    def out = salt.cmdRun(pepperEnv, target, '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
-    if (out.toString().toLowerCase().contains('error')) {
-        common.errorMsg(out)
-        if (INTERACTIVE.toBoolean()) {
-            input message: "APIs are not working as expected. Please fix it manually."
-        } else {
-            throw new Exception("APIs are not working as expected")
+    def cmds = ["openstack service list",
+                "openstack image list",
+                "openstack flavor list",
+                "openstack compute service list",
+                "openstack server list",
+                "openstack network list",
+                "openstack volume list",
+                "openstack orchestration service list"]
+    def sourcerc = ". /root/keystonercv3;"
+    def cmdOut = ">/dev/null 2>&1;echo \$?"
+    for (c in cmds) {
+        def command = sourcerc + c + cmdOut
+        def out = salt.cmdRun(pepperEnv, target, "${command}")
+        if (!out.toString().toLowerCase().contains('0')) {
+            common.errorMsg(out)
+            if (INTERACTIVE.toBoolean()) {
+                input message: "APIs are not working as expected. Please fix it manually."
+            } else {
+                throw new Exception("APIs are not working as expected")
+            }
         }
     }
 }
