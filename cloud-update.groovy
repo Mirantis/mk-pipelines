@@ -425,6 +425,22 @@ def contrailServices(pepperEnv, target, action='stop') {
     }
 }
 
+def periodicCheck(pepperEnv, target, maxRetries=50) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+    def count = 0
+    while(count < maxRetries) {
+        try {
+            sleep(10)
+            salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+            break
+        } catch (Exception e) {
+            common.warningMsg("${target} not ready yet. Waiting ...")
+        }
+        count++
+    }
+}
+
 def highstate(pepperEnv, target, type) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
@@ -457,9 +473,17 @@ def highstate(pepperEnv, target, type) {
     // optionally reboot
     if (reboots.contains(type)) {
         stage("Reboot ${target} nodes") {
-            salt.runSaltProcessStep(pepperEnv, target, 'system.reboot', null, null, true, 5)
-            sleep(10)
-            salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+            if (type == 'cfg') {
+                try {
+                    salt.runSaltProcessStep(pepperEnv, target, 'system.reboot', null, null, true, 5)
+                } catch (Exception e) {
+                    periodicCheck(pepperEnv, target)
+                }
+            } else {
+                salt.runSaltProcessStep(pepperEnv, target, 'system.reboot', null, null, true, 5)
+                sleep 10
+                salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+            }
         }
     }
 }
