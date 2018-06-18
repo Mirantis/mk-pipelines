@@ -81,6 +81,12 @@ timeout(time: 12, unit: 'HOURS') {
             }
             sleep(5)
             salt.cmdRun(pepperEnv, 'I@galera:master', "su root -c 'salt-call mysql.status | grep -A1 wsrep_cluster_size'")
+
+            try {
+                salt.runSaltProcessStep(pepperEnv, 'I@galera:master or I@galera:slave', 'file.touch', ["/var/lib/mysql/.galera_bootstrap"], null, true)
+            } catch (Exception er) {
+                common.warningMsg('File is already present')
+            }
         }
     }
 }
