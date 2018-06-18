@@ -724,7 +724,7 @@ def verifyGalera(pepperEnv, target, count=0, maxRetries=200) {
     def out
     while(count < maxRetries) {
         try {
-            out = salt.getReturnValues(salt.cmdRun(pepperEnv, target, 'salt-call mysql.status | grep -A1 wsrep_cluster_size'))
+            out = salt.getReturnValues(salt.cmdRun(pepperEnv, target, 'salt-call -l quiet mysql.status | grep -A1 wsrep_cluster_size'))
         } catch (Exception er) {
             common.infoMsg(er)
         }
