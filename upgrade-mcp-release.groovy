@@ -6,12 +6,11 @@
  *   SALT_MASTER_URL            Salt API server location
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API
  *   MCP_VERSION                Version of MCP to upgrade to
+ *   UPGRADE_SALTSTACK          Upgrade SaltStack packages to new version.
  *   UPDATE_CLUSTER_MODEL       Update MCP version parameter in cluster model
  *   UPDATE_PIPELINES           Update pipeline repositories on Gerrit
  *   UPDATE_LOCAL_REPOS         Update local repositories
  */
-
-import hudson.model.*
 
 // Load shared libs
 salt = new com.mirantis.mk.Salt()
@@ -19,6 +18,7 @@ common = new com.mirantis.mk.Common()
 python = new com.mirantis.mk.Python()
 jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 venvPepper = "venvPepper"
+workspace = ""
 
 def triggerMirrorJob(jobName){
     params = jenkinsUtils.getJobParameters(jobName)
@@ -30,9 +30,44 @@ def triggerMirrorJob(jobName){
     ]
 }
 
+def updateSaltStack(target, pkgs){
+    try{
+        salt.runSaltProcessStep(venvPepper, target, 'pkg.install', ["force_yes=True", "pkgs='$pkgs'"], null, true, 5)
+    }catch(Exception ex){}
+
+    common.retry(10, 30){
+        salt.minionsReachable(venvPepper, 'I@salt:master', '*')
+        def running = salt.runSaltProcessStep(venvPepper, target, 'saltutil.running', [], null, true, 5)
+        for(value in running.get("return")[0].values()){
+            if(value != []){
+                throw new Exception("Not all salt-minions are ready for execution")
+            }
+        }
+    }
+
+    def saltVersion = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_version").get("return")[0].values()[0]
+    def saltMinionVersions = salt.cmdRun(venvPepper, "*", "apt-cache policy salt-common |  awk '/Installed/ && /$saltVersion/'").get("return")
+    def saltMinionVersion = ""
+
+    for(minion in saltMinionVersions[0].keySet()){
+        saltMinionVersion = saltMinionVersions[0].get(minion).replace("Salt command execution success","").trim()
+        if(saltMinionVersion == ""){
+            error("Installed version of Salt on $minion doesn't match specified version in the model.")
+        }
+    }
+}
+
+def archiveReclassInventory(filename){
+    def ret = salt.cmdRun(venvPepper, 'I@salt:master', "reclass -i", true, null, false)
+    def reclassInv = ret.values()[0]
+    writeFile file: filename, text: reclassInv.toString()
+    archiveArtifacts artifacts: "$filename"
+}
+
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
         try {
+            workspace = common.getWorkspace()
             python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
             if(MCP_VERSION == ""){
@@ -108,6 +143,16 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.cmdRun(venvPepper, 'I@salt:master', "sed -i -e 's/[^ ]*[^ ]/$MCP_VERSION/4' /etc/apt/sources.list.d/mcp_salt.list")
                 salt.cmdRun(venvPepper, 'I@salt:master', "apt-get -o Dir::Etc::sourcelist='/etc/apt/sources.list.d/mcp_salt.list' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0' update")
                 salt.cmdRun(venvPepper, 'I@salt:master', "apt-get install -y --allow-downgrades salt-formula-*")
+
+                def inventoryBeforeFilename = "reclass-inventory-before.out"
+                def inventoryAfterFilename = "reclass-inventory-after.out"
+
+                archiveReclassInventory(inventoryBeforeFilename)
+
+                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i -e 's/[^ ]*[^ ]/$MCP_VERSION/4' /etc/apt/sources.list.d/mcp_extra.list")
+                salt.cmdRun(venvPepper, 'I@salt:master', "apt-get -o Dir::Etc::sourcelist='/etc/apt/sources.list.d/mcp_extra.list' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0' update")
+                salt.cmdRun(venvPepper, 'I@salt:master', "apt-get install -y --allow-downgrades reclass")
+
                 salt.fullRefresh(venvPepper, 'I@salt:master')
 
                 try{
@@ -124,6 +169,19 @@ timeout(time: 12, unit: 'HOURS') {
                 }
                 catch(Exception ex){
                     error("Reclass fails rendering. Pay attention to your cluster model.")
+                }
+
+                archiveReclassInventory(inventoryAfterFilename)
+
+                sh "diff -u $inventoryBeforeFilename $inventoryAfterFilename > reclass-inventory-diff.out || true"
+                archiveArtifacts artifacts: "reclass-inventory-diff.out"
+
+                if(UPGRADE_SALTSTACK.toBoolean()){
+                    salt.enforceState(venvPepper, "I@linux:system", 'linux.system.repo', true)
+
+                    updateSaltStack("I@salt:master", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+
+                    updateSaltStack("I@salt:minion and not I@salt:master", '["salt-minion"]')
                 }
 
                 if(UPDATE_PIPELINES.toBoolean()){
