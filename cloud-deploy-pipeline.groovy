@@ -45,6 +45,8 @@
 
  *   SALT_VERSION               Version of Salt  which is going to be installed i.e. 'stable 2016.3' or 'stable 2017.7' etc.
  *
+ *   EXTRA_TARGET               The value will be added to target nodes
+ *
  * Test settings:
  *   TEST_K8S_API_SERVER     Kubernetes API address
  *   TEST_K8S_CONFORMANCE_IMAGE   Path to docker image with conformance e2e tests
@@ -97,6 +99,12 @@ def slave_node = 'python'
 if (common.validInputParam('SLAVE_NODE')) {
     slave_node = SLAVE_NODE
 }
+
+def extra_tgt = ''
+if (common.validInputParam('EXTRA_TARGET')) {
+    extra_tgt = "${EXTRA_TARGET}"
+}
+
 timeout(time: 12, unit: 'HOURS') {
     node(slave_node) {
         try {
@@ -303,7 +311,7 @@ timeout(time: 12, unit: 'HOURS') {
             // Set up override params
             if (common.validInputParam('SALT_OVERRIDES')) {
                 stage('Set Salt overrides') {
-                    salt.setSaltOverrides(venvPepper,  SALT_OVERRIDES)
+                    salt.setSaltOverrides(venvPepper,  SALT_OVERRIDES, '/srv/salt/reclass', extra_tgt)
                 }
             }
 
@@ -317,14 +325,14 @@ timeout(time: 12, unit: 'HOURS') {
                     if (common.validInputParam('STATIC_MGMT_NETWORK')) {
                         staticMgmtNetwork = STATIC_MGMT_NETWORK.toBoolean()
                     }
-                    orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork)
+                    orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_tgt)
 
                     if (common.checkContains('STACK_INSTALL', 'kvm')) {
-                        orchestrate.installInfraKvm(venvPepper)
-                        orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork)
+                        orchestrate.installInfraKvm(venvPepper, extra_tgt)
+                        orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_target)
                     }
 
-                    orchestrate.validateFoundationInfra(venvPepper)
+                    orchestrate.validateFoundationInfra(venvPepper, extra_tgt)
                 }
             }
 
@@ -337,35 +345,35 @@ timeout(time: 12, unit: 'HOURS') {
                         def awsOutputs = aws.getOutputs(venv, aws_env_vars, STACK_NAME)
                         common.prettyPrint(awsOutputs)
                         if (awsOutputs.containsKey('ControlLoadBalancer')) {
-                            salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'reclass.cluster_meta_set', ['kubernetes_control_address', awsOutputs['ControlLoadBalancer']], null, true)
+                            salt.runSaltProcessStep(venvPepper, "I@salt:master ${extra_tgt}", 'reclass.cluster_meta_set', ['kubernetes_control_address', awsOutputs['ControlLoadBalancer']], null, true)
                             outputs.put('kubernetes_apiserver', 'https://' + awsOutputs['ControlLoadBalancer'])
                         }
                     }
 
                     // ensure certificates are generated properly
-                    salt.runSaltProcessStep(venvPepper, '*', 'saltutil.refresh_pillar', [], null, true)
-                    salt.enforceState(venvPepper, '*', ['salt.minion.cert'], true)
+                    salt.runSaltProcessStep(venvPepper, "* ${extra_tgt}", 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(venvPepper, "* ${extra_tgt}", ['salt.minion.cert'], true)
 
-                    orchestrate.installKubernetesInfra(venvPepper)
+                    orchestrate.installKubernetesInfra(venvPepper, extra_tgt)
                 }
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
                     stage('Install Contrail control') {
-                        orchestrate.installContrailNetwork(venvPepper)
+                        orchestrate.installContrailNetwork(venvPepper, extra_tgt)
                     }
                 }
 
                 stage('Install Kubernetes control') {
-                    orchestrate.installKubernetesControl(venvPepper)
+                    orchestrate.installKubernetesControl(venvPepper, extra_tgt)
 
                     // collect artifacts (kubeconfig)
-                    writeFile(file: 'kubeconfig', text: salt.getFileContent(venvPepper, 'I@kubernetes:master and *01*', '/etc/kubernetes/admin-kube-config'))
+                    writeFile(file: 'kubeconfig', text: salt.getFileContent(venvPepper, "I@kubernetes:master and *01* ${extra_tgt}", '/etc/kubernetes/admin-kube-config'))
                     archiveArtifacts(artifacts: 'kubeconfig')
                 }
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
                     stage('Install Contrail compute') {
-                        orchestrate.installContrailCompute(venvPepper)
+                        orchestrate.installContrailCompute(venvPepper, extra_tgt)
                     }
                 }
 
@@ -393,7 +401,7 @@ timeout(time: 12, unit: 'HOURS') {
                         }
                     }
 
-                    orchestrate.installKubernetesCompute(venvPepper)
+                    orchestrate.installKubernetesCompute(venvPepper, extra_tgt)
                 }
             }
 
@@ -402,49 +410,49 @@ timeout(time: 12, unit: 'HOURS') {
                 // install Infra and control, tests, ...
 
                 stage('Install OpenStack infra') {
-                    orchestrate.installOpenstackInfra(venvPepper)
+                    orchestrate.installOpenstackInfra(venvPepper, extra_tgt)
                 }
 
                 stage('Install OpenStack control') {
-                    orchestrate.installOpenstackControl(venvPepper)
+                    orchestrate.installOpenstackControl(venvPepper, extra_tgt)
                 }
 
                 // Workaround for PROD-17765 issue to prevent crashes of keystone.role_present state.
                 // More details: https://mirantis.jira.com/browse/PROD-17765
-                salt.runSaltProcessStep(venvPepper, 'I@keystone:client', 'service.restart', ['salt-minion'])
-                salt.minionsReachable(venvPepper, 'I@salt:master and *01*', 'I@keystone:client', null, 10, 6)
+                salt.runSaltProcessStep(venvPepper, "I@keystone:client ${extra_tgt}", 'service.restart', ['salt-minion'])
+                salt.minionsReachable(venvPepper, "I@salt:master and *01* ${extra_tgt}", 'I@keystone:client', null, 10, 6)
 
                 stage('Install OpenStack network') {
 
                     if (common.checkContains('STACK_INSTALL', 'contrail')) {
-                        orchestrate.installContrailNetwork(venvPepper)
+                        orchestrate.installContrailNetwork(venvPepper, extra_tgt)
                     } else if (common.checkContains('STACK_INSTALL', 'ovs')) {
-                        orchestrate.installOpenstackNetwork(venvPepper)
+                        orchestrate.installOpenstackNetwork(venvPepper, extra_tgt)
                     }
 
                     // Wait for network to come up, 150s should be enough
                     common.retry(10, 15) {
-                        salt.cmdRun(venvPepper, 'I@keystone:server', '. /root/keystonercv3; openstack network list')
+                        salt.cmdRun(venvPepper, "I@keystone:server ${extra_tgt}", '. /root/keystonercv3; openstack network list')
                     }
                 }
 
-                if (salt.testTarget(venvPepper, 'I@ironic:conductor')){
+                if (salt.testTarget(venvPepper, "I@ironic:conductor ${extra_tgt}")){
                     stage('Install OpenStack Ironic conductor') {
-                        orchestrate.installIronicConductor(venvPepper)
+                        orchestrate.installIronicConductor(venvPepper, extra_tgt)
                     }
                 }
 
-                if (salt.testTarget(venvPepper, 'I@manila:share')){
+                if (salt.testTarget(venvPepper, "I@manila:share ${extra_tgt}")){
                     stage('Install OpenStack Manila data and share') {
-                       orchestrate.installManilaShare(venvPepper)
+                       orchestrate.installManilaShare(venvPepper, extra_tgt)
                     }
                 }
 
                 stage('Install OpenStack compute') {
-                    orchestrate.installOpenstackCompute(venvPepper)
+                    orchestrate.installOpenstackCompute(venvPepper, extra_tgt)
 
                     if (common.checkContains('STACK_INSTALL', 'contrail')) {
-                        orchestrate.installContrailCompute(venvPepper)
+                        orchestrate.installContrailCompute(venvPepper, extra_tgt)
                     }
                 }
 
@@ -453,48 +461,48 @@ timeout(time: 12, unit: 'HOURS') {
             // install ceph
             if (common.checkContains('STACK_INSTALL', 'ceph')) {
                 stage('Install Ceph MONs') {
-                    orchestrate.installCephMon(venvPepper)
+                    orchestrate.installCephMon(venvPepper, "I@ceph:mon ${extra_tgt}", extra_tgt)
                 }
 
                 stage('Install Ceph OSDs') {
-                    orchestrate.installCephOsd(venvPepper)
+                    orchestrate.installCephOsd(venvPepper, "I@ceph:osd ${extra_tgt}", true, extra_tgt)
                 }
 
 
                 stage('Install Ceph clients') {
-                    orchestrate.installCephClient(venvPepper)
+                    orchestrate.installCephClient(venvPepper, extra_tgt)
                 }
 
                 stage('Connect Ceph') {
-                    orchestrate.connectCeph(venvPepper)
+                    orchestrate.connectCeph(venvPepper, extra_tgt)
                 }
             }
 
             if (common.checkContains('STACK_INSTALL', 'oss')) {
               stage('Install Oss infra') {
-                orchestrate.installOssInfra(venvPepper)
+                orchestrate.installOssInfra(venvPepper, extra_tgt)
               }
             }
 
             if (common.checkContains('STACK_INSTALL', 'cicd')) {
                 stage('Install Cicd') {
-                    orchestrate.installInfra(venvPepper)
-                    orchestrate.installDockerSwarm(venvPepper)
-                    orchestrate.installCicd(venvPepper)
+                    orchestrate.installInfra(venvPepper, extra_tgt)
+                    orchestrate.installDockerSwarm(venvPepper, extra_tgt)
+                    orchestrate.installCicd(venvPepper, extra_tgt)
                 }
             }
 
             if (common.checkContains('STACK_INSTALL', 'sl-legacy')) {
                 stage('Install StackLight v1') {
-                    orchestrate.installStacklightv1Control(venvPepper)
-                    orchestrate.installStacklightv1Client(venvPepper)
+                    orchestrate.installStacklightv1Control(venvPepper, extra_tgt)
+                    orchestrate.installStacklightv1Client(venvPepper, extra_tgt)
                 }
             }
 
             if (common.checkContains('STACK_INSTALL', 'stacklight')) {
                 stage('Install StackLight') {
-                    orchestrate.installDockerSwarm(venvPepper)
-                    orchestrate.installStacklight(venvPepper)
+                    orchestrate.installDockerSwarm(venvPepper, extra_tgt)
+                    orchestrate.installStacklight(venvPepper, extra_tgt)
                 }
             }
 
@@ -502,10 +510,10 @@ timeout(time: 12, unit: 'HOURS') {
               stage('Install OSS') {
                 if (!common.checkContains('STACK_INSTALL', 'stacklight')) {
                   // In case if StackLightv2 enabled containers already started
-                  orchestrate.installDockerSwarm(venvPepper)
-                  salt.enforceState(venvPepper, 'I@docker:swarm:role:master and I@devops_portal:config', 'docker.client', true)
+                  orchestrate.installDockerSwarm(venvPepper, extra_tgt)
+                  salt.enforceState(venvPepper, "I@docker:swarm:role:master and I@devops_portal:config ${extra_tgt}", 'docker.client', true)
                 }
-                orchestrate.installOss(venvPepper)
+                orchestrate.installOss(venvPepper, extra_tgt)
               }
             }
 
@@ -518,7 +526,7 @@ timeout(time: 12, unit: 'HOURS') {
                 stage('Run k8s conformance e2e tests') {
                     def image = TEST_K8S_CONFORMANCE_IMAGE
                     def output_file = image.replaceAll('/', '-') + '.output'
-                    def target = 'ctl01*'
+                    def target = "ctl01* ${extra_tgt}"
                     def conformance_output_file = 'conformance_test.tar'
 
                     // run image
@@ -602,8 +610,8 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Finalize') {
                 if (common.checkContains('STACK_INSTALL', 'finalize')) {
-                    def gluster_compound = 'I@glusterfs:server'
-                    def salt_ca_compound = 'I@salt:minion:ca:salt_master_ca'
+                    def gluster_compound = "I@glusterfs:server ${extra_tgt}"
+                    def salt_ca_compound = "I@salt:minion:ca:salt_master_ca ${extra_tgt}"
                     // Enforce highstate asynchronous only on the nodes which are not glusterfs servers
                     salt.enforceHighstate(venvPepper, '* and not ' + gluster_compound + ' and not ' + salt_ca_compound)
                     // Iterate over nonempty set of gluster servers and apply highstates one by one
