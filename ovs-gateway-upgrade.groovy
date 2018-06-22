@@ -7,6 +7,7 @@
  *   TARGET_SERVERS             Salt compound target to match nodes to be updated [*, G@osfamily:debian].
  *   TARGET_SUBSET_TEST         Number of nodes to list package updates, empty string means all targetted nodes.
  *   TARGET_SUBSET_LIVE         Number of selected nodes to live apply selected package update.
+ *   INTERACTIVE                Ask interactive questions during pipeline run (bool).
  *
 **/
 
@@ -63,8 +64,10 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.runSaltProcessStep(pepperEnv, targetTestSubset, 'pkg.list_upgrades', [], null, true)
             }
 
-            stage('Confirm upgrade on sample nodes') {
+            if (INTERACTIVE.toBoolean()){
+              stage('Confirm upgrade on sample nodes') {
                 input message: "Please verify the list of packages that you want to be upgraded. Do you want to continue with upgrade?"
+              }
             }
 
             stage("Add new repos on sample nodes") {
@@ -81,8 +84,10 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            stage('Confirm upgrade on sample') {
+            if (INTERACTIVE.toBoolean()){
+              stage('Confirm upgrade on sample') {
                 input message: "Please verify if there are packages that it wants to downgrade. If so, execute apt-cache policy on them and verify if everything is fine. Do you want to continue with upgrade?"
+              }
             }
 
             command = "cmd.run"
@@ -111,10 +116,12 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            stage('Confirm upgrade on all targeted nodes') {
+            if (INTERACTIVE.toBoolean()){
+              stage('Confirm upgrade on all targeted nodes') {
                 timeout(time: 2, unit: 'HOURS') {
-                   input message: "Verify that the upgraded sample nodes are working correctly. If so, do you want to approve live upgrade on ${targetLiveAll} nodes?"
+                  input message: "Verify that the upgraded sample nodes are working correctly. If so, do you want to approve live upgrade on ${targetLiveAll} nodes?"
                 }
+              }
             }
 
             stage("Add new repos on all targeted nodes") {
