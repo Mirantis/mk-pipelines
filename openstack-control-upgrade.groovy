@@ -9,6 +9,7 @@
  *   STAGE_ROLLBACK_UPGRADE             Run rollback upgrade stage (bool)
  *   SKIP_VM_RELAUNCH                   Set to true if vms should not be recreated (bool)
  *   OPERATING_SYSTEM_RELEASE_UPGRADE   Set to true if operating system of vms should be upgraded to newer release (bool)
+ *   INTERACTIVE                        Ask interactive questions during pipeline run (bool).
  *
 **/
 
@@ -195,10 +196,10 @@ def vcpTestUpgrade(pepperEnv) {
 
     salt.cmdRun(pepperEnv, "${test_upgrade_node}*", '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
 
-    if (STAGE_TEST_UPGRADE.toBoolean() == true && STAGE_REAL_UPGRADE.toBoolean() == true) {
-        stage('Ask for manual confirmation') {
-            input message: "Do you want to continue with upgrade?"
-        }
+    if (INTERACTIVE.toBoolean() && STAGE_TEST_UPGRADE.toBoolean() == true && STAGE_REAL_UPGRADE.toBoolean() == true) {
+      stage('Ask for manual confirmation') {
+        input message: "Do you want to continue with upgrade?"
+      }
     }
 }
 
@@ -303,8 +304,12 @@ def vcpRealUpgrade(pepperEnv) {
         stopServices(pepperEnv, proxy_node, proxy_general_target, 'prx')
         stopServices(pepperEnv, control_node, control_general_target, 'ctl')
         salt.printSaltCommandResult(out)
-        if (out.toString().contains("dpkg returned an error code")) {
-            input message: "Apt dist-upgrade failed, please fix it manually and then click on proceed. If unable to fix it, click on abort and run the rollback stage."
+        if (out.toString().contains("dpkg returned an error code")){
+            if (INTERACTIVE.toBoolean()) {
+              input message: "Apt dist-upgrade failed, please fix it manually and then click on proceed. If unable to fix it, click on abort and run the rollback stage."
+            } else {
+              error("Apt dist-upgrade failed. And interactive mode was disabled, failing...")
+            }
         }
         // run base states
         try {
@@ -355,10 +360,14 @@ def vcpRealUpgrade(pepperEnv) {
         retryStateRun(pepperEnv, control_general_target, 'heat')
     } catch (Exception e) {
         errorOccured = true
-        if (OPERATING_SYSTEM_RELEASE_UPGRADE.toBoolean() == false) {
-            input message: "Some states that require syncdb failed. Please check the reason.Click proceed only if you want to restore database into it's pre-upgrade state. If you want restore production database and also the VMs into its pre-upgrade state please click on abort and run the rollback stage."
+        if (INTERACTIVE.toBoolean()){
+          if (OPERATING_SYSTEM_RELEASE_UPGRADE.toBoolean() == false) {
+              input message: "Some states that require syncdb failed. Please check the reason. Click proceed only if you want to restore database into it's pre-upgrade state. If you want restore production database and also the VMs into its pre-upgrade state please click on abort and run the rollback stage."
+          } else {
+              input message: "Some states that require syncdb failed. Please check the reason and click proceed only if you want to restore database into it's pre-upgrade state. Otherwise, click abort."
+          }
         } else {
-            input message: "Some states that require syncdb failed. Please check the reason and click proceed only if you want to restore database into it's pre-upgrade state. Otherwise, click abort."
+          error("Stage Real control upgrade failed. And interactive mode was disabled, failing...")
         }
         openstack.restoreGaleraDb(pepperEnv)
         common.errorMsg("Stage Real control upgrade failed")
@@ -420,7 +429,9 @@ def vcpRealUpgrade(pepperEnv) {
 
         /*
         if (OPERATING_SYSTEM_RELEASE_UPGRADE.toBoolean() == false) {
-            input message: "Please verify if the control upgrade was successful! If so, by clicking proceed the original VMs disk images will be backed up and snapshot will be merged to the upgraded VMs which will finalize the upgrade procedure"
+            if (INTERACTIVE.toBoolean()){
+              input message: "Please verify if the control upgrade was successful! If so, by clicking proceed the original VMs disk images will be backed up and snapshot will be merged to the upgraded VMs which will finalize the upgrade procedure"
+            }
             node_count = 1
             for (t in proxy_target_hosts) {
                 def target = salt.stripDomainName(t)
@@ -445,8 +456,10 @@ def vcpRealUpgrade(pepperEnv) {
                 virsh.liveSnapshotMerge(pepperEnv, nodeProvider, target, snapshotName)
                 node_count++
             }
-            input message: "Please scroll up and look for red highlighted messages containing 'virsh blockcommit' string.
-            If there are any fix it manually.  Otherwise click on proceed."
+            if (INTERACTIVE.toBoolean()){
+              input message: "Please scroll up and look for red highlighted messages containing 'virsh blockcommit' string.
+              If there are any fix it manually.  Otherwise click on proceed."
+            }
         }
         */
     }
@@ -548,7 +561,7 @@ timeout(time: 12, unit: 'HOURS') {
                 vcpRealUpgrade(pepperEnv)
             }
 
-            if (STAGE_REAL_UPGRADE.toBoolean() == true && STAGE_ROLLBACK_UPGRADE.toBoolean() == true) {
+            if (INTERACTIVE.toBoolean() && STAGE_REAL_UPGRADE.toBoolean() == true && STAGE_ROLLBACK_UPGRADE.toBoolean() == true) {
                 stage('Ask for manual confirmation') {
                     input message: "Please verify if the control upgrade was successful. If it did not succeed, in the worst scenario, you can click on proceed to continue with control-upgrade-rollback. Do you want to continue with the rollback?"
                 }
@@ -557,8 +570,10 @@ timeout(time: 12, unit: 'HOURS') {
 
         if (STAGE_ROLLBACK_UPGRADE.toBoolean() == true) {
             stage('Rollback upgrade') {
-                stage('Ask for manual confirmation') {
+                if (INTERACTIVE.toBoolean()){
+                  stage('Ask for manual confirmation') {
                     input message: "Before rollback please check the documentation for reclass model changes. Do you really want to continue with the rollback?"
+                  }
                 }
                 vcpRollback(pepperEnv)
             }
