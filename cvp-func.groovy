@@ -33,6 +33,7 @@ node() {
             saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             validate.runBasicContainer(saltMaster, TARGET_NODE, TEST_IMAGE)
             sh "rm -rf ${artifacts_dir}"
+            salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_artifacts_dir}")
             salt.cmdRun(saltMaster, TARGET_NODE, "mkdir -p ${remote_artifacts_dir}")
             validate.configureContainer(saltMaster, TARGET_NODE, PROXY, TOOLS_REPO, TEMPEST_REPO, TEMPEST_ENDPOINT_TYPE)
         }
