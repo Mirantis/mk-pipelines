@@ -182,9 +182,6 @@ timeout(time: 12, unit: 'HOURS') {
         common.errorMsg("----------------KITCHEN LOG:---------------")
         println readFile(".kitchen/logs/kitchen.log")
       }
-      def slack = new com.mirantis.mcp.SlackNotification()
-      slack.jobResultNotification("success", "#test_reclass_notify")
-      common.sendNotification(currentBuild.result, "", ["slack"])
     }
   }
 }
