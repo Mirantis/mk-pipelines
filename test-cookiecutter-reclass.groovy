@@ -97,8 +97,20 @@ def testModel(modelFile, testEnv) {
         nbTry++
         try {
             def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
-            saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", clusterName, EXTRA_FORMULAS, testEnv, "pkg",
-                    DISTRIB_REVISION, dockerContainerName: DockerCName)
+            saltModelTesting.setupAndTestNode(
+                    "cfg01.${clusterDomain}",
+                    clusterName,
+                    EXTRA_FORMULAS,
+                    testEnv,
+                    'pkg',
+                    DISTRIB_REVISION,
+                    'master',
+                    0,
+                    false,
+                    false,
+                    '',
+                    '',
+                    DockerCName)
             break
         } catch (Exception e) {
             if (e.getMessage() == "script returned exit code 124") {
