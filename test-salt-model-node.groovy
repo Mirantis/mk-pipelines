@@ -64,8 +64,7 @@ throttle(['test-model']) {
             def workspace = common.getWorkspace()
             common.infoMsg("Running salt model test for node ${NODE_TARGET} in cluster ${CLUSTER_NAME}")
             try {
-              def DockerCname = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
-              saltModelTesting.setupAndTestNode(NODE_TARGET, CLUSTER_NAME, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION, RECLASS_VERSION, MAX_CPU_PER_JOB.toInteger(), RECLASS_IGNORE_CLASS_NOTFOUND, LEGACY_TEST_MODE, APT_REPOSITORY, APT_REPOSITORY_GPG, dockerContainerName=DockerCName)
+              saltModelTesting.setupAndTestNode(NODE_TARGET, CLUSTER_NAME, EXTRA_FORMULAS, workspace, FORMULAS_SOURCE, FORMULAS_REVISION, RECLASS_VERSION, MAX_CPU_PER_JOB.toInteger(), RECLASS_IGNORE_CLASS_NOTFOUND, LEGACY_TEST_MODE, APT_REPOSITORY, APT_REPOSITORY_GPG)
             } catch (Exception e) {
               if (e.getMessage() == "script returned exit code 124") {
                 common.errorMsg("Impossible to test node due to timeout of salt-master, ABORTING BUILD")
