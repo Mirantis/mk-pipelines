@@ -1534,7 +1534,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (merges.contains("log")) {
                 if (salt.testTarget(pepperEnv, LOG_TARGET)) {
-                    mergeSnapshot(pepperEnv, LOG_TARGET. 'log')
+                    mergeSnapshot(pepperEnv, LOG_TARGET, 'log')
                 }
             }
 
