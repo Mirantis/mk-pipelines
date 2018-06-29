@@ -336,6 +336,14 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
+            stage('Install infra') {
+              if (common.checkContains('STACK_INSTALL', 'core') ||
+                    common.checkContains('STACK_INSTALL', 'openstack') ||
+                      common.checkContains('STACK_INSTALL', 'oss')) {
+                  orchestrate.installInfra(venvPepper, extra_tgt)
+              }
+            }
+
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
 
@@ -353,8 +361,6 @@ timeout(time: 12, unit: 'HOURS') {
                     // ensure certificates are generated properly
                     salt.runSaltProcessStep(venvPepper, "* ${extra_tgt}", 'saltutil.refresh_pillar', [], null, true)
                     salt.enforceState(venvPepper, "* ${extra_tgt}", ['salt.minion.cert'], true)
-
-                    orchestrate.installKubernetesInfra(venvPepper, extra_tgt)
                 }
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
@@ -407,12 +413,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             // install openstack
             if (common.checkContains('STACK_INSTALL', 'openstack')) {
-                // install Infra and control, tests, ...
-
-                stage('Install OpenStack infra') {
-                    orchestrate.installOpenstackInfra(venvPepper, extra_tgt)
-                }
-
+                // install control, tests, ...
                 stage('Install OpenStack control') {
                     orchestrate.installOpenstackControl(venvPepper, extra_tgt)
                 }
