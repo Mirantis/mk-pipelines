@@ -66,20 +66,20 @@ throttle(['test-model']) {
             try {
               def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
 
-              saltModelTesting.setupAndTestNode(
-                      NODE_TARGET,
-                      CLUSTER_NAME,
-                      EXTRA_FORMULAS,
-                      workspace,
-                      FORMULAS_SOURCE,
-                      FORMULAS_REVISION,
-                      RECLASS_VERSION,
-                      MAX_CPU_PER_JOB.toInteger(),
-                      RECLASS_IGNORE_CLASS_NOTFOUND,
-                      LEGACY_TEST_MODE,
-                      APT_REPOSITORY,
-                      APT_REPOSITORY_GPG,
-                      DockerCName)
+              test_result = saltModelTesting.setupAndTestNode(
+                  NODE_TARGET,
+                  CLUSTER_NAME,
+                  EXTRA_FORMULAS,
+                  workspace,
+                  FORMULAS_SOURCE,
+                  FORMULAS_REVISION,
+                  RECLASS_VERSION,
+                  MAX_CPU_PER_JOB.toInteger(),
+                  RECLASS_IGNORE_CLASS_NOTFOUND,
+                  LEGACY_TEST_MODE,
+                  APT_REPOSITORY,
+                  APT_REPOSITORY_GPG,
+                  DockerCName)
             } catch (Exception e) {
               if (e.getMessage() == "script returned exit code 124") {
                 common.errorMsg("Impossible to test node due to timeout of salt-master, ABORTING BUILD")
@@ -88,13 +88,19 @@ throttle(['test-model']) {
                 throw e
               }
             }
+            if (test_result) {
+              common.infoMsg("Test finished: SUCCESS")
+            } else {
+              common.warningMsg("Test finished: FAILURE")
+              currentBuild.result = "FAILURE"
+            }
           }
         }
       } catch (Throwable e) {
-         // If there was an error or exception thrown, the build failed
-         currentBuild.result = "FAILURE"
-         currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-         throw e
+        // If there was an error or exception thrown, the build failed
+        currentBuild.result = "FAILURE"
+        currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+        throw e
       }
     }
   }
