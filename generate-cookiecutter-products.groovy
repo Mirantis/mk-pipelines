@@ -167,10 +167,10 @@ parameters:
             }
 
           stage("Test") {
+            def testResult = false
             if (sharedReclassUrl != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
               sh("cp -r ${modelEnv} ${testEnv}")
               def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
-              def testResult = false
               testResult = saltModelTesting.setupAndTestNode(
                   "${saltMaster}.${clusterDomain}",
                   "",
