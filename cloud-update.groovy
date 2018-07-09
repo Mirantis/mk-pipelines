@@ -37,6 +37,7 @@
  *   REMOVE_PKGS                Space separated list of pkgs=versions to be removed on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
  *   RESTORE_GALERA             Restore Galera DB (bool)
  *   RESTORE_CONTRAIL_DB        Restore Cassandra and Zookeeper DBs for OpenContrail (bool)
+ *   RUN_CVP_TESTS              Run cloud validation pipelines before and after upgrade
  *
 **/
 def common = new com.mirantis.mk.Common()
@@ -840,6 +841,14 @@ def verifyCephOsds(pepperEnv, target) {
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
+            if(RUN_CVP_TESTS.toBoolean() == True){
+                stage('Run CVP tests before upgrade.') {
+                    build job: "cvp-sanity"
+                    build job: "cvp-func"
+                    build job: "cvp-ha"
+                    build job: "cvp-perf"
+                }
+            }
 
             stage('Setup virtualenv for Pepper') {
                 python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
@@ -1565,6 +1574,15 @@ timeout(time: 12, unit: 'HOURS') {
             if (RESTORE_CONTRAIL_DB.toBoolean()) {
                 restoreContrailDb(pepperEnv)
                 // verification is already present in restore pipelines
+            }
+
+            if(RUN_CVP_TESTS.toBoolean() == True){
+                stage('Run CVP tests after upgrade.') {
+                    build job: "cvp-sanity"
+                    build job: "cvp-func"
+                    build job: "cvp-ha"
+                    build job: "cvp-perf"
+                }
             }
 
         } catch (Throwable e) {
