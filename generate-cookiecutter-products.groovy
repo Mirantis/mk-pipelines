@@ -166,27 +166,33 @@ parameters:
                 git.commitGitChanges(modelEnv, "Create model ${clusterName}", "${user}@localhost", "${user}")
             }
 
-            stage("Test") {
-                if (sharedReclassUrl != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
-                    sh("cp -r ${modelEnv} ${testEnv}")
-                    def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
-                    saltModelTesting.setupAndTestNode(
-                            "${saltMaster}.${clusterDomain}",
-                            "",
-                            "",
-                            testEnv,
-                            'pkg',
-                            'stable',
-                            'master',
-                            0,
-                            false,
-                            false,
-                            '',
-                            '',
-                            DockerCName)
-                }
+          stage("Test") {
+            if (sharedReclassUrl != "" && TEST_MODEL && TEST_MODEL.toBoolean()) {
+              sh("cp -r ${modelEnv} ${testEnv}")
+              def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
+              def testResult = false
+              testResult = saltModelTesting.setupAndTestNode(
+                  "${saltMaster}.${clusterDomain}",
+                  "",
+                  "",
+                  testEnv,
+                  'pkg',
+                  'stable',
+                  'master',
+                  0,
+                  false,
+                  false,
+                  '',
+                  '',
+                  DockerCName)
             }
-
+            if (testResult) {
+              common.infoMsg("Test finished: SUCCESS")
+            } else {
+              error('Test finished: FAILURE')
+              currentBuild.result = "FAILURE"
+            }
+          }
             stage("Generate config drives") {
                 // apt package genisoimage is required for this stage
 

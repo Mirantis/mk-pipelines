@@ -62,11 +62,11 @@ throttle(['test-model']) {
         stage("test node") {
           if (checkouted) {
             def workspace = common.getWorkspace()
+            def testResult = false
             common.infoMsg("Running salt model test for node ${NODE_TARGET} in cluster ${CLUSTER_NAME}")
             try {
               def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
-
-              test_result = saltModelTesting.setupAndTestNode(
+              testResult = saltModelTesting.setupAndTestNode(
                   NODE_TARGET,
                   CLUSTER_NAME,
                   EXTRA_FORMULAS,
@@ -88,10 +88,10 @@ throttle(['test-model']) {
                 throw e
               }
             }
-            if (test_result) {
+            if (testResult) {
               common.infoMsg("Test finished: SUCCESS")
             } else {
-              common.warningMsg("Test finished: FAILURE")
+              error('Test finished: FAILURE')
               currentBuild.result = "FAILURE"
             }
           }
