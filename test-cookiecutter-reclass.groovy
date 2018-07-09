@@ -112,7 +112,7 @@ def testModel(modelFile, testEnv) {
     common.infoMsg("testModel finished: SUCCESS")
   } else {
     error('testModel finished: FAILURE')
-    currentBuild.result = "FAILURE"
+    throw new RuntimeException('Test stage finished: FAILURE')
   }
 
 }

@@ -91,8 +91,8 @@ throttle(['test-model']) {
             if (testResult) {
               common.infoMsg("Test finished: SUCCESS")
             } else {
-              error('Test finished: FAILURE')
-              currentBuild.result = "FAILURE"
+              error('Test node finished: FAILURE')
+              throw new RuntimeException('Test node stage finished: FAILURE')
             }
           }
         }
