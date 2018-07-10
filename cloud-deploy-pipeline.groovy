@@ -329,7 +329,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                     if (common.checkContains('STACK_INSTALL', 'kvm')) {
                         orchestrate.installInfraKvm(venvPepper, extra_tgt)
-                        orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_target)
+                        orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_tgt)
                     }
 
                     orchestrate.validateFoundationInfra(venvPepper, extra_tgt)
