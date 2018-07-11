@@ -14,7 +14,7 @@
  *   STACK_TEMPLATE             File with stack template
  *   STACK_TEST                 Run tests (bool)
  *   EDGE_DEPLOY_SCHEMAS        Env schemas to deploy as edge clouds
- *   MOM_JOB                    Type of Master-of-Masters stack
+ *   MOM_JOB                    Job name to deploy Master-of-Masters stack
  */
 
 common = new com.mirantis.mk.Common()
@@ -31,7 +31,7 @@ if (common.validInputParam('MOM_JOB')) {
     deployMoMJob = MOM_JOB
 }
 
-def deploy_schemas = '{os_ha_ovs: {deploy_job_name: "deploy-heat-os_ha_ovs", properties: {SLAVE_NODE: "python", STACK_INSTALL: "openstack,ovs", STACK_TEMPLATE: "os_ha_ovs", STACK_TYPE: "heat", FORMULA_PKG_REVISION: "testing", STACK_DELETE: false, STACK_CLUSTER_NAME: "os-ha-ovs"}}}'
+def deploy_schemas = '{os_ha_ovs: {deploy_job_name: "deploy-heat-os_ha_ovs", properties: {SLAVE_NODE: "python", STACK_INSTALL: "openstack,ovs", STACK_TEMPLATE: "os_ha_ovs", STACK_TYPE: "heat", FORMULA_PKG_REVISION: "testing", STACK_DELETE: false, STACK_CLUSTER_NAME: "os-ha-ovs", STACK_RECLASS_ADDRESS: "", STACK_RECLASS_BRANCH: ""}}}'
 if (common.validInputParam('EDGE_DEPLOY_SCHEMAS')) {
     deploy_schemas = EDGE_DEPLOY_SCHEMAS
 }
@@ -142,6 +142,8 @@ node(slave_node) {
                             [$class: 'StringParameterValue', name: 'STACK_TEMPLATE_URL', value: STACK_TEMPLATE_URL],
                             [$class: 'StringParameterValue', name: 'STACK_TEMPLATE_BRANCH', value: 'master'],
                             [$class: 'StringParameterValue', name: 'STACK_TYPE', value: 'heat'],
+                            [$class: 'StringParameterValue', name: 'STACK_RECLASS_ADDRESS', value: props['STACK_RECLASS_ADDRESS']],
+                            [$class: 'StringParameterValue', name: 'STACK_RECLASS_BRANCH', value: props['STACK_RECLASS_BRANCH']],
                             [$class: 'StringParameterValue', name: 'FORMULA_PKG_REVISION', value: props['FORMULA_PKG_REVISION']],
                             [$class: 'StringParameterValue', name: 'STACK_CLUSTER_NAME', value: props['STACK_CLUSTER_NAME']],
                             [$class: 'StringParameterValue', name: 'STACK_TEST', value: ''],
