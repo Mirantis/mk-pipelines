@@ -11,6 +11,7 @@
  *  OSD                                 Failed OSD ids to be replaced (comma-separated list - 1,2,3)
  *  DEVICE                              Comma separated list of failed devices that will be replaced at HOST (/dev/sdb,/dev/sdc)
  *  JOURNAL_BLOCKDB_BLOCKWAL_PARTITION  Comma separated list of partitions where journal or block_db or block_wal for the failed devices on this HOST were stored (/dev/sdh2,/dev/sdh3)
+ *  DATA_PARTITION                      Comma separated list of mounted partitions of failed device. These partitions will be unmounted. For ex. /dev/sdb1,/dev/sdb3
  *  CLUSTER_FLAGS                       Comma separated list of tags to apply to cluster
  *  WAIT_FOR_HEALTHY                    Wait for cluster rebalance before stoping daemons
  *  DMCRYPT                             Set to True if replacing osds are/were encrypted
@@ -26,6 +27,7 @@ def flags = CLUSTER_FLAGS.tokenize(',')
 def osds = OSD.tokenize(',')
 def devices = DEVICE.tokenize(',')
 def journals_blockdbs_blockwals = JOURNAL_BLOCKDB_BLOCKWAL_PARTITION.tokenize(',')
+def mounted_partitions = DATA_PARTITION.tokenize(',')
 
 
 def runCephCommand(master, target, cmd) {
@@ -158,7 +160,6 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
 
-
             // zap disks `ceph-disk zap /dev/sdi`
             stage('Zap devices') {
                 for (dev in devices) {
@@ -174,9 +175,23 @@ timeout(time: 12, unit: 'HOURS') {
         } else {
 
             // umount `umount /dev/sdi1`
-            stage('Umount devices') {
-                for (dev in devices) {
-                    runCephCommand(pepperEnv, HOST, 'umount ' + dev + '1')
+            stage('Umount partitions') {
+                if (mounted_partitions == null || mounted_partitions.empty) {
+                    for (dev in devices) {
+                        try {
+                            runCephCommand(pepperEnv, HOST, 'umount ' + dev + '1')
+                        } catch (Exception e) {
+                            common.warningMsg(e)
+                        }
+                    }
+                } else {
+                    for (part in mounted_partitions) {
+                        try {
+                            runCephCommand(pepperEnv, HOST, 'umount ' + part)
+                        } catch (Exception e) {
+                            common.warningMsg(e)
+                        }
+                    }
                 }
             }
 
