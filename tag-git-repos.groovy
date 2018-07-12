@@ -28,6 +28,9 @@ timeout(time: 12, unit: 'HOURS') {
             def repos = GIT_REPO_LIST.tokenize('\n')
             def repoUrl, repoName, repoCommit, repoArray
             for (repo in repos){
+                if(repo.startsWith('#'))
+                  common.warningMsg("Skipping:" + repo.toString())
+                  continue
                 if(repo.trim().indexOf(' ') == -1){
                     throw new IllegalArgumentException("Wrong format of repository and commit input")
                 }
