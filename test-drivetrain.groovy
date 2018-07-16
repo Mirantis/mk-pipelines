@@ -47,7 +47,7 @@ timeout(time: 12, unit: 'HOURS') {
             def saltCreds = [:]
 
             stage('Trigger deploy job') {
-                def mcpEnvJob = build(job: "create-mcp-env", parameters: [
+                mcpEnvJob = build(job: "create-mcp-env", parameters: [
                     [$class: 'StringParameterValue', name: 'OS_AZ', value: 'mcp-mk'],
                     [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
                     [$class: 'StringParameterValue', name: 'STACK_INSTALL', value: 'core,kvm,cicd'],
