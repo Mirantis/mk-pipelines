@@ -51,7 +51,7 @@ timeout(time: 12, unit: 'HOURS') {
                     [$class: 'StringParameterValue', name: 'OS_AZ', value: 'mcp-mk'],
                     [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
                     [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
-                    [$class: 'StringParameterValue', name: 'STACK_INSTALL', value: 'core,kvm,cicd'],
+                    [$class: 'StringParameterValue', name: 'STACK_INSTALL', value: 'core,cicd'],
                     [$class: 'BooleanParameterValue', name: 'STACK_FULL', value: true],
                     [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: false],
                     [$class: 'TextParameterValue', name: 'COOKIECUTTER_TEMPLATE_CONTEXT', value: COOKIECUTTER_TEMPLATE_CONTEXT]
