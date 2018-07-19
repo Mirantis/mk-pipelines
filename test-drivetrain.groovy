@@ -74,17 +74,17 @@ timeout(time: 12, unit: 'HOURS') {
             def jenkinsUrl = "http://${stackCicdAddr}:8081"
 
             stage('Run CVP before upgrade') {
-                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "[{'name':'SANITY_TESTS_SET', 'value':'test_drivetrain.py'},{'name':'SANITY_TESTS_SETTINGS', 'value':'drivetrain_version=\"${SOURCE_MCP_VERSION}\"'}]")
-                //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "[{'name':'SETTINGS', 'value':'${FUNC_TEST_SETTINGS}'}]")
+                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p SANITY_TESTS_SET=test_drivetrain.py -p SANITY_TESTS_SETTINGS='drivetrain_version=\"${SOURCE_MCP_VERSION}\"'")
+                //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
             stage('Run Upgrade on DriveTrain') {
-                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "upgrade-mcp-release", "[{'name':'MCP_VERSION', 'value':'${TARGET_MCP_VERSION}'}]")
+                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "upgrade-mcp-release", "-p MCP_VERSION=${TARGET_MCP_VERSION}")
             }
 
             stage('Run CVP after upgrade') {
-                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "[{'name':'SANITY_TESTS_SET', 'value':'test_drivetrain.py'},{'name':'SANITY_TESTS_SETTINGS', 'value':'drivetrain_version=\"${TARGET_MCP_VERSION}\"'}]")
-                //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "[{'name':'SETTINGS', 'value':'${FUNC_TEST_SETTINGS}'}]")
+                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p SANITY_TESTS_SET=test_drivetrain.py -p SANITY_TESTS_SETTINGS='drivetrain_version=\"${TARGET_MCP_VERSION}\"'")
+                //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
         } catch (Throwable e) {
