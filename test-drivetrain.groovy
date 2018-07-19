@@ -7,6 +7,7 @@
  *   SOURCE_MCP_VERSION                            MCP version to start with
  *   TARGET_MCP_VERSION                            MCP version to upgrade to
  *   FUNC_TEST_SETTINGS                            Settings for functional tests
+ *   ENVIRONMENT_IP                                IP of already deployed environment
  */
 
 
@@ -45,21 +46,27 @@ timeout(time: 12, unit: 'HOURS') {
             def mcpEnvJob
             def saltReturn
             def saltCreds = [:]
+            def mcpEnvJobIP
 
-            stage('Trigger deploy job') {
-                mcpEnvJob = build(job: "create-mcp-env", parameters: [
-                    [$class: 'StringParameterValue', name: 'OS_AZ', value: 'mcp-mk'],
-                    [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
-                    [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
-                    [$class: 'StringParameterValue', name: 'STACK_INSTALL', value: 'core,cicd'],
-                    [$class: 'BooleanParameterValue', name: 'STACK_FULL', value: false],
-                    [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: false],
-                    [$class: 'TextParameterValue', name: 'COOKIECUTTER_TEMPLATE_CONTEXT', value: COOKIECUTTER_TEMPLATE_CONTEXT]
-                ])
+            if(ENVIRONMENT_IP == ""){
+                stage('Trigger deploy job') {
+                    mcpEnvJob = build(job: "create-mcp-env", parameters: [
+                        [$class: 'StringParameterValue', name: 'OS_AZ', value: 'mcp-mk'],
+                        [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
+                        [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
+                        [$class: 'StringParameterValue', name: 'STACK_INSTALL', value: 'core,cicd'],
+                        [$class: 'BooleanParameterValue', name: 'STACK_FULL', value: false],
+                        [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: false],
+                        [$class: 'TextParameterValue', name: 'COOKIECUTTER_TEMPLATE_CONTEXT', value: COOKIECUTTER_TEMPLATE_CONTEXT]
+                    ])
+                }
+
+                def mcpEnvJobDesc = mcpEnvJob.getDescription().tokenize(" ")
+                mcpEnvJobIP = mcpEnvJobDesc[2]
+            }else{
+                mcpEnvJobIP = ENVIRONMENT_IP
             }
 
-            def mcpEnvJobDesc = mcpEnvJob.getDescription().tokenize(" ")
-            def mcpEnvJobIP = mcpEnvJobDesc[2]
             def saltMasterUrl = "http://${mcpEnvJobIP}:6969"
             def script = "println(com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials.class,jenkins.model.Jenkins.instance).findAll {cred -> cred.id == 'salt'}[0].password)"
             def saltPasswd = sh(returnStdout: true, script: "curl -d \"script=${script}\" --user admin:r00tme http://${mcpEnvJobIP}:8081/scriptText")
