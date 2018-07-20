@@ -49,7 +49,7 @@ def python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
 def artifacts_dir = 'validation_artifacts/'
-if (env.JOB_TIMEOUT == ''){
+if (!env.JOB_TIMEOUT){
     job_timeout = 12
 } else {
     job_timeout = env.JOB_TIMEOUT.toInteger()
