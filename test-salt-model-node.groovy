@@ -29,7 +29,7 @@ def defaultGitUrl = DEFAULT_GIT_URL
 
 def checkouted = false
 
-def reclassVersion = '1.5.4'
+def reclassVersion = 'v1.5.4'
 if (common.validInputParam('RECLASS_VERSION')) {
   reclassVersion = RECLASS_VERSION
 }

@@ -13,7 +13,7 @@ python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 ssh = new com.mirantis.mk.Ssh()
 
-def reclassVersion = '1.5.4'
+def reclassVersion = 'v1.5.4'
 if (common.validInputParam('RECLASS_VERSION')) {
   reclassVersion = RECLASS_VERSION
 }

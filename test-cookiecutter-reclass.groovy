@@ -4,7 +4,7 @@ git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
-def reclassVersion = '1.5.4'
+def reclassVersion = 'v1.5.4'
 if (common.validInputParam('RECLASS_VERSION')) {
   reclassVersion = RECLASS_VERSION
 }
@@ -81,7 +81,7 @@ def generateModel(modelFile, cutterEnv) {
     generateSaltMaster(generatedModel, clusterDomain, clusterName)
 }
 
-def testModel(modelFile, testEnv, reclassVersion='1.5.4') {
+def testModel(modelFile, testEnv, reclassVersion='v1.5.4') {
   def templateEnv = "${env.WORKSPACE}"
   def content = readFile(file: "${templateEnv}/contexts/${modelFile}.yml")
   def templateContext = readYaml text: content
