@@ -29,6 +29,11 @@ def defaultGitUrl = DEFAULT_GIT_URL
 
 def checkouted = false
 
+def reclassVersion = '1.5.4'
+if (common.validInputParam('RECLASS_VERSION')) {
+  reclassVersion = RECLASS_VERSION
+}
+
 throttle(['test-model']) {
   timeout(time: 1, unit: 'HOURS') {
     node("python&&docker") {
@@ -73,7 +78,7 @@ throttle(['test-model']) {
                   workspace,
                   FORMULAS_SOURCE,
                   FORMULAS_REVISION,
-                  RECLASS_VERSION,
+                  reclassVerstion,
                   MAX_CPU_PER_JOB.toInteger(),
                   RECLASS_IGNORE_CLASS_NOTFOUND,
                   LEGACY_TEST_MODE,

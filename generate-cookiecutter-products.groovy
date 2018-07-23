@@ -13,6 +13,11 @@ python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 ssh = new com.mirantis.mk.Ssh()
 
+def reclassVersion = '1.5.4'
+if (common.validInputParam('RECLASS_VERSION')) {
+  reclassVersion = RECLASS_VERSION
+}
+
 timeout(time: 12, unit: 'HOURS') {
   node("python&&docker") {
     def templateEnv = "${env.WORKSPACE}/template"
@@ -178,7 +183,7 @@ parameters:
               testEnv,
               'pkg',
               'stable',
-              'master',
+              reclassVersion,
               0,
               false,
               false,

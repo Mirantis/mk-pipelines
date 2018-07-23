@@ -4,6 +4,11 @@ git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
+def reclassVersion = '1.5.4'
+if (common.validInputParam('RECLASS_VERSION')) {
+  reclassVersion = RECLASS_VERSION
+}
+
 def generateSaltMaster(modEnv, clusterDomain, clusterName) {
     def nodeFile = "${modEnv}/nodes/cfg01.${clusterDomain}.yml"
     def nodeString = """classes:
@@ -101,7 +106,7 @@ def testModel(modelFile, testEnv) {
       testEnv,
       'pkg',
       DISTRIB_REVISION,
-      'master',
+      reclassVersion,
       0,
       false,
       false,
