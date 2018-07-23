@@ -78,7 +78,7 @@ throttle(['test-model']) {
                   workspace,
                   FORMULAS_SOURCE,
                   FORMULAS_REVISION,
-                  reclassVerstion,
+                  reclassVersion,
                   MAX_CPU_PER_JOB.toInteger(),
                   RECLASS_IGNORE_CLASS_NOTFOUND,
                   LEGACY_TEST_MODE,

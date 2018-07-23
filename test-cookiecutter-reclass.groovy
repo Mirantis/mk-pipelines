@@ -81,7 +81,7 @@ def generateModel(modelFile, cutterEnv) {
     generateSaltMaster(generatedModel, clusterDomain, clusterName)
 }
 
-def testModel(modelFile, testEnv) {
+def testModel(modelFile, testEnv, reclassVersion='1.5.4') {
   def templateEnv = "${env.WORKSPACE}"
   def content = readFile(file: "${templateEnv}/contexts/${modelFile}.yml")
   def templateContext = readYaml text: content
@@ -192,7 +192,7 @@ timeout(time: 12, unit: 'HOURS') {
                     for(part in partition){
                         def basename = sh(script: "basename ${part} .yml", returnStdout: true).trim()
                         def testEnv = "${env.WORKSPACE}/model/${basename}"
-                        buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv) })
+                        buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv, reclassVersion) })
                     }
                 }
                 common.serial(buildSteps)
