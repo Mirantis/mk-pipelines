@@ -81,7 +81,7 @@ timeout(time: 12, unit: 'HOURS') {
             def jenkinsUrl = "http://${stackCicdAddr}:8081"
 
             stage('Run CVP before upgrade') {
-                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p SANITY_TESTS_SET=test_drivetrain.py -p SANITY_TESTS_SETTINGS='drivetrain_version=\"${SOURCE_MCP_VERSION}\"'")
+                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${SOURCE_MCP_VERSION}\"'")
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
@@ -90,7 +90,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Run CVP after upgrade') {
-                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p SANITY_TESTS_SET=test_drivetrain.py -p SANITY_TESTS_SETTINGS='drivetrain_version=\"${TARGET_MCP_VERSION}\"'")
+                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${TARGET_MCP_VERSION}\"'")
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
