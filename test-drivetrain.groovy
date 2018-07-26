@@ -8,6 +8,7 @@
  *   TARGET_MCP_VERSION                            MCP version to upgrade to
  *   FUNC_TEST_SETTINGS                            Settings for functional tests
  *   ENVIRONMENT_IP                                IP of already deployed environment
+ *   DELETE_STACK                                  Option to delete Heat Stack
  */
 
 
@@ -59,8 +60,8 @@ timeout(time: 12, unit: 'HOURS') {
             def saltCreds = [:]
             def mcpEnvJobIP
 
-            if(ENVIRONMENT_IP == ""){
-                stage('Trigger deploy job') {
+            stage('Trigger deploy job') {
+                if(ENVIRONMENT_IP == ""){
                     mcpEnvJob = build(job: "create-mcp-env", parameters: [
                         [$class: 'StringParameterValue', name: 'OS_AZ', value: 'mcp-mk'],
                         [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
@@ -70,12 +71,11 @@ timeout(time: 12, unit: 'HOURS') {
                         [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: false],
                         [$class: 'TextParameterValue', name: 'COOKIECUTTER_TEMPLATE_CONTEXT', value: COOKIECUTTER_TEMPLATE_CONTEXT]
                     ])
+                    def mcpEnvJobDesc = mcpEnvJob.getDescription().tokenize(" ")
+                    mcpEnvJobIP = mcpEnvJobDesc[2]
+                }else{
+                    mcpEnvJobIP = ENVIRONMENT_IP
                 }
-
-                def mcpEnvJobDesc = mcpEnvJob.getDescription().tokenize(" ")
-                mcpEnvJobIP = mcpEnvJobDesc[2]
-            }else{
-                mcpEnvJobIP = ENVIRONMENT_IP
             }
 
             def saltMasterUrl = "http://${mcpEnvJobIP}:6969"
@@ -103,6 +103,15 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Run CVP after upgrade') {
                 runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=cvp-sanity-checks/cvp_checks/tests/test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${TARGET_MCP_VERSION}\"'")
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
+            }
+
+            stage('Delete Heat Stack') {
+                if(DELETE_STACK.toBoolean()){
+                    mcpEnvJob = build(job: "delete-heat-stack-for-mcp-env", parameters: [
+                        [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
+                        [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
+                    ])
+                }
             }
 
         } catch (Throwable e) {
