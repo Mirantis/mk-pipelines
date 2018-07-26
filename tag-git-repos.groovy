@@ -6,6 +6,7 @@
  *   GIT_REPO_LIST
  *   GIT_CREDENTIALS
  *   TAG
+ *   SOURCE_TAG initial commit\tag to be tagged with TAG
  *
  */
 
@@ -35,6 +36,11 @@ timeout(time: 12, unit: 'HOURS') {
                 repoName = repoArray[0]
                 repoUrl = repoArray[1]
                 repoCommit = repoArray[2]
+                if (repoCommit.contains('SUBS_SOURCE_REF')) {
+                    common.warningMsg("Replacing SUBS_SOURCE_REF => ${SOURCE_TAG}")
+                    repoCommit.replace('SUBS_SOURCE_REF', SOURCE_TAG
+                        )
+                }
                 gitRepoAddTag(repoUrl, repoName, TAG, GIT_CREDENTIALS, repoCommit)
             }
         } catch (Throwable e) {
