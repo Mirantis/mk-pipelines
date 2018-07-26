@@ -7,6 +7,7 @@
  *   TARGET_REGISTRY                           Target Docker Registry name
  *   REGISTRY_URL                              Target Docker Registry URL
  *   IMAGE_TAG                                 Tag to use when pushing images
+ *   SOURCE_IMAGE_TAG                          Tag to use when pulling images(optional,if SOURCE_IMAGE_TAG has been found)
  *   IMAGE_LIST                                List of images to mirror
  *
  */
@@ -39,6 +40,10 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                     imageArray = image.trim().tokenize(' ')
                     imagePath = imageArray[0]
+                    if (imagePath.contains('SUBS_SOURCE_IMAGE_TAG')) {
+                        common.warningMsg("Replacing SUBS_SOURCE_IMAGE_TAG => ${SOURCE_IMAGE_TAG}")
+                        imagePath.replace('SUBS_SOURCE_IMAGE_TAG', SOURCE_IMAGE_TAG)
+                    }
                     targetRegistry = imageArray[1]
                     imageName = getImageName(imagePath)
                     sh """docker pull ${imagePath}
