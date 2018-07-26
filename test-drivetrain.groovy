@@ -34,10 +34,21 @@ SALTAPI_PASS=${creds.password}
 }
 
 def runJobOnJenkins(jenkinsUrl, userName, password, jobName, parameters){
+    def status = "null"
     def jenkinsDownCmd = "curl -OL ${jenkinsUrl}/jnlpJars/jenkins-cli.jar --output ./jenkins-cli.jar"
-    def runJobFromSaltMasterCmd = "java -jar jenkins-cli.jar -s ${jenkinsUrl} -noKeyAuth -auth admin:${password} build ${jobName} ${parameters} -s | grep -E 'SUCCESS|UNSTABLE'"
+    def runJobFromSaltMasterCmd = "java -jar jenkins-cli.jar -s ${jenkinsUrl} -noKeyAuth -auth ${userName}:${password} build ${jobName} ${parameters} -w"
+    def waitJobFromSaltMasterCmd = "curl -s -X GET '${jenkinsUrl}/job/${jobName}/lastBuild/api/json?tree=result' --user ${userName}:${password} | jq -r '.result'"
     salt.cmdRun(pepperEnv, "I@salt:master", jenkinsDownCmd)
     salt.cmdRun(pepperEnv, "I@salt:master", runJobFromSaltMasterCmd)
+    while (status == "null" || status.contains("parse error")){
+        status = salt.cmdRun(pepperEnv, "I@salt:master", waitJobFromSaltMasterCmd, false)
+        status = status.get("return")[0].values()[0].trim()
+        println("The job ${jobName} result is $status")
+        if(status == "FAILURE"){
+            throw new Exception("The job ${jobName} result is FAILURE.")
+        }
+        sleep(10)
+    }
 }
 
 timeout(time: 12, unit: 'HOURS') {
