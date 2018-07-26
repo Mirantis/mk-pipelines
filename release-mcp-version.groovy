@@ -39,12 +39,13 @@ def triggerAptlyPromoteJob(aptlyUrl, components, diffOnly, dumpPublish, packages
   ]
 }
 
-def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, targetTag, imageList) {
+def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, targetTag, imageList, sourceImageTag) {
   build job: "docker-images-mirror", parameters: [
     [$class: 'StringParameterValue', name: 'TARGET_REGISTRY_CREDENTIALS_ID', value: dockerCredentials],
     [$class: 'StringParameterValue', name: 'REGISTRY_URL', value: dockerRegistryUrl],
     [$class: 'StringParameterValue', name: 'IMAGE_TAG', value: targetTag],
-    [$class: 'StringParameterValue', name: 'IMAGE_LIST', value: imageList]
+    [$class: 'StringParameterValue', name: 'IMAGE_LIST', value: imageList],
+    [$class: 'StringParameterValue', name: 'SOURCE_IMAGE_TAG', value: sourceImageTag]
   ]
 }
 
@@ -81,7 +82,7 @@ timeout(time: 12, unit: 'HOURS') {
                 if(RELEASE_DOCKER.toBoolean())
                 {
                     common.infoMsg("Promoting Docker images")
-                    triggerDockerMirrorJob(DOCKER_CREDENTIALS, DOCKER_URL, TARGET_REVISION, DOCKER_IMAGES)
+                    triggerDockerMirrorJob(DOCKER_CREDENTIALS, DOCKER_URL, TARGET_REVISION, DOCKER_IMAGES, SOURCE_REVISION)
                 }
 
                 if(RELEASE_GIT.toBoolean())
