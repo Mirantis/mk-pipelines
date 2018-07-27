@@ -224,6 +224,17 @@ timeout(time: 12, unit: 'HOURS') {
                             envParams.put('cfg_saltversion', SALT_VERSION)
                         }
 
+                        // If stack wasn't removed by the same user which has created it,
+                        // nova key pair won't be removed, so need to make sure that no
+                        // key pair with the same name exists before creating the stack.
+                        if (openstack.getKeyPair(openstackCloud, STACK_NAME, venv)){
+                            try {
+                                openstack.deleteKeyPair(openstackCloud, STACK_NAME, venv)
+                            } catch (Exception e) {
+                                common.errorMsg("Key pair failed to remove with error ${e.message}")
+                            }
+                        }
+
                         openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv)
                     }
 
