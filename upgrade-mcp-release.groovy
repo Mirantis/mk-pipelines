@@ -67,11 +67,15 @@ def archiveReclassInventory(filename){
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
         try {
+            def gitMcpVersion = MCP_VERSION
             workspace = common.getWorkspace()
             python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
             if(MCP_VERSION == ""){
                 error("You must specify MCP version")
+            }
+            if(MCP_VERSION == "testing"){
+                gitMcpVersion = "master"
             }
 
             stage("Update Reclass"){
@@ -92,7 +96,7 @@ timeout(time: 12, unit: 'HOURS') {
                 catch(Exception ex){
                     error("You have unstaged changes in your Reclass system model repository. Please reset them and rerun the pipeline.")
                 }
-                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $MCP_VERSION")
+                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $gitMcpVersion")
             }
 
             if(UPDATE_LOCAL_REPOS.toBoolean()){
