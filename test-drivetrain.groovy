@@ -91,6 +91,10 @@ timeout(time: 12, unit: 'HOURS') {
             def stackCicdAddr = saltReturn.get("return")[0].values()[0]
             def jenkinsUrl = "http://${stackCicdAddr}:8081"
 
+            salt.cmdRun(pepperEnv, "I@salt:master", 'cd /srv/salt/reclass && echo -e ".gitignore\\nclasses/service/\\nnodes/_generated/" >> .gitignore')
+            salt.cmdRun(pepperEnv, "I@salt:master", "cd /srv/salt/reclass && git reset --hard")
+            salt.cmdRun(pepperEnv, "I@salt:master", "cd /srv/salt/reclass/classes/system && git reset --hard && git clean -fd")
+
             stage('Run CVP before upgrade') {
                 runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=cvp-sanity-checks/cvp_checks/tests/test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${SOURCE_MCP_VERSION}\"'")
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
