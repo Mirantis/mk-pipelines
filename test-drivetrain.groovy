@@ -109,18 +109,16 @@ timeout(time: 12, unit: 'HOURS') {
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
-            stage('Delete Heat Stack') {
-                if(DELETE_STACK.toBoolean()){
-                    mcpEnvJob = build(job: "delete-heat-stack-for-mcp-env", parameters: [
-                        [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
-                        [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
-                    ])
-                }
-            }
-
         } catch (Throwable e) {
             currentBuild.result = 'FAILURE'
             throw e
+        } finally{
+            if(DELETE_STACK.toBoolean() && ENVIRONMENT_IP == ""){
+                mcpEnvJob = build(job: "delete-heat-stack-for-mcp-env", parameters: [
+                    [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
+                    [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
+                ])
+            }
         }
     }
 }
