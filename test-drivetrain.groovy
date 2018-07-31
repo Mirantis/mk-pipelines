@@ -95,8 +95,12 @@ timeout(time: 12, unit: 'HOURS') {
             salt.cmdRun(pepperEnv, "I@salt:master", "cd /srv/salt/reclass && git reset --hard")
             salt.cmdRun(pepperEnv, "I@salt:master", "cd /srv/salt/reclass/classes/system && git reset --hard && git clean -fd")
 
+            //TODO: Temporary fix. Remove the line below after 2a3757a (reclass-system) is in stable tag.
+            salt.cmdRun(pepperEnv, "cid*", "mkdir /etc/aptly", false)
+
             stage('Run CVP before upgrade') {
                 runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=cvp-sanity-checks/cvp_checks/tests/test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${SOURCE_MCP_VERSION}\"'")
+                //TODO: Enable functional tests after they become implemented.
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
@@ -106,6 +110,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Run CVP after upgrade') {
                 runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=cvp-sanity-checks/cvp_checks/tests/test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${TARGET_MCP_VERSION}\"'")
+                //TODO: Enable functional tests after they become implemented.
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
