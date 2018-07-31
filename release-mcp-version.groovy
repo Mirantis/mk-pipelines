@@ -27,41 +27,41 @@ git = new com.mirantis.mk.Git()
 
 def triggerAptlyPromoteJob(aptlyUrl, components, diffOnly, dumpPublish, packages, recreate, source, storages, target){
   build job: "aptly-promote-all-testing-stable", parameters: [
-  [$class: 'StringParameterValue', name: 'APTLY_URL', value: aptlyUrl],
-  [$class: 'StringParameterValue', name: 'COMPONENTS', value: components],
-  [$class: 'BooleanParameterValue', name: 'DIFF_ONLY', value: diffOnly],
-  [$class: 'BooleanParameterValue', name: 'DUMP_PUBLISH', value: dumpPublish],
-  [$class: 'StringParameterValue', name: 'PACKAGES', value: packages],
-  [$class: 'BooleanParameterValue', name: 'RECREATE', value: recreate],
-  [$class: 'StringParameterValue', name: 'SOURCE', value: source],
-  [$class: 'StringParameterValue', name: 'STORAGES', value: storages],
-  [$class: 'StringParameterValue', name: 'TARGET', value: target]
+    [$class: 'StringParameterValue', name: 'APTLY_URL', value: aptlyUrl],
+    [$class: 'StringParameterValue', name: 'COMPONENTS', value: components],
+    [$class: 'BooleanParameterValue', name: 'DIFF_ONLY', value: diffOnly],
+    [$class: 'BooleanParameterValue', name: 'DUMP_PUBLISH', value: dumpPublish],
+    [$class: 'StringParameterValue', name: 'PACKAGES', value: packages],
+    [$class: 'BooleanParameterValue', name: 'RECREATE', value: recreate],
+    [$class: 'StringParameterValue', name: 'SOURCE', value: source],
+    [$class: 'StringParameterValue', name: 'STORAGES', value: storages],
+    [$class: 'StringParameterValue', name: 'TARGET', value: target],
   ]
 }
 
 def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, targetTag, imageList, sourceImageTag) {
   build job: "docker-images-mirror", parameters: [
-  [$class: 'StringParameterValue', name: 'TARGET_REGISTRY_CREDENTIALS_ID', value: dockerCredentials],
-  [$class: 'StringParameterValue', name: 'REGISTRY_URL', value: dockerRegistryUrl],
-  [$class: 'StringParameterValue', name: 'IMAGE_TAG', value: targetTag],
-  [$class: 'StringParameterValue', name: 'IMAGE_LIST', value: imageList],
-  [$class: 'StringParameterValue', name: 'SOURCE_IMAGE_TAG', value: sourceImageTag]
+    [$class: 'StringParameterValue', name: 'TARGET_REGISTRY_CREDENTIALS_ID', value: dockerCredentials],
+    [$class: 'StringParameterValue', name: 'REGISTRY_URL', value: dockerRegistryUrl],
+    [$class: 'StringParameterValue', name: 'IMAGE_TAG', value: targetTag],
+    [$class: 'StringParameterValue', name: 'IMAGE_LIST', value: imageList],
+    [$class: 'StringParameterValue', name: 'SOURCE_IMAGE_TAG', value: sourceImageTag],
   ]
 }
 
 def triggerMirrorRepoJob(snapshotId, snapshotName) {
   build job: "mirror-snapshot-name-all", parameters: [
-  [$class: 'StringParameterValue', name: 'SNAPSHOT_NAME', value: snapshotName],
-  [$class: 'StringParameterValue', name: 'SNAPSHOT_ID', value: snapshotId]
+    [$class: 'StringParameterValue', name: 'SNAPSHOT_NAME', value: snapshotName],
+    [$class: 'StringParameterValue', name: 'SNAPSHOT_ID', value: snapshotId],
   ]
 }
 
 def triggerGitTagJob(gitRepoList, gitCredentials, tag, sourceTag) {
   build job: "tag-git-repos-stable", parameters: [
-  [$class: 'StringParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
-  [$class: 'StringParameterValue', name: 'GIT_CREDENTIALS', value: gitCredentials],
-  [$class: 'StringParameterValue', name: 'TAG', value: tag],
-  [$class: 'StringParameterValue', name: 'SOURCE_TAG', value: sourceTag]
+    [$class: 'StringParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
+    [$class: 'StringParameterValue', name: 'GIT_CREDENTIALS', value: gitCredentials],
+    [$class: 'StringParameterValue', name: 'TAG', value: tag],
+    [$class: 'StringParameterValue', name: 'SOURCE_TAG', value: sourceTag],
   ]
 }
 
