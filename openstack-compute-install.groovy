@@ -80,7 +80,9 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage("Highstate compute") {
                 // Execute highstate without state opencontrail.client.
-                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'state.highstate', ['exclude=opencontrail.client'], null, true)
+                common.retry(2){
+                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'state.highstate', ['exclude=opencontrail.client'], null, true)
+                }
 
                 // Apply nova state to remove libvirt default bridge virbr0.
                 salt.enforceState(pepperEnv, targetLiveAll, 'nova', true)
