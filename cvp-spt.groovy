@@ -44,7 +44,7 @@ node() {
                  file: "report.xml",
                  nodeType: 'NODESET',
                  url: '',
-                 xpath: '/testsuite/testcase[@classname="cvp-spt.cvp_spt.tests.test_hw2hw"]/properties/property']]
+                 xpath: '/testsuite/testcase[@classname="cvp_spt.tests.test_hw2hw"]/properties/property']]
             plot csvFileName: 'plot-8634d2fe-dc48-4713-99f9-b69a381483bc.csv',
                  group: 'SPT',
                  style: 'line',
@@ -53,7 +53,7 @@ node() {
                  file: "report.xml",
                  nodeType: 'NODESET',
                  url: '',
-                 xpath: '/testsuite/testcase[@classname="cvp-spt.cvp_spt.tests.test_vm2vm"]/properties/property']]
+                 xpath: '/testsuite/testcase[@classname="cvp_spt.tests.test_vm2vm"]/properties/property']]
         }
     } catch (Throwable e) {
         // If there was an error or exception thrown, the build failed
