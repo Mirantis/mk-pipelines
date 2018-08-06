@@ -87,7 +87,11 @@ timeout(time: 12, unit: 'HOURS') {
                     catch(Exception ex){
                         error("You have uncommited changes in your Reclass cluster model repository. Please commit or reset them and rerun the pipeline.")
                     }
+                    def dateTime = common.getDatetime()
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs sed -i 's/apt_mk_version: .*/apt_mk_version: \"$MCP_VERSION\"/g'")
+                    common.infoMsg("The following changes were made to the cluster model and will be commited. Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
+                    salt.cmdRun(venvPepper, 'I@salt.master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git status && git add -u && git commit -m 'Cluster model update to the release $MCP_VERSION on $dateTime'")
                 }
 
                 try{
