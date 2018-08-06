@@ -355,6 +355,10 @@ timeout(time: 12, unit: 'HOURS') {
               }
             }
 
+            stage('Install Orchestrated Apps'){
+                orchestrate.OrchestrateApplications(venvPepper, "I@salt:master ${extra_tgt}", "orchestration.deploy.applications")
+            }
+
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
 
