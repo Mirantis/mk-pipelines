@@ -46,7 +46,7 @@ def updateSaltStack(target, pkgs){
     }
 
     def saltVersion = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_version").get("return")[0].values()[0]
-    def saltMinionVersions = salt.cmdRun(venvPepper, "*", "apt-cache policy salt-common |  awk '/Installed/ && /$saltVersion/'").get("return")
+    def saltMinionVersions = salt.cmdRun(venvPepper, target, "apt-cache policy salt-common |  awk '/Installed/ && /$saltVersion/'").get("return")
     def saltMinionVersion = ""
 
     for(minion in saltMinionVersions[0].keySet()){
