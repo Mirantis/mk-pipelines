@@ -39,6 +39,7 @@
  *   GENERATE_REPORT             If not false, run report generation command
  *   ACCUMULATE_RESULTS          If true, results from the previous build will be used
  *   JOB_TIMEOUT                 Job timeout in hours
+ *   SKIP_LIST                   List of the Rally scenarios which should be skipped
  *
  */
 
@@ -93,7 +94,7 @@ timeout(time: job_timeout, unit: 'HOURS') {
                       rally_variables = ["plugins_repo":"${RALLY_PLUGINS_REPO}",
                                          "plugins_branch":"${RALLY_PLUGINS_BRANCH}"]
                     }
-                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, platform, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables, report_dir)
+                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, platform, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables, report_dir, SKIP_LIST)
                 } else {
                     common.infoMsg("Skipping Rally tests")
                 }
