@@ -11,8 +11,8 @@ timeout(time: 1, unit: 'HOURS') {
 node() {
   try {
     extra_vars = readYaml text: EXTRA_VARIABLES_YAML
+    currentBuild.description = extra_vars.modelFile
     saltModelTesting.testCCModel(extra_vars)
-    currentBuild.description = cfg.modelFile
     } catch (Throwable e) {
           // If there was an error or exception thrown, the build failed
           currentBuild.result = "FAILURE"
