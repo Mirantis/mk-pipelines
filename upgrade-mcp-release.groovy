@@ -64,7 +64,12 @@ def archiveReclassInventory(filename){
     archiveArtifacts artifacts: "$filename"
 }
 
-timeout(time: 12, unit: 'HOURS') {
+def pipelineTimeout = 12
+if (common.validInputParam('PIPELINE_TIMEOUT') && PIPELINE_TIMEOUT.isInteger()) {
+    pipelineTimeout = "${PIPELINE_TIMEOUT}".toInteger()
+}
+
+timeout(time: pipelineTimeout, unit: 'HOURS') {
     node("python") {
         try {
             def gitMcpVersion = MCP_VERSION
