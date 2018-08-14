@@ -64,12 +64,16 @@ timeout(time: 12, unit: 'HOURS') {
           checkout changelog: true, poll: false,
             scm: [$class: 'GitSCM', branches: pollBranches, doGenerateSubmoduleConfigurations: false,
             extensions: extensions,  submoduleCfg: [], userRemoteConfigs: userRemoteConfigs]
+
+          /* There are 2 schemas of build spec keeping:
+                 1. Separate directory with specs.
+                 2. Separate branch with build specs. I.e. debian/xenial
+             Logic below makes package build compatible with both schemas.
+          */
+          if (fileExists('debian/changelog')) {
+              debian_branch = null
+          }
           if (debian_branch){
-            /* There are 2 schemas of build spec keeping:
-                   1. Separate branch with build specs. I.e. debian/xenial
-                   2. Separate directory with specs.
-               Logic below makes package build compatible with both schemas.
-            */
             def retStatus = sh(script: 'git checkout ' + DEBIAN_BRANCH, returnStatus: true)
             if (retStatus != 0) {
               common.warningMsg("Cannot checkout ${DEBIAN_BRANCH} branch. Going to build package by ${SOURCE_BRANCH} branch.")
