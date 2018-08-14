@@ -44,7 +44,7 @@ timeout(time: 12, unit: 'HOURS') {
         repoCommit = repoArray[2]
         if (repoCommit.contains('SUBS_SOURCE_REF')) {
           common.warningMsg("Replacing SUBS_SOURCE_REF => ${SOURCE_TAG}")
-          repoCommit.replace('SUBS_SOURCE_REF', SOURCE_TAG
+          repoCommit = repoCommit.replace('SUBS_SOURCE_REF', SOURCE_TAG
             )
         }
         gitRepoAddTag(repoUrl, repoName, TAG, GIT_CREDENTIALS, repoCommit)

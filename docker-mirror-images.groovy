@@ -42,7 +42,7 @@ timeout(time: 12, unit: 'HOURS') {
                     imagePath = imageArray[0]
                     if (imagePath.contains('SUBS_SOURCE_IMAGE_TAG')) {
                         common.warningMsg("Replacing SUBS_SOURCE_IMAGE_TAG => ${SOURCE_IMAGE_TAG}")
-                        imagePath.replace('SUBS_SOURCE_IMAGE_TAG', SOURCE_IMAGE_TAG)
+                        imagePath = imagePath.replace('SUBS_SOURCE_IMAGE_TAG', SOURCE_IMAGE_TAG)
                     }
                     targetRegistry = imageArray[1]
                     imageName = getImageName(imagePath)
