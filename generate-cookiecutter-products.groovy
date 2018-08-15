@@ -17,9 +17,19 @@ def reclassVersion = 'v1.5.4'
 if (common.validInputParam('RECLASS_VERSION')) {
   reclassVersion = RECLASS_VERSION
 }
+slaveNode = (env.SLAVE_NODE ?: 'python&&docker')
 
-timeout(time: 12, unit: 'HOURS') {
-  node("python&&docker") {
+// install extra formulas required only for rendering cfg01. All others - should be fetched automatically via
+// salt.master.env state, during salt-master bootstrap.
+// TODO: In the best - those data should fetched somewhere from CC, per env\context. Like option, process _enabled
+// options from CC contexts
+// currently, just mix them together in one set
+def testCfg01ExtraFormulas = 'glusterfs jenkins logrotate maas ntp rsyslog fluentd telegraf prometheus ' +
+                             'grafana backupninja auditd'
+
+
+timeout(time: 2, unit: 'HOURS') {
+  node(slaveNode) {
     def templateEnv = "${env.WORKSPACE}/template"
     def modelEnv = "${env.WORKSPACE}/model"
     def testEnv = "${env.WORKSPACE}/test"
@@ -43,6 +53,7 @@ timeout(time: 12, unit: 'HOURS') {
       def templateDir = "${templateEnv}/template/dir"
       def templateOutputDir = templateBaseDir
       def user
+      def testResult = false
       wrap([$class: 'BuildUser']) {
         user = env.BUILD_USER_ID
       }
@@ -50,7 +61,8 @@ timeout(time: 12, unit: 'HOURS') {
       currentBuild.description = clusterName
       print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
 
-      stage ('Download Cookiecutter template') {
+      stage('Download Cookiecutter template') {
+        sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
         def cookiecutterTemplateUrl = templateContext.default_context.cookiecutter_template_url
         def cookiecutterTemplateBranch = templateContext.default_context.cookiecutter_template_branch
         git.checkoutGitRepository(templateEnv, cookiecutterTemplateUrl, 'master')
@@ -64,7 +76,7 @@ timeout(time: 12, unit: 'HOURS') {
           if (cookiecutterTemplateBranch == '') {
             cookiecutterTemplateBranch = mcpVersion
             // Don't have nightly/testing/stable for cookiecutter-templates repo, therefore use master
-            if(mcpVersion == "nightly" || mcpVersion == "testing" || mcpVersion == "stable"){
+            if ([ "nightly" , "testing", "stable" ].contains(mcpVersion)) {
               cookiecutterTemplateBranch = 'master'
             }
           }
@@ -72,7 +84,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
       }
 
-      stage ('Create empty reclass model') {
+      stage('Create empty reclass model') {
         dir(path: modelEnv) {
           sh "rm -rfv .git"
           sh "git init"
@@ -89,8 +101,9 @@ timeout(time: 12, unit: 'HOURS') {
           // Use mcpVersion git tag if not specified branch for reclass-system
           if (sharedReclassBranch == '') {
             sharedReclassBranch = mcpVersion
-            // Don't have nightly/testing/stable for reclass-system repo, therefore use master
-            if(mcpVersion == "nightly" || mcpVersion == "testing" || mcpVersion == "stable"){
+            // Don't have nightly/testing for reclass-system repo, therefore use master
+            if ([ "nightly" , "testing", "stable" ].contains(mcpVersion)) {
+              common.warningMsg("Fetching reclass-system from master!")
               sharedReclassBranch = 'master'
             }
           }
@@ -142,11 +155,11 @@ timeout(time: 12, unit: 'HOURS') {
         }
       }
 
-      if(localRepositories && !offlineDeployment){
+      if (localRepositories && !offlineDeployment) {
         def aptlyModelUrl = templateContext.default_context.local_model_url
         dir(path: modelEnv) {
           ssh.agentSh "git submodule add \"${aptlyModelUrl}\" \"classes/cluster/${clusterName}/cicd/aptly\""
-          if(!(mcpVersion in ["nightly", "testing", "stable"])){
+          if (!(mcpVersion in ["nightly", "testing", "stable"])) {
             ssh.agentSh "cd \"classes/cluster/${clusterName}/cicd/aptly\";git fetch --tags;git checkout ${mcpVersion}"
           }
         }
@@ -173,16 +186,16 @@ parameters:
 
       stage("Test") {
         if (TEST_MODEL.toBoolean() && sharedReclassUrl != '') {
-          def testResult = false
           sh("cp -r ${modelEnv} ${testEnv}")
           def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
+          common.infoMsg("Attempt to run test against formula-version: ${mcpVersion}")
           testResult = saltModelTesting.setupAndTestNode(
               "${saltMaster}.${clusterDomain}",
               "",
-              "",
+              testCfg01ExtraFormulas,
               testEnv,
               'pkg',
-              'stable',
+              mcpVersion,
               reclassVersion,
               0,
               false,
@@ -193,8 +206,7 @@ parameters:
           if (testResult) {
             common.infoMsg("Test finished: SUCCESS")
           } else {
-            common.infoMsg('Test finished: FAILURE')
-            throw new RuntimeException('Test stage finished: FAILURE')
+            common.warningMsg('Test finished: FAILURE')
           }
         } else {
           common.warningMsg("Test stage has been skipped!")
@@ -208,16 +220,18 @@ parameters:
         def mcpCommonScriptsBranch = templateContext.default_context.mcp_common_scripts_branch
         if (mcpCommonScriptsBranch == '') {
           mcpCommonScriptsBranch = mcpVersion
-          // Don't have nightly for mcp-common-scripts repo, therefore use master
-          if(mcpVersion == "nightly"){
+          // Don't have n/t/s for mcp-common-scripts repo, therefore use master
+          if ([ "nightly" , "testing", "stable" ].contains(mcpVersion)) {
+            common.warningMsg("Fetching mcp-common-scripts from master!")
             mcpCommonScriptsBranch = 'master'
           }
         }
         def config_drive_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${mcpCommonScriptsBranch}/config-drive/create_config_drive.sh"
         def user_data_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${mcpCommonScriptsBranch}/config-drive/master_config.sh"
-
-        sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
-        sh "wget -O user_data.sh ${user_data_script_url}"
+        common.retry(3, 5) {
+          sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
+          sh "wget -O user_data.sh ${user_data_script_url}"
+        }
 
         sh "git clone --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
         sh "git clone --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
@@ -231,7 +245,7 @@ parameters:
         smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
         smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
         smc['MCP_VERSION'] = "${mcpVersion}"
-        if (templateContext['default_context']['local_repositories'] == 'True'){
+        if (templateContext['default_context']['local_repositories'] == 'True') {
           def localRepoIP = templateContext['default_context']['local_repo_url']
           smc['MCP_SALT_REPO_KEY'] = "http://${localRepoIP}/public.gpg"
           smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}/ubuntu-xenial"
@@ -239,8 +253,8 @@ parameters:
           smc['PIPELINE_REPO_URL'] = "http://${localRepoIP}:8088"
           smc['LOCAL_REPOS'] = 'true'
         }
-        if (templateContext['default_context']['upstream_proxy_enabled'] == 'True'){
-          if (templateContext['default_context']['upstream_proxy_auth_enabled'] == 'True'){
+        if (templateContext['default_context']['upstream_proxy_enabled'] == 'True') {
+          if (templateContext['default_context']['upstream_proxy_auth_enabled'] == 'True') {
             smc['http_proxy'] = 'http://' + templateContext['default_context']['upstream_proxy_user'] + ':' + templateContext['default_context']['upstream_proxy_password'] + '@' + templateContext['default_context']['upstream_proxy_address'] + ':' + templateContext['default_context']['upstream_proxy_port']
             smc['https_proxy'] = 'http://' + templateContext['default_context']['upstream_proxy_user'] + ':' + templateContext['default_context']['upstream_proxy_password'] + '@' + templateContext['default_context']['upstream_proxy_address'] + ':' + templateContext['default_context']['upstream_proxy_port']
           } else {
@@ -260,7 +274,7 @@ parameters:
         // save cfg iso to artifacts
         archiveArtifacts artifacts: "output-${clusterName}/${saltMaster}.${clusterDomain}-config.iso"
 
-        if (templateContext['default_context']['local_repositories'] == 'True'){
+        if (templateContext['default_context']['local_repositories'] == 'True') {
           def aptlyServerHostname = templateContext.default_context.aptly_server_hostname
           def user_data_script_apt_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/config-drive/mirror_config.sh"
           sh "wget -O mirror_config.sh ${user_data_script_apt_url}"
@@ -284,8 +298,8 @@ parameters:
         }
       }
 
-      stage ('Save changes reclass model') {
-        sh(returnStatus: true, script: "tar -zcf output-${clusterName}/${clusterName}.tar.gz -C ${modelEnv} .")
+      stage('Save changes reclass model') {
+        sh(returnStatus: true, script: "tar -czf output-${clusterName}/${clusterName}.tar.gz --exclude='*@tmp' -C ${modelEnv} .")
         archiveArtifacts artifacts: "output-${clusterName}/${clusterName}.tar.gz"
 
 
@@ -295,21 +309,24 @@ parameters:
               body: "Mirantis Jenkins\n\nRequested reclass model ${clusterName} has been created and attached to this email.\nEnjoy!\n\nMirantis",
               subject: "Your Salt model ${clusterName}")
         }
-        dir("output-${clusterName}"){
+        dir("output-${clusterName}") {
           deleteDir()
         }
       }
 
+      // Fail, but leave possibility to get failed artifacts
+      if (!testResult && TEST_MODEL.toBoolean()) {
+        common.warningMsg('Test finished: FAILURE. Please check logs and\\or debug failed model manually!')
+        error('Test stage finished: FAILURE')
+      }
+
     } catch (Throwable e) {
-      // If there was an error or exception thrown, the build failed
       currentBuild.result = "FAILURE"
       currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
       throw e
     } finally {
-      stage ('Clean workspace directories') {
-        sh(returnStatus: true, script: "rm -rf ${templateEnv}")
-        sh(returnStatus: true, script: "rm -rf ${modelEnv}")
-        sh(returnStatus: true, script: "rm -rf ${pipelineEnv}")
+      stage('Clean workspace directories') {
+        sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
       }
       // common.sendNotification(currentBuild.result,"",["slack"])
     }
