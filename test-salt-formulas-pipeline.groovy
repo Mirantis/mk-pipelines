@@ -74,6 +74,13 @@ timeout(time: 12, unit: 'HOURS') {
   node("python") {
     try {
       stage("checkout") {
+        if (fileExists('tests/build')) {
+          echo 'Cleaning from previous build...'
+          dir('tests/build') {
+            deleteDir()
+          }
+        }
+
         if (gerritRef) {
           // job is triggered by Gerrit
           def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
@@ -127,6 +134,7 @@ timeout(time: 12, unit: 'HOURS') {
               && apt-get install -y git-core wget curl apt-transport-https \
               && apt-get install -y python-pip python3-pip python-virtualenv python3-virtualenv python-yaml autoconf build-essential""")
               sh("cd /formula/ && make clean && make test")
+              sh("cd /formula/ && rm -rf tests/build")
             }
           } else {
             common.warningMsg("Those tests should be always be run in clean env! Recommends to use docker env!")
