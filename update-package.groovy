@@ -11,12 +11,10 @@
  *   TARGET_BATCH_LIVE          Batch size for the complete live package update on all nodes, empty string means apply to all targetted nodes.
  *
 **/
-
+pepperEnv = "pepperEnv"
+salt = new com.mirantis.mk.Salt()
 def common = new com.mirantis.mk.Common()
-def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
-
-def pepperEnv = "pepperEnv"
 def targetTestSubset
 def targetLiveSubset
 def targetLiveAll
@@ -25,6 +23,10 @@ def result
 def packages
 def command
 def commandKwargs
+def installSaltStack(target, pkgs){
+    salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ["force_yes=True", "pkgs='$pkgs'"], null, true, 30)
+}
+
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
@@ -89,6 +91,20 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Apply package upgrades on sample') {
+                if(packages == null || packages.contains("salt-master") || packages.contains("salt-common") || packages.contains("salt-minion") || packages.contains("salt-api")){
+                    def saltTargets = (targetLiveSubset.split(' or ').collect{it as String})
+                    for(int i = 0; i < saltTargets.size(); i++ ){
+                        common.infoMsg("During salt-minion upgrade on cfg node, pipeline lose connectivy to salt-master for 2 min. If pipeline ended with error rerun pipeline again.")
+                        common.retry(10, 5) {
+                            if(salt.minionsReachable(pepperEnv, 'I@salt:master', "I@salt:master and ${saltTargets[i]}")){
+                                installSaltStack("I@salt:master and ${saltTargets[i]}", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+                            }
+                            if(salt.minionsReachable(pepperEnv, 'I@salt:master', "I@salt:minion and not I@salt:master and ${saltTargets[i]}")){
+                                installSaltStack("I@salt:minion and not I@salt:master and ${saltTargets[i]}", '["salt-minion"]')
+                            }
+                        }
+                    }
+                }
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, packages, commandKwargs)
                 salt.printSaltCommandResult(out)
             }
@@ -100,6 +116,22 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Apply package upgrades on all nodes') {
+
+                if(packages == null || packages.contains("salt-master") || packages.contains("salt-common") || packages.contains("salt-minion") || packages.contains("salt-api")){
+                    def saltTargets = (targetLiveAll.split(' or ').collect{it as String})
+                    for(int i = 0; i < saltTargets.size(); i++ ){
+                        common.infoMsg("During salt-minion upgrade on cfg node, pipeline lose connectivy to salt-master for 2 min. If pipeline ended with error rerun pipeline again.")
+                        common.retry(10, 5) {
+                            if(salt.minionsReachable(pepperEnv, 'I@salt:master', "I@salt:master and ${saltTargets[i]}")){
+                                installSaltStack("I@salt:master and ${saltTargets[i]}", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+                            }
+                            if(salt.minionsReachable(pepperEnv, 'I@salt:master', "I@salt:minion and not I@salt:master and ${saltTargets[i]}")){
+                                installSaltStack("I@salt:minion and not I@salt:master and ${saltTargets[i]}", '["salt-minion"]')
+                            }
+                        }
+                    }
+                }
+
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, packages, commandKwargs)
                 salt.printSaltCommandResult(out)
             }
