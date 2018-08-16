@@ -4,28 +4,19 @@
  *  DEFAULT_GIT_URL
  *  CREDENTIALS_ID
  *  KITCHEN_TESTS_PARALLEL
- *  RUN_TEST_IN_DOCKER     If true, run test stage in docker
  *  SMOKE_TEST_DOCKER_IMG  Docker image for run test (default "ubuntu:16.04")
  */
 common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ruby = new com.mirantis.mk.Ruby()
 
-def gerritRef
-try {
-  gerritRef = GERRIT_REFSPEC
-} catch (MissingPropertyException e) {
-  gerritRef = null
-}
-
-def defaultGitRef, defaultGitUrl
-try {
-  defaultGitRef = DEFAULT_GIT_REF
-  defaultGitUrl = DEFAULT_GIT_URL
-} catch (MissingPropertyException e) {
-  defaultGitRef = null
-  defaultGitUrl = null
-}
+def gerritRef = env.GERRIT_REFSPEC ?: null
+def defaultGitRef = env.DEFAULT_GIT_REF ?: null
+def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
+def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
+def saltVersion = env.SALT_VERSION ?: ""
+def dockerLib = new com.mirantis.mk.Docker()
+def img = dockerLib.getImage(env.SMOKE_TEST_DOCKER_IMG, "ubuntu:16.04")
 
 def checkouted = false
 
@@ -70,15 +61,14 @@ def triggerTestFormulaJob(testEnv, defaultGitRef, defaultGitUrl) {
     [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION]
   ]
 }
-timeout(time: 12, unit: 'HOURS') {
-  node("python") {
+timeout(time: 2, unit: 'HOURS') {
+  node(slaveNode) {
     try {
+      if (fileExists("tests/build")) {
+        common.infoMsg('Cleaning test env')
+        sh ("sudo rm -rf tests/build")
+      }
       stage("checkout") {
-        if (fileExists('tests/build')) {
-          echo 'Cleaning from previous build...'
-          sh ('sudo rm -rf tests/build')
-        }
-
         if (gerritRef) {
           // job is triggered by Gerrit
           def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
@@ -107,40 +97,39 @@ timeout(time: 12, unit: 'HOURS') {
           throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
         }
     }
-    stage("test") {
-      if (checkouted) {
-        try {
-          saltVersion = SALT_VERSION
-            } catch (MissingPropertyException e) {
-          saltVersion = "" // default value is empty string, means latest
-        }
-        withEnv(["SALT_VERSION=${saltVersion}"]) {
-          boolean run_test_in_docker = (env.RUN_TEST_IN_DOCKER ?: false).toBoolean()
-          if (run_test_in_docker) {
-            def dockerLib = new com.mirantis.mk.Docker()
-            def img = dockerLib.getImage(env.SMOKE_TEST_DOCKER_IMG, "ubuntu:16.04")
-            def workspace = common.getWorkspace()
-            img.inside("-u root:root -v ${workspace}/:/formula/") {
-              sh("""cd /etc/apt/ && echo > sources.list \
-              && echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial main restricted universe multiverse" >> sources.list \
-              && echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial-updates main restricted universe multiverse" >> sources.list \
-              && echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial-backports main restricted universe multiverse" >> sources.list \
-              && echo 'Acquire::Languages "none";' > apt.conf.d/docker-no-languages \
-              && echo 'Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";' > apt.conf.d/docker-gzip-indexes \
-              && echo 'APT::Get::Install-Recommends "false"; APT::Get::Install-Suggests "false";' > apt.conf.d/docker-recommends \
-              && apt-get update \
-              && apt-get install -y git-core wget curl apt-transport-https \
-              && apt-get install -y python-pip python3-pip python-virtualenv python3-virtualenv python-yaml autoconf build-essential""")
-              sh("cd /formula/ && make clean && make test")
-              sh("cd /formula/ && rm -rf tests/build")
+      stage("test") {
+        if (checkouted) {
+          try {
+            // TODO add try\finally for image-stuck case. (copy-paste from SaltModelTesting)
+            withEnv(["SALT_VERSION=${saltVersion}"]) {
+              img.inside("-v ${env.WORKSPACE}/:/formula/ -u root:root --cpus=4 --ulimit nofile=4096:8192") {
+                sh('''#!/bin/bash -xe
+                      cd /etc/apt/
+                      echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial main restricted universe" > sources.list
+                      echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial-updates main restricted universe" >> sources.list
+                      echo 'Acquire::Languages "none";' > apt.conf.d/docker-no-languages
+                      echo 'Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";' > apt.conf.d/docker-gzip-indexes
+                      echo 'APT::Get::Install-Recommends "false"; APT::Get::Install-Suggests "false";' > apt.conf.d/docker-recommends
+                      apt-get update
+                      apt-get install -y git-core wget curl apt-transport-https
+                      apt-get install -y python-pip python3-pip python-virtualenv python3-virtualenv python-yaml autoconf build-essential
+                      cd /formula/
+                      make clean
+                      make test
+                      make clean
+                      ''')
+              }
             }
-          } else {
-            common.warningMsg("Those tests should be always be run in clean env! Recommends to use docker env!")
-            sh("make clean && make test")
+          }
+          finally {
+            if (fileExists("tests/build")) {
+              common.infoMsg('Cleaning test env')
+              sh ("sudo rm -rf tests/build")
+            }
           }
         }
+
       }
-    }
     stage("kitchen") {
         if (checkouted) {
           if (fileExists(".kitchen.yml")) {
