@@ -76,9 +76,7 @@ timeout(time: 12, unit: 'HOURS') {
       stage("checkout") {
         if (fileExists('tests/build')) {
           echo 'Cleaning from previous build...'
-          dir('tests/build') {
-            deleteDir()
-          }
+          sh ('sudo rm -rf tests/build')
         }
 
         if (gerritRef) {
