@@ -107,6 +107,11 @@ timeout(time: 12, unit: 'HOURS') {
                 }
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, packages, commandKwargs)
                 salt.printSaltCommandResult(out)
+                for(value in out.get("return")[0].values()){
+                    if (value.containsKey('result') && value.result == false) {
+                        throw new Exception("The package upgrade on sample node has failed. Please check the Salt run result above for more information.")
+                    }
+                }
             }
 
             stage('Confirm package upgrades on all nodes') {
@@ -134,6 +139,12 @@ timeout(time: 12, unit: 'HOURS') {
 
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, packages, commandKwargs)
                 salt.printSaltCommandResult(out)
+                for(value in out.get("return")[0].values()){
+                    if (value.containsKey('result') && value.result == false) {
+                        throw new Exception("The package upgrade on sample node has failed. Please check the Salt run result above for more information.")
+                    }
+                }
+                common.warningMsg("Pipeline has finished successfully, but please, check if any packages have been kept back.")
             }
 
         } catch (Throwable e) {
