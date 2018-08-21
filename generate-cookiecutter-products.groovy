@@ -247,6 +247,9 @@ parameters:
         smc['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
         smc['DEPLOY_NETWORK_GW'] = templateContext['default_context']['deploy_network_gateway']
         smc['DEPLOY_NETWORK_NETMASK'] = templateContext['default_context']['deploy_network_netmask']
+        if (templateContext['default_context'].get('deploy_network_mtu')) {
+          smc['DEPLOY_NETWORK_MTU'] = templateContext['default_context']['deploy_network_mtu']
+        }
         smc['DNS_SERVERS'] = templateContext['default_context']['dns_server01']
         smc['MCP_VERSION'] = "${mcpVersion}"
         if (templateContext['default_context']['local_repositories'] == 'True') {
