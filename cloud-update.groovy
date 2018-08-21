@@ -38,6 +38,7 @@
  *   RESTORE_GALERA             Restore Galera DB (bool)
  *   RESTORE_CONTRAIL_DB        Restore Cassandra and Zookeeper DBs for OpenContrail (bool)
  *   RUN_CVP_TESTS              Run cloud validation pipelines before and after upgrade
+ *   MINIONS_TEST_TIMEOUT       Time in seconds for a Salt result to receive a response when calling a minionsReachable method.
  *
 **/
 def common = new com.mirantis.mk.Common()
@@ -56,6 +57,11 @@ def result
 def packages
 def command
 def commandKwargs
+
+def wait = 10
+if (common.validInputParam('MINIONS_TEST_TIMEOUT') && MINIONS_TEST_TIMEOUT.isInteger()) {
+    wait = "${MINIONS_TEST_TIMEOUT}".toInteger()
+}
 
 def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
     def salt = new com.mirantis.mk.Salt()
@@ -153,11 +159,11 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
         if (targetType == 'cfg') {
             common.warningMsg('salt-master pkg upgrade, rerun the pipeline if disconnected')
             salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ['salt-master'], null, true, 5)
-            salt.minionsReachable(pepperEnv, 'I@salt:master', '*')
+            salt.minionsReachable(pepperEnv, 'I@salt:master', '*', null, wait)
         }
         // salt minion pkg
         salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ['salt-minion'], null, true, 5)
-        salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+        salt.minionsReachable(pepperEnv, 'I@salt:master', target, null, wait)
         common.infoMsg('Performing pkg upgrades ... ')
         common.retry(3){
             out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, true, packages, commandKwargs)
@@ -317,7 +323,7 @@ def rollbackPkgs(pepperEnv, target, targetType = "", targetPackages="") {
                 common.retry(3){
                     out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' install salt-minion'], null, true, 5)
                 }
-                salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+                salt.minionsReachable(pepperEnv, 'I@salt:master', target, null, wait)
                 common.retry(3){
                     out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' install ' + packages])
                 }
@@ -433,7 +439,7 @@ def periodicCheck(pepperEnv, target, maxRetries=50) {
     while(count < maxRetries) {
         try {
             sleep(10)
-            salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+            salt.minionsReachable(pepperEnv, 'I@salt:master', target, null, wait)
             break
         } catch (Exception e) {
             common.warningMsg("${target} not ready yet. Waiting ...")
@@ -483,7 +489,7 @@ def highstate(pepperEnv, target, type) {
             } else {
                 salt.runSaltProcessStep(pepperEnv, target, 'system.reboot', null, null, true, 5)
                 sleep 10
-                salt.minionsReachable(pepperEnv, 'I@salt:master', target)
+                salt.minionsReachable(pepperEnv, 'I@salt:master', target, null, wait)
             }
         }
     }
@@ -541,7 +547,7 @@ def mergeSnapshot(pepperEnv, tgt, generalTarget='') {
             virsh.liveSnapshotMerge(pepperEnv, nodeProvider, target, SNAPSHOT_NAME)
         }
     }
-    salt.minionsReachable(pepperEnv, 'I@salt:master', tgt)
+    salt.minionsReachable(pepperEnv, 'I@salt:master', tgt, null, wait)
 }
 
 
