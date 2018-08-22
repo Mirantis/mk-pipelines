@@ -30,6 +30,14 @@ parameters:
     writeFile(file: nodeFile, text: nodeString)
 }
 
+/**
+ *
+ * @param contextFile - path to `contexts/XXX.yaml file`
+ * @param virtualenv  - pyvenv with CC and dep's
+ * @param templateEnvDir - root of CookieCutter
+ * @return
+ */
+
 def generateModel(contextFile, virtualenv, templateEnvDir) {
     def modelEnv = "${templateEnvDir}/model"
     def basename = common.GetBaseName(contextFile, '.yml')
@@ -42,43 +50,43 @@ def generateModel(contextFile, virtualenv, templateEnvDir) {
     def templateBaseDir = templateEnvDir
     def templateDir = "${templateEnvDir}/dir"
     def templateOutputDir = templateBaseDir
-    sh(script: "rm -rf ${generatedModel} || true")
+    dir(templateEnvDir) {
+        sh(script: "rm -rf ${generatedModel} || true")
+        common.infoMsg("Generating model from context ${contextFile}")
+        def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "oss", "stacklight", "ceph"]
+        for (product in productList) {
 
-    common.infoMsg("Generating model from context ${contextFile}")
-
-    def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "oss", "stacklight", "ceph"]
-    for (product in productList) {
-
-        // get templateOutputDir and productDir
-        if (product.startsWith("stacklight")) {
-            templateOutputDir = "${templateEnvDir}/output/stacklight"
-            try {
-                productDir = "stacklight" + templateContext.default_context['stacklight_version']
-            } catch (Throwable e) {
-                productDir = "stacklight1"
+            // get templateOutputDir and productDir
+            if (product.startsWith("stacklight")) {
+                templateOutputDir = "${templateEnvDir}/output/stacklight"
+                try {
+                    productDir = "stacklight" + templateContext.default_context['stacklight_version']
+                } catch (Throwable e) {
+                    productDir = "stacklight1"
+                }
+            } else {
+                templateOutputDir = "${templateEnvDir}/output/${product}"
+                productDir = product
             }
-        } else {
-            templateOutputDir = "${templateEnvDir}/output/${product}"
-            productDir = product
+
+            if (product == "infra" || (templateContext.default_context["${product}_enabled"]
+                && templateContext.default_context["${product}_enabled"].toBoolean())) {
+
+                templateDir = "${templateEnvDir}/cluster_product/${productDir}"
+                common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
+
+                sh "rm -rf ${templateOutputDir} || true"
+                sh "mkdir -p ${templateOutputDir}"
+                sh "mkdir -p ${outputDestination}"
+
+                python.buildCookiecutterTemplate(templateDir, content, templateOutputDir, virtualenv, templateBaseDir)
+                sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
+            } else {
+                common.warningMsg("Product " + product + " is disabled")
+            }
         }
-
-        if (product == "infra" || (templateContext.default_context["${product}_enabled"]
-            && templateContext.default_context["${product}_enabled"].toBoolean())) {
-
-            templateDir = "${templateEnvDir}/cluster_product/${productDir}"
-            common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
-
-            sh "rm -rf ${templateOutputDir} || true"
-            sh "mkdir -p ${templateOutputDir}"
-            sh "mkdir -p ${outputDestination}"
-
-            python.buildCookiecutterTemplate(templateDir, content, templateOutputDir, virtualenv, templateBaseDir)
-            sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-        } else {
-            common.warningMsg("Product " + product + " is disabled")
-        }
+        generateSaltMaster(generatedModel, clusterDomain, clusterName)
     }
-    generateSaltMaster(generatedModel, clusterDomain, clusterName)
 }
 
 
@@ -98,7 +106,7 @@ def testModel(modelFile, reclassVersion = 'v1.5.4') {
   """
     build job: "test-mk-cookiecutter-templates-chunk", parameters: [
         [$class: 'StringParameterValue', name: 'EXTRA_VARIABLES_YAML',
-         value: _values_string.stripIndent()],
+         value : _values_string.stripIndent()],
     ]
 }
 
@@ -151,8 +159,8 @@ def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
 
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
-        def templateEnvHead = "${env.WORKSPACE}/env_head/"
-        def templateEnvPatched = "${env.WORKSPACE}/env_patched/"
+        def templateEnvHead = "${env.WORKSPACE}/EnvHead/"
+        def templateEnvPatched = "${env.WORKSPACE}/EnvPatched/"
         def contextFileListHead = []
         def contextFileListPatched = []
         def vEnv = "${env.WORKSPACE}/venv"
@@ -187,8 +195,8 @@ timeout(time: 1, unit: 'HOURS') {
                 // Generate over 2env's - for patchset, and for HEAD
                 paralellEnvs = [:]
                 paralellEnvs.failFast = true
-                paralellEnvs['GenerateEnvHead'] = StepGenerateModels(contextFileListPatched, vEnv, templateEnvPatched)
-                paralellEnvs['GenerateEnvPatched'] = StepGenerateModels(contextFileListHead, vEnv, templateEnvHead)
+                paralellEnvs['GenerateEnvPatched'] = StepGenerateModels(contextFileListPatched, vEnv, templateEnvPatched)
+                paralellEnvs['GenerateEnvHead'] = StepGenerateModels(contextFileListHead, vEnv, templateEnvHead)
                 parallel paralellEnvs
 
                 // Collect artifacts
@@ -263,7 +271,7 @@ timeout(time: 1, unit: 'HOURS') {
                    tar -xzf head_reclass.tar.gz  --directory ${compareRoot}/old
                    """)
                 common.warningMsg('infra/secrets.yml has been skipped from compare!')
-                rezult = common.comparePillars(compareRoot, env.BUILD_URL, "-Ev 'infra/secrets.yml'")
+                rezult = common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml\'")
                 currentBuild.description = rezult
             }
             stage("test-contexts") {
