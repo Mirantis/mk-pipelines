@@ -67,7 +67,7 @@ timeout(time: 12, unit: 'HOURS') {
             if(backup_dir == null || backup_dir.isEmpty()) { backup_dir='/var/backups/mysql/xtrabackup' }
             print(backup_dir)
             salt.runSaltProcessStep(pepperEnv, 'I@galera:master', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
-            salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "su root -c 'salt-call state.sls xtrabackup'")
+            salt.runSaltProcessStep(pepperEnv, 'I@galera:master', 'state.apply', ["xtrabackup.client.restore"], null, true)
             salt.runSaltProcessStep(pepperEnv, 'I@galera:master', 'service.start', ['mysql'], null, true)
 
             // wait until mysql service on galera master is up
