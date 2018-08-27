@@ -78,7 +78,7 @@ node() {
 
         if (gitSrcObj.contains('SUBS_SOURCE_REF')) {
             echo ("Replacing 'SUBS_SOURCE_REF' => ${SOURCE_REVISION}")
-            gitSrcObj.replace('SUBS_SOURCE_REF', srcObj)
+            gitSrcObj = gitSrcObj.replace('SUBS_SOURCE_REF', srcObj)
         }
 
         // Remove preifix `origin/` from gitSrcObj
