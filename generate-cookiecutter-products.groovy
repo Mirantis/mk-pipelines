@@ -25,7 +25,7 @@ slaveNode = (env.SLAVE_NODE ?: 'python&&docker')
 // options from CC contexts
 // currently, just mix them together in one set
 def testCfg01ExtraFormulas = 'glusterfs jenkins logrotate maas ntp rsyslog fluentd telegraf prometheus ' +
-                             'grafana backupninja auditd'
+                             'grafana backupninja'
 
 
 timeout(time: 2, unit: 'HOURS') {
@@ -56,6 +56,10 @@ timeout(time: 2, unit: 'HOURS') {
       def testResult = false
       wrap([$class: 'BuildUser']) {
         user = env.BUILD_USER_ID
+      }
+
+      if (mcpVersion != '2018.4.0') {
+        testCfg01ExtraFormulas += ' auditd'
       }
 
       currentBuild.description = clusterName
