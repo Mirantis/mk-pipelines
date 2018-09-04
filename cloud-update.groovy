@@ -388,7 +388,7 @@ def services(pepperEnv, probe, target, action='stop') {
     } else {
         def salt = new com.mirantis.mk.Salt()
         for (s in services) {
-            def outputServicesStr = salt.getReturnValues(salt.cmdRun(pepperEnv, "${probe}*", "service --status-all | grep ${s} | awk \'{print \$4}\'"))
+            def outputServicesStr = salt.getReturnValues(salt.cmdRun(pepperEnv, probe, "service --status-all | grep ${s} | awk \'{print \$4}\'"))
             def servicesList = outputServicesStr.tokenize("\n").init() //init() returns the items from the Iterable excluding the last item
             if (servicesList) {
                 for (name in servicesList) {
