@@ -46,6 +46,8 @@ timeout(time: 12, unit: 'HOURS') {
             }
             if (!imageTagsList.contains("latest")) {
               imageTagsList << "latest"
+              //workaround for all of our docker images
+              imageTagsList << "nightly"
             }
           } catch (Exception e) {
             common.infoMsg("Impossible to find any tag")
@@ -98,4 +100,3 @@ timeout(time: 12, unit: 'HOURS') {
     }
   }
 }
-
