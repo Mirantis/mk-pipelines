@@ -16,6 +16,7 @@
  *   RUN_TEMPEST_TESTS           If not false, run Tempest tests
  *   RUN_RALLY_TESTS             If not false, run Rally tests
  *   K8S_RALLY                   If not false, run Kubernetes Rally tests
+ *   STACKLIGHT_RALLY            If not false, run additional Stacklight tests
  *   RUN_K8S_TESTS               If not false, run Kubernetes e2e/conformance tests
  *   RUN_SPT_TESTS               If not false, run SPT tests
  *   SPT_SSH_USER                The name of the user which should be used for ssh to nodes
@@ -31,6 +32,7 @@
  *   RALLY_CONFIG_REPO           Git repository with files for Rally
  *   RALLY_CONFIG_BRANCH         Git branch which will be used during the checkout
  *   RALLY_SCENARIOS             Path to file or directory with rally scenarios
+ *   RALLY_SL_SCENARIOS          Path to file or directory with stacklight rally scenarios
  *   RALLY_TASK_ARGS_FILE        Path to file with rally tests arguments
  *   REPORT_DIR                  Path for reports outside docker image
  *   TEST_K8S_API_SERVER         Kubernetes API address
@@ -81,20 +83,21 @@ timeout(time: job_timeout, unit: 'HOURS') {
             stage('Run Rally tests') {
                 if (RUN_RALLY_TESTS.toBoolean() == true) {
                     def report_dir = env.REPORT_DIR ?: '/root/qa_results'
-                    def platform
-                    def rally_variables
+                    def platform = ["type":"unknown", "stacklight_enabled":false]
+                    def rally_variables = []
                     if (K8S_RALLY.toBoolean() == false) {
-                      platform = 'openstack'
+                      platform['type'] = 'openstack'
                       rally_variables = ["floating_network=${FLOATING_NETWORK}",
                                          "rally_image=${RALLY_IMAGE}",
                                          "rally_flavor=${RALLY_FLAVOR}",
                                          "availability_zone=${AVAILABILITY_ZONE}"]
                     } else {
-                      platform = 'k8s'
-                      rally_variables = ["plugins_repo":"${RALLY_PLUGINS_REPO}",
-                                         "plugins_branch":"${RALLY_PLUGINS_BRANCH}"]
+                      platform['type'] = 'k8s'
                     }
-                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, platform, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables, report_dir, SKIP_LIST)
+                    if (STACKLIGHT_RALLY.toBoolean() == true) {
+                      platform['stacklight_enabled'] = true
+                    }
+                    validate.runRallyTests(pepperEnv, TARGET_NODE, TEST_IMAGE, platform, artifacts_dir, RALLY_CONFIG_REPO, RALLY_CONFIG_BRANCH, RALLY_PLUGINS_REPO, RALLY_PLUGINS_BRANCH, RALLY_SCENARIOS, RALLY_SL_SCENARIOS, RALLY_TASK_ARGS_FILE, rally_variables, report_dir, SKIP_LIST)
                 } else {
                     common.infoMsg("Skipping Rally tests")
                 }
