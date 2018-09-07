@@ -3,10 +3,11 @@ Able to be triggered from Gerrit if :
 Variators:
 Modes:
 1) manual run via job-build , possible to pass refspec
+   TODO: currently impossible to use custom COOKIECUTTER_TEMPLATE_URL| RECLASS_SYSTEM_URL Gerrit-one always used.
    - for CC
    - Reclass
-   TODO: currently impossible to use custom COOKIECUTTER_TEMPLATE_URL| RECLASS_SYSTEM_URL Gerrit-one always used.
- - gerrit trigget.
+
+2) gerrit trigger
    Automatically switches if GERRIT_PROJECT variable detected
    Always test GERRIT_REFSPEC VS GERRIT_BRANCH-master version of opposite project
  */
@@ -46,6 +47,10 @@ reclassVersion = 'v1.5.4'
 if (common.validInputParam(env.RECLASS_VERSION)) {
     reclassVersion = env.RECLASS_VERSION
 }
+// Name of sub-test chunk job
+chunkJobName = "test-mk-cookiecutter-templates-chunk"
+testModelBuildsData = [:]
+
 
 def generateSaltMaster(modEnv, clusterDomain, clusterName) {
     def nodeFile = "${modEnv}/nodes/cfg01.${clusterDomain}.yml"
@@ -124,28 +129,41 @@ def generateModel(contextFile, virtualenv, templateEnvDir) {
     }
 }
 
+def getAndUnpackNodesInfoArtifact(jobName, copyTo, build) {
+    return {
+        dir(copyTo) {
+            copyArtifacts(projectName: jobName, selector: specific(build), filter: "nodesinfo.tar.gz")
+            sh "tar -xvf nodesinfo.tar.gz"
+            sh "rm -v nodesinfo.tar.gz"
+        }
+    }
+}
 
-def testModel(modelFile, reclassVersion = 'v1.5.4') {
+def testModel(modelFile, reclassArtifactName, artifactCopyPath) {
     // modelFile - `modelfiname` from model/modelfiname/modelfiname.yaml
     //* Grub all models and send it to check in paralell - by one in thread.
-
-    _values_string = """
+    def _uuid = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}_${modelFile.toLowerCase()}_" + UUID.randomUUID().toString().take(8)
+    def _values_string = """
   ---
-  MODELS_TARGZ: "${env.BUILD_URL}/artifact/patched_reclass.tar.gz"
-  DockerCName: "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}_${modelFile.toLowerCase()}"
+  MODELS_TARGZ: "${env.BUILD_URL}/artifact/${reclassArtifactName}"
+  DockerCName: "${_uuid}"
   testReclassEnv: "model/${modelFile}/"
   modelFile: "contexts/${modelFile}.yml"
   DISTRIB_REVISION: "${testDistribRevision}"
   EXTRA_FORMULAS: "${env.EXTRA_FORMULAS}"
   reclassVersion: "${reclassVersion}"
   """
-    build job: "test-mk-cookiecutter-templates-chunk", parameters: [
+    def chunkJob = build job: chunkJobName, parameters: [
         [$class: 'StringParameterValue', name: 'EXTRA_VARIABLES_YAML',
          value : _values_string.stripIndent()],
     ]
+    // Put sub-job info into global map.
+    testModelBuildsData.put(_uuid, ['jobname'  : chunkJob.fullProjectName,
+                                    'copyToDir': "${artifactCopyPath}/${modelFile}",
+                                    'buildId'  : "${chunkJob.number}"])
 }
 
-def StepTestModel(basename) {
+def StepTestModel(basename, reclassArtifactName, artifactCopyPath) {
     // We need to wrap what we return in a Groovy closure, or else it's invoked
     // when this method is called, not when we pass it to parallel.
     // To do this, you need to wrap the code below in { }, and either return
@@ -153,7 +171,7 @@ def StepTestModel(basename) {
     // return node object
     return {
         node(slaveNode) {
-            testModel(basename)
+            testModel(basename, reclassArtifactName, artifactCopyPath)
         }
     }
 }
@@ -246,7 +264,36 @@ def globalVariatorsUpdate() {
         message = "<font color='red'>Manual run detected!</font>" + "<br/>"
         currentBuild.description = currentBuild.description ? message + "<br/>" + currentBuild.description : message
     }
+}
 
+def linkReclassModels(contextList, envPath, archiveName) {
+    // to be able share reclass for all subenvs
+    // Also, makes artifact test more solid - use one reclass for all of sub-models.
+    // Archive Structure will be:
+    // tar.gz
+    // ├── contexts
+    // │   └── ceph.yml
+    // ├── global_reclass <<< reclass system
+    // ├── model
+    // │   └── ceph       <<< from `context basename`
+    // │       ├── classes
+    // │       │   ├── cluster
+    // │       │   └── system -> ../../../global_reclass
+    // │       └── nodes
+    // │           └── cfg01.ceph-cluster-domain.local.yml
+    dir(envPath) {
+        for (String context : contextList) {
+            def basename = common.GetBaseName(context, '.yml')
+            dir("${envPath}/model/${basename}") {
+                sh(script: 'mkdir -p classes/; ln -sfv ../../../../global_reclass classes/system ')
+            }
+        }
+        // Save all models and all contexts. Warning! `h` flag must be used.
+        sh(script: "set -ex; tar -chzf ${archiveName} --exclude='*@tmp' model contexts", returnStatus: true)
+        archiveArtifacts artifacts: archiveName
+        // move for "Compare Pillars" stage
+        sh(script: "mv -v ${archiveName} ${env.WORKSPACE}")
+    }
 }
 
 timeout(time: 1, unit: 'HOURS') {
@@ -258,6 +305,11 @@ timeout(time: 1, unit: 'HOURS') {
         def contextFileListHead = []
         def contextFileListPatched = []
         def vEnv = "${env.WORKSPACE}/venv"
+        def headReclassArtifactName = "head_reclass.tar.gz"
+        def patchedReclassArtifactName = "patched_reclass.tar.gz"
+        def reclassNodeInfoDir = "${env.WORKSPACE}/reclassNodeInfo_compare/"
+        def reclassInfoHeadPath = "${reclassNodeInfoDir}/old"
+        def reclassInfoPatchedPath = "${reclassNodeInfoDir}/new"
 
         try {
             sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
@@ -302,74 +354,55 @@ timeout(time: 1, unit: 'HOURS') {
                     archiveArtifacts artifacts: "model.tar.gz"
                 }
 
-                // to be able share reclass for all subenvs
-                // Also, makes artifact test more solid - use one reclass for all of sub-models.
-                // Archive Structure will be:
-                // tar.gz
-                // ├── contexts
-                // │   └── ceph.yml
-                // ├── global_reclass <<< reclass system
-                // ├── model
-                // │   └── ceph       <<< from `context basename`
-                // │       ├── classes
-                // │       │   ├── cluster
-                // │       │   └── system -> ../../../global_reclass
-                // │       └── nodes
-                // │           └── cfg01.ceph-cluster-domain.local.yml
                 StepPrepareGit("${env.WORKSPACE}/global_reclass/", gerritDataRS).call()
                 // link all models, to use one global reclass
                 // For HEAD
-                dir(templateEnvHead) {
-                    for (String context : contextFileListHead) {
-                        def basename = common.GetBaseName(context, '.yml')
-                        dir("${templateEnvHead}/model/${basename}") {
-                            sh(script: 'mkdir -p classes/; ln -sfv ../../../../global_reclass classes/system ')
-                        }
-                    }
-                    // Save all models and all contexts. Warning! `h` flag must be used.
-                    sh(script: "set -ex;tar -chzf head_reclass.tar.gz --exclude='*@tmp' model contexts")
-                    archiveArtifacts artifacts: "head_reclass.tar.gz"
-                    // move for "Compare Pillars" stage
-                    sh(script: "mv -v head_reclass.tar.gz ${env.WORKSPACE}")
-                }
+                linkReclassModels(contextFileListHead, templateEnvHead, headReclassArtifactName)
                 // For patched
-                dir(templateEnvPatched) {
-                    for (String context : contextFileListPatched) {
-                        def basename = common.GetBaseName(context, '.yml')
-                        dir("${templateEnvPatched}/model/${basename}") {
-                            sh(script: 'mkdir -p classes/; ln -sfv ../../../../global_reclass classes/system ')
-                        }
-                    }
-                    // Save all models and all contexts. Warning! `h` flag must be used.
-                    sh(script: "set -ex;tar -chzf patched_reclass.tar.gz --exclude='*@tmp' model contexts")
-                    archiveArtifacts artifacts: "patched_reclass.tar.gz"
-                    // move for "Compare Pillars" stage
-                    sh(script: "mv -v patched_reclass.tar.gz ${env.WORKSPACE}")
-                }
+                linkReclassModels(contextFileListPatched, templateEnvPatched, patchedReclassArtifactName)
             }
 
-            stage("Compare Cluster lvl models") {
+            stage("Compare cluster lvl Head/Patched") {
                 // Compare patched and HEAD reclass pillars
-                compareRoot = "${env.WORKSPACE}/test_compare/"
+                compareRoot = "${env.WORKSPACE}/cluster_compare/"
                 sh(script: """
                    mkdir -pv ${compareRoot}/new ${compareRoot}/old
-                   tar -xzf patched_reclass.tar.gz  --directory ${compareRoot}/new
-                   tar -xzf head_reclass.tar.gz  --directory ${compareRoot}/old
+                   tar -xzf ${patchedReclassArtifactName}  --directory ${compareRoot}/new
+                   tar -xzf ${headReclassArtifactName}  --directory ${compareRoot}/old
                    """)
                 common.warningMsg('infra/secrets.yml has been skipped from compare!')
-                rezult = common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml\'")
-                currentBuild.description = currentBuild.description + '\n' + rezult
+                result =  '\n' + common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml\'")
+                currentBuild.description = currentBuild.description ? currentBuild.description + result : result
             }
-            stage("test-contexts") {
-                // Test contexts for patched only
-                stepsForParallel = [:]
+            stage("TestContexts Head/Patched") {
+                def stepsForParallel = [:]
+                stepsForParallel.failFast = true
+                common.infoMsg("Found: ${contextFileListHead.size()} HEAD contexts to test.")
+                for (String context : contextFileListHead) {
+                    def basename = common.GetBaseName(context, '.yml')
+                    stepsForParallel.put("ContextHeadTest:${basename}", StepTestModel(basename, headReclassArtifactName, reclassInfoHeadPath))
+                }
                 common.infoMsg("Found: ${contextFileListPatched.size()} patched contexts to test.")
                 for (String context : contextFileListPatched) {
                     def basename = common.GetBaseName(context, '.yml')
-                    stepsForParallel.put("ContextPatchTest:${basename}", StepTestModel(basename))
+                    stepsForParallel.put("ContextPatchedTest:${basename}", StepTestModel(basename, patchedReclassArtifactName, reclassInfoPatchedPath))
                 }
                 parallel stepsForParallel
-                common.infoMsg('All tests done')
+                common.infoMsg('All TestContexts tests done')
+            }
+            stage("Compare NodesInfo Head/Patched") {
+                // Download all artifacts
+                def stepsForParallel = [:]
+                stepsForParallel.failFast = true
+                common.infoMsg("Found: ${testModelBuildsData.size()} nodeinfo artifacts to download.")
+                testModelBuildsData.each { bname, bdata ->
+                    stepsForParallel.put("FetchData:${bname}",
+                        getAndUnpackNodesInfoArtifact(bdata.jobname, bdata.copyToDir, bdata.buildId))
+                }
+                parallel stepsForParallel
+                // Compare patched and HEAD reclass pillars
+                result = '\n' + common.comparePillars(reclassNodeInfoDir, env.BUILD_URL, '')
+                currentBuild.description = currentBuild.description ? currentBuild.description + result : result
             }
             sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
 
