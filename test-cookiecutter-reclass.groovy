@@ -1,15 +1,50 @@
+/*
+Able to be triggered from Gerrit if :
+Variators:
+Modes:
+1) manual run via job-build , possible to pass refspec
+   - for CC
+   - Reclass
+   TODO: currently impossible to use custom COOKIECUTTER_TEMPLATE_URL| RECLASS_SYSTEM_URL Gerrit-one always used.
+ - gerrit trigget.
+   Automatically switches if GERRIT_PROJECT variable detected
+   Always test GERRIT_REFSPEC VS GERRIT_BRANCH-master version of opposite project
+ */
+
 common = new com.mirantis.mk.Common()
 gerrit = new com.mirantis.mk.Gerrit()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 
-gerritRef = env.GERRIT_REFSPEC ?: null
-slaveNode = (env.SLAVE_NODE ?: 'python&&docker')
-def alreadyMerged = false
+slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 
+// Global var's
+alreadyMerged = false
+gerritConData = [credentialsId       : env.CREDENTIALS_ID,
+                 gerritName          : env.GERRIT_NAME ?: 'mcp-jenkins',
+                 gerritHost          : env.GERRIT_HOST ?: 'gerrit.mcp.mirantis.net',
+                 gerritRefSpec       : null,
+                 gerritProject       : null,
+                 withWipeOut         : true,
+                 GERRIT_CHANGE_NUMBER: null]
+//
+//ccTemplatesRepo = env.COOKIECUTTER_TEMPLATE_URL ?: 'ssh://mcp-jenkins@gerrit.mcp.mirantis.net:29418/mk/cookiecutter-templates'
+gerritDataCC = [:]
+gerritDataCC << gerritConData
+gerritDataCC['gerritBranch'] = env.COOKIECUTTER_TEMPLATE_BRANCH ?: 'master'
+gerritDataCC['gerritProject'] = 'mk/cookiecutter-templates'
+//
+//reclassSystemRepo = env.RECLASS_SYSTEM_URL ?: 'ssh://mcp-jenkins@gerrit.mcp.mirantis.net:29418/salt-models/reclass-system'
+gerritDataRS = [:]
+gerritDataRS << gerritConData
+gerritDataRS['gerritBranch'] = env.RECLASS_MODEL_BRANCH ?: 'master'
+gerritDataRS['gerritProject'] = 'salt-models/reclass-system'
+
+// version of debRepos, aka formulas\reclass
+def testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
 def reclassVersion = 'v1.5.4'
-if (common.validInputParam('RECLASS_VERSION')) {
-    reclassVersion = RECLASS_VERSION
+if (common.validInputParam(env.RECLASS_VERSION)) {
+    reclassVersion = env.RECLASS_VERSION
 }
 
 def generateSaltMaster(modEnv, clusterDomain, clusterName) {
@@ -33,7 +68,7 @@ parameters:
 /**
  *
  * @param contextFile - path to `contexts/XXX.yaml file`
- * @param virtualenv  - pyvenv with CC and dep's
+ * @param virtualenv - pyvenv with CC and dep's
  * @param templateEnvDir - root of CookieCutter
  * @return
  */
@@ -100,7 +135,7 @@ def testModel(modelFile, reclassVersion = 'v1.5.4') {
   DockerCName: "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}_${modelFile.toLowerCase()}"
   testReclassEnv: "model/${modelFile}/"
   modelFile: "contexts/${modelFile}.yml"
-  DISTRIB_REVISION: "${DISTRIB_REVISION}"
+  DISTRIB_REVISION: "${testDistribRevision}"
   EXTRA_FORMULAS: "${env.EXTRA_FORMULAS}"
   reclassVersion: "${reclassVersion}"
   """
@@ -123,27 +158,33 @@ def StepTestModel(basename) {
     }
 }
 
-def StepPrepareCCenv(refchange, templateEnvFolder) {
+def StepPrepareGit(templateEnvFolder, gerrit_data) {
     // return git clone  object
     return {
+        def checkouted = false
+        common.infoMsg("StepPrepareGit: ${gerrit_data}")
         // fetch needed sources
         dir(templateEnvFolder) {
-            if (refchange) {
-                def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID)
+            if (gerrit_data['gerritRefSpec']) {
+                // Those part might be not work,in case manual var's pass
+                def gerritChange = gerrit.getGerritChange(gerrit_data['gerritName'], gerrit_data['gerritHost'],
+                    gerrit_data['GERRIT_CHANGE_NUMBER'], gerrit_data['credentialsId'])
                 merged = gerritChange.status == "MERGED"
                 if (!merged) {
-                    checkouted = gerrit.gerritPatchsetCheckout([
-                        credentialsId: CREDENTIALS_ID
-                    ])
+                    checkouted = gerrit.gerritPatchsetCheckout(gerrit_data)
                 } else {
-                    // update global variable for success return from pipeline
-                    //alreadyMerged = true
-                    common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
-                    currentBuild.result = 'ABORTED'
-                    throw new hudson.AbortException('change already merged')
+                    // update global variable for pretty return from pipeline
+                    alreadyMerged = true
+                    common.successMsg("Change ${gerrit_data['GERRIT_CHANGE_NUMBER']} is already merged, no need to gate them")
+                    error('change already merged')
                 }
             } else {
-                git.checkoutGitRepository(templateEnvFolder, COOKIECUTTER_TEMPLATE_URL, COOKIECUTTER_TEMPLATE_BRANCH, CREDENTIALS_ID)
+                // Get clean HEAD
+                gerrit_data['useGerritTriggerBuildChooser'] = false
+                checkouted = gerrit.gerritPatchsetCheckout(gerrit_data)
+                if (!checkouted) {
+                    error("Failed to get repo:${gerrit_data}")
+                }
             }
         }
     }
@@ -157,8 +198,61 @@ def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
     }
 }
 
+def globalVariatorsUpdate() {
+    // Simple function, to check and define branch-around variables
+    // In general, simply make transition updates for non-master branch
+    // based on magic logic
+    def message = ''
+    if (!common.validInputParam(env.GERRIT_PROJECT)) {
+        if (!['nightly', 'testing', 'stable', 'proposed', 'master'].contains(env.GERRIT_BRANCH)) {
+            gerritDataCC['gerritBranch'] = env.GERRIT_BRANCH
+            gerritDataRS['gerritBranch'] = env.GERRIT_BRANCH
+            // 'binary' branch logic w\o 'release/' prefix
+            testDistribRevision = env.GERRIT_BRANCH.split('/')[-1]
+            // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
+            if (!common.checkRemoteBinary([apt_mk_version: testDistribRevision]).linux_system_repo_url) {
+                common.errorMsg("Binary release: ${testDistribRevision} not exist. Fallback to 'proposed'! ")
+                testDistribRevision = 'proposed'
+            }
+        }
+        // Identify, who triggered. To whom we should pass refspec
+        if (env.GERRIT_PROJECT == 'salt-models/reclass-system') {
+            gerritDataRS['gerritRefSpec'] = env.GERRIT_REFSPEC
+            gerritDataRS['GERRIT_CHANGE_NUMBER'] = env.GERRIT_CHANGE_NUMBER
+            message = "<br/>RECLASS_SYSTEM_GIT_REF =>${gerritDataRS['gerritRefSpec']}"
+        } else if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates') {
+            gerritDataCC['gerritRefSpec'] = env.GERRIT_REFSPEC
+            gerritDataCC['GERRIT_CHANGE_NUMBER'] = env.GERRIT_CHANGE_NUMBER
+            message = "<br/>COOKIECUTTER_TEMPLATE_REF =>${gerritDataCC['gerritRefSpec']}"
+        } else {
+            error("Unsuported gerrit-project triggered:${env.GERRIT_PROJECT}")
+        }
+
+        message = "<font color='red'>GerritTrigger detected! We are in auto-mode:</font>" +
+            "<br/>Test env variables has been changed:" +
+            "<br/>COOKIECUTTER_TEMPLATE_BRANCH => ${gerritDataCC['gerritBranch']}" +
+            "<br/>DISTRIB_REVISION =>${testDistribRevision}" +
+            "<br/>RECLASS_MODEL_BRANCH=> ${gerritDataRS['gerritBranch']}" + message
+        common.warningMsg(message)
+        currentBuild.description = currentBuild.description ? message + "<br/>" + currentBuild.description : message
+    } else {
+        // Check for passed variables:
+        if (common.validInputParam(env.RECLASS_SYSTEM_GIT_REF)) {
+            gerritDataRS['gerritRefSpec'] = RECLASS_SYSTEM_GIT_REF
+        }
+        if (common.validInputParam(env.COOKIECUTTER_TEMPLATE_REF)) {
+            gerritDataCC['gerritRefSpec'] = COOKIECUTTER_TEMPLATE_REF
+        }
+        message = "<font color='red'>Manual run detected!</font>" + "<br/>"
+        currentBuild.description = currentBuild.description ? message + "<br/>" + currentBuild.description : message
+    }
+
+}
+
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
+        globalVariatorsUpdate()
+        def gerritDataCCHEAD = [:]
         def templateEnvHead = "${env.WORKSPACE}/EnvHead/"
         def templateEnvPatched = "${env.WORKSPACE}/EnvPatched/"
         def contextFileListHead = []
@@ -169,10 +263,12 @@ timeout(time: 1, unit: 'HOURS') {
             sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
             stage('Download and prepare CC env') {
                 // Prepare 2 env - for patchset, and for HEAD
-                paralellEnvs = [:]
+                def paralellEnvs = [:]
                 paralellEnvs.failFast = true
-                paralellEnvs['downloadEnvHead'] = StepPrepareCCenv('', templateEnvHead)
-                paralellEnvs['downloadEnvPatched'] = StepPrepareCCenv(gerritRef, templateEnvPatched)
+                paralellEnvs['downloadEnvPatched'] = StepPrepareGit(templateEnvPatched, gerritDataCC)
+                gerritDataCCHEAD << gerritDataCC
+                gerritDataCCHEAD['gerritRefSpec'] = null; gerritDataCCHEAD['GERRIT_CHANGE_NUMBER'] = null
+                paralellEnvs['downloadEnvHead'] = StepPrepareGit(templateEnvHead, gerritDataCCHEAD)
                 parallel paralellEnvs
             }
             stage("Check workflow_definition") {
@@ -193,7 +289,7 @@ timeout(time: 1, unit: 'HOURS') {
                     }
                 }
                 // Generate over 2env's - for patchset, and for HEAD
-                paralellEnvs = [:]
+                def paralellEnvs = [:]
                 paralellEnvs.failFast = true
                 paralellEnvs['GenerateEnvPatched'] = StepGenerateModels(contextFileListPatched, vEnv, templateEnvPatched)
                 paralellEnvs['GenerateEnvHead'] = StepGenerateModels(contextFileListHead, vEnv, templateEnvHead)
@@ -220,17 +316,7 @@ timeout(time: 1, unit: 'HOURS') {
                 // │       │   └── system -> ../../../global_reclass
                 // │       └── nodes
                 // │           └── cfg01.ceph-cluster-domain.local.yml
-
-                if (SYSTEM_GIT_URL == "") {
-                    git.checkoutGitRepository("${env.WORKSPACE}/global_reclass/", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
-                } else {
-                    dir("${env.WORKSPACE}/global_reclass/") {
-                        if (!gerrit.gerritPatchsetCheckout(SYSTEM_GIT_URL, SYSTEM_GIT_REF, "HEAD", CREDENTIALS_ID)) {
-                            common.errorMsg("Failed to obtain system reclass with url: ${SYSTEM_GIT_URL} and ${SYSTEM_GIT_REF}")
-                            throw new RuntimeException("Failed to obtain system reclass")
-                        }
-                    }
-                }
+                StepPrepareGit("${env.WORKSPACE}/global_reclass/", gerritDataRS).call()
                 // link all models, to use one global reclass
                 // For HEAD
                 dir(templateEnvHead) {
@@ -241,7 +327,7 @@ timeout(time: 1, unit: 'HOURS') {
                         }
                     }
                     // Save all models and all contexts. Warning! `h` flag must be used.
-                    sh(script: "tar -chzf head_reclass.tar.gz --exclude='*@tmp' model contexts global_reclass", returnStatus: true)
+                    sh(script: "set -ex;tar -chzf head_reclass.tar.gz --exclude='*@tmp' model contexts")
                     archiveArtifacts artifacts: "head_reclass.tar.gz"
                     // move for "Compare Pillars" stage
                     sh(script: "mv -v head_reclass.tar.gz ${env.WORKSPACE}")
@@ -255,14 +341,14 @@ timeout(time: 1, unit: 'HOURS') {
                         }
                     }
                     // Save all models and all contexts. Warning! `h` flag must be used.
-                    sh(script: "tar -chzf patched_reclass.tar.gz --exclude='*@tmp' model contexts global_reclass", returnStatus: true)
+                    sh(script: "set -ex;tar -chzf patched_reclass.tar.gz --exclude='*@tmp' model contexts")
                     archiveArtifacts artifacts: "patched_reclass.tar.gz"
                     // move for "Compare Pillars" stage
                     sh(script: "mv -v patched_reclass.tar.gz ${env.WORKSPACE}")
                 }
             }
 
-            stage("Compare Pillars") {
+            stage("Compare Cluster lvl models") {
                 // Compare patched and HEAD reclass pillars
                 compareRoot = "${env.WORKSPACE}/test_compare/"
                 sh(script: """
@@ -272,7 +358,7 @@ timeout(time: 1, unit: 'HOURS') {
                    """)
                 common.warningMsg('infra/secrets.yml has been skipped from compare!')
                 rezult = common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml\'")
-                currentBuild.description = rezult
+                currentBuild.description = currentBuild.description + '\n' + rezult
             }
             stage("test-contexts") {
                 // Test contexts for patched only
@@ -285,16 +371,19 @@ timeout(time: 1, unit: 'HOURS') {
                 parallel stepsForParallel
                 common.infoMsg('All tests done')
             }
-
             sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
 
         } catch (Throwable e) {
+            if (alreadyMerged) {
+                currentBuild.result = 'ABORTED'
+                currentBuild.description = "Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them"
+                return
+            }
             currentBuild.result = "FAILURE"
             currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
             throw e
         } finally {
             def dummy = "dummy"
-            //FAILING common.sendNotification(currentBuild.result,"",["slack"])
         }
     }
 }
