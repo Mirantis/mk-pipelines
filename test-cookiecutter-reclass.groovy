@@ -41,8 +41,8 @@ gerritDataRS['gerritBranch'] = env.RECLASS_MODEL_BRANCH ?: 'master'
 gerritDataRS['gerritProject'] = 'salt-models/reclass-system'
 
 // version of debRepos, aka formulas\reclass
-def testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
-def reclassVersion = 'v1.5.4'
+testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
+reclassVersion = 'v1.5.4'
 if (common.validInputParam(env.RECLASS_VERSION)) {
     reclassVersion = env.RECLASS_VERSION
 }
