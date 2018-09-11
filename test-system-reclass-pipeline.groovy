@@ -1,6 +1,9 @@
 def gerrit = new com.mirantis.mk.Gerrit()
 def common = new com.mirantis.mk.Common()
 
+
+slaveNode = env.SLAVE_NODE ?: 'python&&docker'
+
 def gerritCredentials
 try {
     gerritCredentials = CREDENTIALS_ID
@@ -28,7 +31,7 @@ def merged = false
 def systemRefspec = "HEAD"
 def formulasRevision = 'testing'
 timeout(time: 12, unit: 'HOURS') {
-    node() {
+    node(slaveNode) {
         try {
             stage("Checkout") {
                 if (gerritRef) {
@@ -79,8 +82,8 @@ timeout(time: 12, unit: 'HOURS') {
                         }
                         branches["cookiecutter"] = {
                             build job: "test-mk-cookiecutter-templates", parameters: [
-                                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
-                                [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec],
+                                [$class: 'StringParameterValue', name: 'RECLASS_SYSTEM_URL', value: defaultGitUrl],
+                                [$class: 'StringParameterValue', name: 'RECLASS_SYSTEM_GIT_REF', value: systemRefspec],
                                 [$class: 'StringParameterValue', name: 'DISTRIB_REVISION', value: formulasRevision]
 
                             ]

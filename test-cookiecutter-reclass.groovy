@@ -24,6 +24,8 @@ alreadyMerged = false
 gerritConData = [credentialsId       : env.CREDENTIALS_ID,
                  gerritName          : env.GERRIT_NAME ?: 'mcp-jenkins',
                  gerritHost          : env.GERRIT_HOST ?: 'gerrit.mcp.mirantis.net',
+                 gerritScheme        : env.GERRIT_SCHEME ?: 'ssh',
+                 gerritPort          : env.GERRIT_PORT ?: '29418',
                  gerritRefSpec       : null,
                  gerritProject       : null,
                  withWipeOut         : true,
@@ -44,7 +46,7 @@ gerritDataRS['gerritProject'] = 'salt-models/reclass-system'
 // version of debRepos, aka formulas\reclass
 testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
 reclassVersion = 'v1.5.4'
-if (common.validInputParam(env.RECLASS_VERSION)) {
+if (env.RECLASS_VERSION) {
     reclassVersion = env.RECLASS_VERSION
 }
 // Name of sub-test chunk job
@@ -221,7 +223,7 @@ def globalVariatorsUpdate() {
     // In general, simply make transition updates for non-master branch
     // based on magic logic
     def message = ''
-    if (!common.validInputParam(env.GERRIT_PROJECT)) {
+    if (env.GERRIT_PROJECT) {
         if (!['nightly', 'testing', 'stable', 'proposed', 'master'].contains(env.GERRIT_BRANCH)) {
             gerritDataCC['gerritBranch'] = env.GERRIT_BRANCH
             gerritDataRS['gerritBranch'] = env.GERRIT_BRANCH
@@ -255,10 +257,10 @@ def globalVariatorsUpdate() {
         currentBuild.description = currentBuild.description ? message + "<br/>" + currentBuild.description : message
     } else {
         // Check for passed variables:
-        if (common.validInputParam(env.RECLASS_SYSTEM_GIT_REF)) {
+        if (env.RECLASS_SYSTEM_GIT_REF) {
             gerritDataRS['gerritRefSpec'] = RECLASS_SYSTEM_GIT_REF
         }
-        if (common.validInputParam(env.COOKIECUTTER_TEMPLATE_REF)) {
+        if (env.COOKIECUTTER_TEMPLATE_REF) {
             gerritDataCC['gerritRefSpec'] = COOKIECUTTER_TEMPLATE_REF
         }
         message = "<font color='red'>Manual run detected!</font>" + "<br/>"
@@ -310,7 +312,6 @@ timeout(time: 1, unit: 'HOURS') {
         def reclassNodeInfoDir = "${env.WORKSPACE}/reclassNodeInfo_compare/"
         def reclassInfoHeadPath = "${reclassNodeInfoDir}/old"
         def reclassInfoPatchedPath = "${reclassNodeInfoDir}/new"
-
         try {
             sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
             stage('Download and prepare CC env') {
@@ -371,7 +372,7 @@ timeout(time: 1, unit: 'HOURS') {
                    tar -xzf ${headReclassArtifactName}  --directory ${compareRoot}/old
                    """)
                 common.warningMsg('infra/secrets.yml has been skipped from compare!')
-                result =  '\n' + common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml\'")
+                result = '\n' + common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml\'")
                 currentBuild.description = currentBuild.description ? currentBuild.description + result : result
             }
             stage("TestContexts Head/Patched") {
