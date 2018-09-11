@@ -268,6 +268,25 @@ def globalVariatorsUpdate() {
     }
 }
 
+def replaceGeneratedValues(path) {
+    def files = sh(script: "find ${path} -name 'secrets.yml'", returnStdout: true)
+    def stepsForParallel = [:]
+    stepsForParallel.failFast = true
+    files.tokenize().each {
+        stepsForParallel.put("Removing generated passwords/secrets from ${it}",
+            {
+                def secrets = readYaml file: it
+                for(String key in secrets['parameters']['_param'].keySet()) {
+                    secrets['parameters']['_param'][key] = 'generated'
+                }
+                // writeYaml can't write to already existing file
+                writeYaml file: "${it}.tmp", data: secrets
+                sh "mv ${it}.tmp ${it}"
+            })
+    }
+    parallel stepsForParallel
+}
+
 def linkReclassModels(contextList, envPath, archiveName) {
     // to be able share reclass for all subenvs
     // Also, makes artifact test more solid - use one reclass for all of sub-models.
@@ -290,6 +309,8 @@ def linkReclassModels(contextList, envPath, archiveName) {
                 sh(script: 'mkdir -p classes/; ln -sfv ../../../../global_reclass classes/system ')
             }
         }
+        // replace all generated passwords/secrets/keys with hardcode value for infra/secrets.yaml
+        replaceGeneratedValues("${envPath}/model")
         // Save all models and all contexts. Warning! `h` flag must be used.
         sh(script: "set -ex; tar -chzf ${archiveName} --exclude='*@tmp' model contexts", returnStatus: true)
         archiveArtifacts artifacts: archiveName
@@ -401,6 +422,8 @@ timeout(time: 1, unit: 'HOURS') {
                         getAndUnpackNodesInfoArtifact(bdata.jobname, bdata.copyToDir, bdata.buildId))
                 }
                 parallel stepsForParallel
+                // remove timestamp field from rendered files
+                sh("find ${reclassNodeInfoDir} -type f -exec sed -i '/  timestamp: .*/d' {} \\;")
                 // Compare patched and HEAD reclass pillars
                 result = '\n' + common.comparePillars(reclassNodeInfoDir, env.BUILD_URL, '')
                 currentBuild.description = currentBuild.description ? currentBuild.description + result : result
