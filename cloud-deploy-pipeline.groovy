@@ -426,6 +426,21 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
+            // install ceph
+            if (common.checkContains('STACK_INSTALL', 'ceph')) {
+                stage('Install Ceph MONs') {
+                    orchestrate.installCephMon(venvPepper, "I@ceph:mon ${extra_tgt}", extra_tgt)
+                }
+
+                stage('Install Ceph OSDs') {
+                    orchestrate.installCephOsd(venvPepper, "I@ceph:osd ${extra_tgt}", true, extra_tgt)
+                }
+
+                stage('Install Ceph clients') {
+                    orchestrate.installCephClient(venvPepper, extra_tgt)
+                }
+            }
+
             // install openstack
             if (common.checkContains('STACK_INSTALL', 'openstack')) {
                 // install control, tests, ...
@@ -474,20 +489,8 @@ timeout(time: 12, unit: 'HOURS') {
 
             }
 
-            // install ceph
+            // connect ceph
             if (common.checkContains('STACK_INSTALL', 'ceph')) {
-                stage('Install Ceph MONs') {
-                    orchestrate.installCephMon(venvPepper, "I@ceph:mon ${extra_tgt}", extra_tgt)
-                }
-
-                stage('Install Ceph OSDs') {
-                    orchestrate.installCephOsd(venvPepper, "I@ceph:osd ${extra_tgt}", true, extra_tgt)
-                }
-
-
-                stage('Install Ceph clients') {
-                    orchestrate.installCephClient(venvPepper, extra_tgt)
-                }
 
                 stage('Connect Ceph') {
                     orchestrate.connectCeph(venvPepper, extra_tgt)
