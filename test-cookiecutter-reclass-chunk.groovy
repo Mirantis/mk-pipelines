@@ -12,16 +12,18 @@ def saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 
 timeout(time: 1, unit: 'HOURS') {
-  node(slaveNode) {
-    try {
-      extraVars = readYaml text: EXTRA_VARIABLES_YAML
-      currentBuild.description = extraVars.modelFile
-      saltModelTesting.testCCModel(extraVars)
-    } catch (Throwable e) {
-      // If there was an error or exception thrown, the build failed
-      currentBuild.result = "FAILURE"
-      currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
-      throw e
+    node(slaveNode) {
+        stage("RunTest") {
+            try {
+                extraVars = readYaml text: EXTRA_VARIABLES_YAML
+                currentBuild.description = extraVars.modelFile
+                saltModelTesting.testCCModel(extraVars)
+            } catch (Throwable e) {
+                // If there was an error or exception thrown, the build failed
+                currentBuild.result = "FAILURE"
+                currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+                throw e
+            }
+        }
     }
-  }
 }
