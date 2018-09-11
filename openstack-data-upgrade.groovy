@@ -1,6 +1,5 @@
 /**
- * Upgrade OpenStack packages on control plane nodes.
- * There are no silver boollet in uprading cloud.
+ * Upgrade OpenStack packages on gateway nodes.
  * Update packages on given nodes
  *
  * Expected parameters:
@@ -18,8 +17,8 @@
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
-def debian = new com.mirantis.mk.Debian()
 def openstack = new com.mirantis.mk.Openstack()
+def debian = new com.mirantis.mk.Debian()
 
 def interactive = INTERACTIVE.toBoolean()
 def LinkedHashMap upgradeStageMap = [:]
@@ -37,17 +36,19 @@ upgradeStageMap.put('Pre upgrade',
  * Run some service built in checkers like keystone-manage doctor or nova-status upgrade.''',
     'State result': 'Basic checks around services API are passed.'
   ])
-upgradeStageMap.put('Stop OpenStack services',
+upgradeStageMap.put('Upgrade pre: migrate resources',
   [
-    'Description': 'All OpenStack python services will be stopped on All control nodes. This does not affect data plane services such as openvswitch or qemu.',
+    'Description': 'In order to minimize workload downtime smooth resource migration is happening during this phase. Neutron agents on node are set to admin_disabled state, to make sure they are quickly migrated to new node (1-2 ping loss). Instances might be live-migrated from host (this stage is optional) and configured from pillar.',
     'Status': 'NOT_LAUNCHED',
     'Expected behaviors': '''
- * OpenStack python services are stopped.
- * OpenStack API are not accessible from this point.
- * No workload downtime''',
+ * No service downtime
+ * Small workload downtime''',
     'Launched actions': '''
- * Stop OpenStack python services''',
-    'State result': 'OpenStack python services are stopped',
+ * Set neutron agents to admin disabled sate
+ * Migrate instances if allowed (optional).''',
+    'State result': '''
+ * Hosts are being removed from scheduling to host new resources.
+ * If instance migration was performed no instances should be present.'''
   ])
 upgradeStageMap.put('Upgrade OpenStack',
    [
@@ -91,62 +92,47 @@ upgradeStageMap.put('Upgrade OS',
  * Node might be rebooted
 '''
   ])
+upgradeStageMap.put('Upgrade post: enable resources',
+  [
+    'Description': 'Verify that agents/services on node are up, add them back to scheduling.',
+    'Status': 'NOT_LAUNCHED',
+    'Expected behaviors': '''
+ * No service downtime
+ * No workload downtime''',
+    'Launched actions': '''
+ * Set neutron agents to admin sate enabled
+ * Enable nova-compute services''',
+    'State result': 'Hosts are being added to scheduling to host new resources',
+  ])
+upgradeStageMap.put('Post upgrade',
+  [
+    'Description': 'Only non destructive actions will be applied during this phase. Like cleanup old configs, cleanup temporary files. Online dbsyncs.',
+    'Status': 'NOT_LAUNCHED',
+    'Expected behaviors': '''
+ * No service downtime
+ * No workload downtime''',
+    'Launched actions': '''
+ * Cleanup os client configs''',
+    'State result': 'Temporary resources are being cleaned.'
+  ])
 
-def stopOpenStackServices(env, target) {
-    def salt = new com.mirantis.mk.Salt()
-    def openstack = new com.mirantis.mk.Openstack()
-    def common = new com.mirantis.mk.Common()
-
-    def services = openstack.getOpenStackUpgradeServices(env, target)
-    def st
-    for (service in services){
-        st = "${service}.upgrade.service_stopped".trim()
-        common.infoMsg("Stopping ${st} services on ${target}")
-        salt.enforceState(env, target, st)
-    }
-}
-
-def snapshotVM(env, domain, snapshotName) {
-  def common = new com.mirantis.mk.Common()
-  def salt = new com.mirantis.mk.Salt()
-
-  def target =  salt.getNodeProvider(env, domain)
-
-  // TODO: gracefully migrate all workloads from VM, and stop it
-  salt.runSaltProcessStep(env, target, 'virt.shutdown', [domain], null, true, 3600)
-
-  //TODO: wait while VM is powered off
-
-  common.infoMsg("Creating snapshot ${snapshotName} for VM ${domain} on node ${target}")
-  salt.runSaltProcessStep(env, target, 'virt.snapshot', [domain, snapshotName], null, true, 3600)
-}
-
-def revertSnapshotVM(env, domain, snapshotName, ensureUp=true) {
-  def common = new com.mirantis.mk.Common()
-  def salt = new com.mirantis.mk.Salt()
-
-  def target =  salt.getNodeProvider(env, domain)
-
-  common.infoMsg("Reverting snapshot ${snapshotName} for VM ${domain} on node ${target}")
-  salt.runSaltProcessStep(env, target, 'virt.revert_snapshot', [snapshotName, domain], null, true, 3600)
-
-  if (ensureUp){
-    salt.runSaltProcessStep(env, target, 'virt.start', [domain], null, true, 300)
-  }
-}
 
 def env = "env"
-timeout(time: 12, unit: 'HOURS') {
+timeout(time: 24, unit: 'HOURS') {
   node() {
 
     stage('Setup virtualenv for Pepper') {
       python.setupPepperVirtualenv(env, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
     }
 
-    def upgradeTargets = salt.getMinionsSorted(env, TARGET_SERVERS)
+    def targetNodes = salt.getMinionsSorted(env, TARGET_SERVERS)
+    def migrateResources = true
 
-    if (upgradeTargets.isEmpty()) {
+    if (targetNodes.isEmpty()) {
       error("No servers for upgrade matched by ${TARGET_SERVERS}")
+    }
+    if (targetNodes.size() == 1 ){
+      migrateResources = false
     }
 
     common.printStageMap(upgradeStageMap)
@@ -155,26 +141,29 @@ timeout(time: 12, unit: 'HOURS') {
         "Above you can find detailed info this pipeline will execute.\nThe info provides brief description of each stage, actions that will be performed and service/workload impact during each stage.\nPlease read it carefully.", "yellow")
     }
 
-
-    for (target in upgradeTargets){
+    for (target in targetNodes){
       common.stageWrapper(upgradeStageMap, "Pre upgrade", target, interactive) {
         openstack.runOpenStackUpgradePhase(env, target, 'pre')
-      }
-    }
-
-    for (target in upgradeTargets) {
-      common.stageWrapper(upgradeStageMap, "Stop OpenStack services", target, interactive) {
-        stopOpenStackServices(env, target)
-      }
-    }
-
-    for (target in upgradeTargets) {
-      common.stageWrapper(upgradeStageMap, "Upgrade OpenStack", target, interactive) {
-        openstack.runOpenStackUpgradePhase(env, target, 'upgrade')
-        openstack.applyOpenstackAppsStates(env, target)
         openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
 
+      common.stageWrapper(upgradeStageMap, "Upgrade pre: migrate resources", target, interactive) {
+        if (migrateResources) {
+          common.infoMsg("Migrating neutron resources from ${target}")
+          openstack.runOpenStackUpgradePhase(env, target, 'upgrade.pre')
+          // Start upgrade only when resources were successfully migrated
+        }
+      }
+
+      common.stageWrapper(upgradeStageMap, "Upgrade OpenStack", target, interactive) {
+        // Stop services on node. //Do actual step by step orch here.
+        openstack.runOpenStackUpgradePhase(env, target, 'service_stopped')
+        openstack.runOpenStackUpgradePhase(env, target, 'pkgs_latest')
+        openstack.runOpenStackUpgradePhase(env, target, 'render_config')
+        openstack.runOpenStackUpgradePhase(env, target, 'service_running')
+        openstack.applyOpenstackAppsStates(env, target)
+        openstack.runOpenStackUpgradePhase(env, target, 'verify')
+      }
       common.stageWrapper(upgradeStageMap, "Upgrade OS", target, interactive) {
         if (OS_DIST_UPGRADE.toBoolean() == true){
           upgrade_mode = 'dist-upgrade'
@@ -186,6 +175,10 @@ timeout(time: 12, unit: 'HOURS') {
         }
         openstack.applyOpenstackAppsStates(env, target)
         openstack.runOpenStackUpgradePhase(env, target, 'verify')
+      }
+
+      common.stageWrapper(upgradeStageMap, "Upgrade post: enable resources", target, interactive) {
+        openstack.runOpenStackUpgradePhase(env, target, 'upgrade.post')
       }
     }
   }
