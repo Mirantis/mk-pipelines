@@ -156,7 +156,7 @@ def testModel(modelFile, reclassArtifactName, artifactCopyPath) {
   reclassVersion: "${reclassVersion}"
   """
     def chunkJob = build job: chunkJobName, parameters: [
-        [$class: 'StringParameterValue', name: 'EXTRA_VARIABLES_YAML',
+        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML',
          value : _values_string.stripIndent()],
     ]
     // Put sub-job info into global map.
@@ -276,7 +276,7 @@ def replaceGeneratedValues(path) {
         stepsForParallel.put("Removing generated passwords/secrets from ${it}",
             {
                 def secrets = readYaml file: it
-                for(String key in secrets['parameters']['_param'].keySet()) {
+                for (String key in secrets['parameters']['_param'].keySet()) {
                     secrets['parameters']['_param'][key] = 'generated'
                 }
                 // writeYaml can't write to already existing file
