@@ -15,7 +15,7 @@ timeout(time: 1, unit: 'HOURS') {
     node() {
         stage("Promote") {
             catchError {
-                for (String jobname : ['mirror-snapshot-name-maas-xenial', 'mirror-snapshot-name-ubuntu', 'mirror-snapshot-name-maas-ephemeral-v3']) {
+                for (String jobname : ['mirror-snapshot-name-maas-xenial', 'mirror-snapshot-name-ubuntu', 'ebf-hotfix-ubuntu', 'ebf-update-ubuntu', 'mirror-snapshot-name-maas-ephemeral-v3']) {
                     build job: jobname, parameters: [
                         [$class: 'StringParameterValue', name: 'SNAPSHOT_NAME', value: SNAPSHOT_NAME],
                         [$class: 'StringParameterValue', name: 'SNAPSHOT_ID', value: SNAPSHOT_ID],
