@@ -13,20 +13,8 @@ python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 ssh = new com.mirantis.mk.Ssh()
 
-def reclassVersion = 'v1.5.4'
-if (common.validInputParam('RECLASS_VERSION')) {
-    reclassVersion = RECLASS_VERSION
-}
-slaveNode = (env.SLAVE_NODE ?: 'python&&docker')
-
-// install extra formulas required only for rendering cfg01. All others - should be fetched automatically via
-// salt.master.env state, during salt-master bootstrap.
-// TODO: In the best - those data should fetched somewhere from CC, per env\context. Like option, process _enabled
-// options from CC contexts
-// currently, just mix them together in one set
-def testCfg01ExtraFormulas = 'glusterfs jenkins logrotate maas ntp rsyslog fluentd telegraf prometheus ' +
-    'grafana backupninja'
-
+reclassVersion = env.RECLASS_VERSION ?: 'v1.5.4'
+slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 
 timeout(time: 2, unit: 'HOURS') {
     node(slaveNode) {
@@ -56,10 +44,6 @@ timeout(time: 2, unit: 'HOURS') {
             def testResult = false
             wrap([$class: 'BuildUser']) {
                 user = env.BUILD_USER_ID
-            }
-
-            if (mcpVersion != '2018.4.0') {
-                testCfg01ExtraFormulas += ' auditd'
             }
 
             currentBuild.description = clusterName
@@ -196,7 +180,7 @@ parameters:
                     testResult = saltModelTesting.setupAndTestNode(
                         "${saltMaster}.${clusterDomain}",
                         "",
-                        testCfg01ExtraFormulas,
+                        "",
                         testEnv,
                         'pkg',
                         mcpVersion,

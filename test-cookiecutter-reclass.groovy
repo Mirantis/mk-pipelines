@@ -52,11 +52,6 @@ if (env.RECLASS_VERSION) {
 // Name of sub-test chunk job
 chunkJobName = "test-mk-cookiecutter-templates-chunk"
 testModelBuildsData = [:]
-def extraFormulasList = ['linux', 'openssh']
-if (env.EXTRA_FORMULAS){
-  extraFormulasList = env.EXTRA_FORMULAS.tokenize()
-}
-
 
 def generateSaltMaster(modEnv, clusterDomain, clusterName) {
     def nodeFile = "${modEnv}/nodes/cfg01.${clusterDomain}.yml"
@@ -156,7 +151,6 @@ def testModel(modelFile, reclassArtifactName, artifactCopyPath) {
   testReclassEnv: "model/${modelFile}/"
   modelFile: "contexts/${modelFile}.yml"
   DISTRIB_REVISION: "${testDistribRevision}"
-  EXTRA_FORMULAS: "${extraFormulasList.join(' ')}"
   reclassVersion: "${reclassVersion}"
   """
     def chunkJob = build job: chunkJobName, parameters: [
@@ -234,13 +228,6 @@ def globalVariatorsUpdate() {
             gerritDataRS['gerritBranch'] = env.GERRIT_BRANCH
             // 'binary' branch logic w\o 'release/' prefix
             testDistribRevision = env.GERRIT_BRANCH.split('/')[-1]
-            /// FIXME: ugly hack, for versioning tests.
-            // Leave it in this place - to don't fail after release.
-            if (testDistribRevision == '2018.8.1') {
-                if (extraFormulasList.remove('openscap')) {
-                    common.infoMsg('Removing openscap from tests extraFormulasList !')
-                }
-            }
             // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
             if (!common.checkRemoteBinary([apt_mk_version: testDistribRevision]).linux_system_repo_url) {
                 common.errorMsg("Binary release: ${testDistribRevision} not exist. Fallback to 'proposed'! ")

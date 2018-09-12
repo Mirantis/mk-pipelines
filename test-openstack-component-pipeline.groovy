@@ -4,7 +4,6 @@
 
  * Flow parameters:
  *   CREDENTIALS_ID
- *   EXTRA_FORMULAS
  *   FORMULAS_REVISION
  *   FORMULAS_SOURCE
  *   SALT_OPTS

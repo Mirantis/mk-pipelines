@@ -199,7 +199,7 @@ timeout(time: 12, unit: 'HOURS') {
                             envParams.put('cfg_bootstrap_extra_repo_params', BOOTSTRAP_EXTRA_REPO_PARAMS)
                         }
 
-                        // put extra salt-formulas
+                        // put extra salt-formulas # FIXME: looks like some outdated logic. See #PROD-23127
                         if (common.validInputParam('EXTRA_FORMULAS')) {
                             common.infoMsg("Setting extra salt-formulas to ${EXTRA_FORMULAS}")
                             envParams.put('cfg_extra_formulas', EXTRA_FORMULAS)

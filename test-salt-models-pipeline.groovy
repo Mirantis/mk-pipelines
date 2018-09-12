@@ -3,7 +3,6 @@
  *  DEFAULT_GIT_URL default git url (will be used if pipeline run is not triggered by gerrit)
  *  DEFAULT_GIT_RED default git ref (branch,tag,...) (will be used if pipeline run is not triggered by gerrit)
  *  CREDENTIALS_ID Jenkins credetials id for git checkout
- *  EXTRA_FORMULAS extra formulas list for passing to salt bootstrap script
  *  MAX_CPU_PER_JOB max cpu count for one docket test instance
  *  SYSTEM_GIT_URL reclass system git URL (optional)
  *  SYSTEM_GIT_REF reclass system git URL (optional)
@@ -102,7 +101,6 @@ def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, fo
     [$class: 'StringParameterValue', name: 'CLUSTER_NAME', value: clusterName],
     [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
     [$class: 'StringParameterValue', name: 'FORMULAS_SOURCE', value: formulasSource],
-    [$class: 'StringParameterValue', name: 'EXTRA_FORMULAS', value: EXTRA_FORMULAS],
     [$class: 'StringParameterValue', name: 'FORMULAS_REVISION', value: FORMULAS_REVISION],
     [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
     [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],

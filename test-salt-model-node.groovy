@@ -4,7 +4,6 @@
  *  DEFAULT_GIT_REF
  *  DEFAULT_GIT_URL
  *  CREDENTIALS_ID
- *  EXTRA_FORMULAS
  *  CLUSTER_NAME
  *  NODE_TARGET
  *  SYSTEM_GIT_URL
@@ -74,7 +73,7 @@ throttle(['test-model']) {
               testResult = saltModelTesting.setupAndTestNode(
                   NODE_TARGET,
                   CLUSTER_NAME,
-                  EXTRA_FORMULAS,
+                  '',
                   workspace,
                   FORMULAS_SOURCE,
                   FORMULAS_REVISION,
