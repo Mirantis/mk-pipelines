@@ -58,6 +58,13 @@ def triggerMirrorRepoJob(snapshotId, snapshotName) {
     ]
 }
 
+def triggerEbfRepoJob(snapshotId, snapshotName) {
+    build job: "ebf-snapshot-name-all", parameters: [
+        [$class: 'StringParameterValue', name: 'SNAPSHOT_NAME', value: snapshotName],
+        [$class: 'StringParameterValue', name: 'SNAPSHOT_ID', value: snapshotId],
+    ]
+}
+
 def triggerGitTagJob(gitRepoList, gitCredentials, tag, sourceTag) {
     build job: "tag-git-repos-all", parameters: [
         [$class: 'StringParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
@@ -87,6 +94,11 @@ timeout(time: 12, unit: 'HOURS') {
                 if (RELEASE_DEB_MIRRORS.toBoolean()) {
                     common.infoMsg("Promoting Debmirrors")
                     triggerMirrorRepoJob(SOURCE_REVISION, TARGET_REVISION)
+                }
+
+                if (RELEASE_EBF_MIRRORS.toBoolean()) {
+                    common.infoMsg("Promoting Emergency Bug Fix Debmirrors")
+                    triggerEbfRepoJob(SOURCE_REVISION, TARGET_REVISION)
                 }
 
                 if (RELEASE_DOCKER.toBoolean()) {
