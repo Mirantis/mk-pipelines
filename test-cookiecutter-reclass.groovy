@@ -52,7 +52,11 @@ if (env.RECLASS_VERSION) {
 // Name of sub-test chunk job
 chunkJobName = "test-mk-cookiecutter-templates-chunk"
 testModelBuildsData = [:]
-extraFormulasList = env.EXTRA_FORMULAS.tokenize() ?: ['linux', 'openssh']
+def extraFormulasList = ['linux', 'openssh']
+if (env.EXTRA_FORMULAS){
+  extraFormulasList = env.EXTRA_FORMULAS.tokenize()
+}
+
 
 def generateSaltMaster(modEnv, clusterDomain, clusterName) {
     def nodeFile = "${modEnv}/nodes/cfg01.${clusterDomain}.yml"
