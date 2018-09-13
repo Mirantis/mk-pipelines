@@ -8,7 +8,6 @@
  *  NODE_TARGET
  *  SYSTEM_GIT_URL
  *  SYSTEM_GIT_REF
- *  FORMULAS_SOURCE
  *  RECLASS_VERSION
  *  MAX_CPU_PER_JOB
  *  LEGACY_TEST_MODE
@@ -66,38 +65,23 @@ throttle(['test-model']) {
         stage("test node") {
           if (checkouted) {
             def workspace = common.getWorkspace()
-            def testResult = false
             common.infoMsg("Running salt model test for node ${NODE_TARGET} in cluster ${CLUSTER_NAME}")
-            try {
-              def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
-              testResult = saltModelTesting.setupAndTestNode(
-                  NODE_TARGET,
-                  CLUSTER_NAME,
-                  '',
-                  workspace,
-                  FORMULAS_SOURCE,
-                  FORMULAS_REVISION,
-                  reclassVersion,
-                  MAX_CPU_PER_JOB.toInteger(),
-                  RECLASS_IGNORE_CLASS_NOTFOUND,
-                  LEGACY_TEST_MODE,
-                  APT_REPOSITORY,
-                  APT_REPOSITORY_GPG,
-                  DockerCName)
-            } catch (Exception e) {
-              if (e.getMessage() == "script returned exit code 124") {
-                common.errorMsg("Impossible to test node due to timeout of salt-master, ABORTING BUILD")
-                currentBuild.result = "ABORTED"
-              } else {
-                throw e
-              }
-            }
-            if (testResult) {
-              common.infoMsg("Test finished: SUCCESS")
-            } else {
-              error('Test node finished: FAILURE')
-              throw new RuntimeException('Test node stage finished: FAILURE')
-            }
+
+            def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
+            def config = [
+              'dockerHostname': NODE_TARGET,
+              'clusterName': CLUSTER_NAME,
+              'reclassEnv': workspace,
+              'formulasRevision': FORMULAS_REVISION,
+              'reclassVersion': reclassVersion,
+              'dockerMaxCpus': MAX_CPU_PER_JOB.toInteger(),
+              'ignoreClassNotfound': RECLASS_IGNORE_CLASS_NOTFOUND,
+              'aptRepoUrl': APT_REPOSITORY,
+              'aptRepoGPG': APT_REPOSITORY_GPG,
+              'dockerContainerName': DockerCName,
+              'testContext': 'salt-model-node'
+            ]
+            saltModelTesting.testNode(config)
           }
         }
       } catch (Throwable e) {

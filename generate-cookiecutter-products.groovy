@@ -177,24 +177,20 @@ parameters:
                     sh("cp -r ${modelEnv} ${testEnv}")
                     def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
                     common.infoMsg("Attempt to run test against formula-version: ${mcpVersion}")
-                    testResult = saltModelTesting.setupAndTestNode(
-                        "${saltMaster}.${clusterDomain}",
-                        "",
-                        "",
-                        testEnv,
-                        'pkg',
-                        mcpVersion,
-                        reclassVersion,
-                        0,
-                        false,
-                        false,
-                        '',
-                        '',
-                        DockerCName)
-                    if (testResult) {
+                    try {
+                        def config = [
+                            'dockerHostname': "${saltMaster}.${clusterDomain}",
+                            'reclassEnv': testEnv,
+                            'formulasRevision': mcpVersion,
+                            'reclassVersion': reclassVersion,
+                            'dockerContainerName': DockerCName,
+                            'testContext': 'salt-model-node'
+                        ]
+                        testResult = saltModelTesting.testNode(config)
                         common.infoMsg("Test finished: SUCCESS")
-                    } else {
-                        common.warningMsg('Test finished: FAILURE')
+                    } catch (Exception ex) {
+                        common.warningMsg("Test finished: FAILED")
+                        testResult = false
                     }
                 } else {
                     common.warningMsg("Test stage has been skipped!")

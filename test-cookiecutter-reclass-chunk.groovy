@@ -17,7 +17,25 @@ timeout(time: 1, unit: 'HOURS') {
             try {
                 extraVars = readYaml text: EXTRA_VARIABLES_YAML
                 currentBuild.description = extraVars.modelFile
-                saltModelTesting.testCCModel(extraVars)
+                sh(script:  'find . -mindepth 1 -delete || true', returnStatus: true)
+                sh(script: """
+                    wget --progress=dot:mega --auth-no-challenge -O models.tar.gz ${extraVars.MODELS_TARGZ}
+                    tar -xzf models.tar.gz
+                """)
+                common.infoMsg("Going to test exactly one context: ${extraVars.modelFile}\n, with params: ${extraVars}")
+
+                def content = readFile(file: extraVars.modelFile)
+                def templateContext = readYaml text: content
+                def config = [
+                    'dockerHostname': "cfg01.${templateContext.default_context.cluster_domain}",
+                    'clusterName': templateContext.default_context.cluster_name,
+                    'reclassEnv': extraVars.testReclassEnv,
+                    'formulasRevision': extraVars.DISTRIB_REVISION,
+                    'reclassVersion': extraVars.reclassVersion,
+                    'dockerContainerName': extraVars.DockerCName,
+                    'testContext': extraVars.modelFile
+                ]
+                saltModelTesting.testNode(config)
             } catch (Throwable e) {
                 // If there was an error or exception thrown, the build failed
                 currentBuild.result = "FAILURE"
