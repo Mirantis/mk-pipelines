@@ -220,11 +220,11 @@ parameters:
                 ])
 
                 sh "cp mcp-common-scripts/config-drive/create_config_drive.sh create-config-drive && chmod +x create-config-drive"
-                sh "cp mcp-common-scripts/config-drive/master_config.sh user_data.sh"
+                sh "[ -f mcp-common-scripts/config-drive/master_config.sh ] && cp mcp-common-scripts/config-drive/master_config.sh user_data || cp mcp-common-scripts/config-drive/master_config.yaml user_data"
 
                 sh "git clone --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
                 sh "git clone --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
-                args = "--user-data user_data.sh --hostname ${saltMaster} --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ ${saltMaster}.${clusterDomain}-config.iso"
+                args = "--user-data user_data --hostname ${saltMaster} --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ ${saltMaster}.${clusterDomain}-config.iso"
 
                 // load data from model
                 def smc = [:]
@@ -256,7 +256,7 @@ parameters:
                 }
 
                 for (i in common.entries(smc)) {
-                    sh "sed -i 's,export ${i[0]}=.*,export ${i[0]}=${i[1]},' user_data.sh"
+                    sh "sed -i 's,${i[0]}=.*,${i[0]}=${i[1]},' user_data"
                 }
 
                 // create cfg config-drive
@@ -268,8 +268,7 @@ parameters:
 
                 if (templateContext['default_context']['local_repositories'] == 'True') {
                     def aptlyServerHostname = templateContext.default_context.aptly_server_hostname
-                    def user_data_script_apt_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/master/config-drive/mirror_config.sh"
-                    sh "wget -O mirror_config.sh ${user_data_script_apt_url}"
+                    sh "cp mcp-common-scripts/config-drive/mirror_config.sh mirror_config.sh"
 
                     def smc_apt = [:]
                     smc_apt['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
@@ -293,7 +292,6 @@ parameters:
             stage('Save changes reclass model') {
                 sh(returnStatus: true, script: "tar -czf output-${clusterName}/${clusterName}.tar.gz --exclude='*@tmp' -C ${modelEnv} .")
                 archiveArtifacts artifacts: "output-${clusterName}/${clusterName}.tar.gz"
-
 
                 if (EMAIL_ADDRESS != null && EMAIL_ADDRESS != "") {
                     emailext(to: EMAIL_ADDRESS,
