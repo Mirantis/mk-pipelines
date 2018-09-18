@@ -201,7 +201,7 @@ parameters:
 
                 // download create-config-drive
                 // FIXME: that should be refactored, to use git clone - to be able download it from custom repo.
-                def mcpCommonScriptsBranch = templateContext.default_context.mcp_common_scripts_branch
+                def mcpCommonScriptsBranch = templateContext['default_context']['mcp_common_scripts_branch']
                 if (mcpCommonScriptsBranch == '') {
                     mcpCommonScriptsBranch = mcpVersion
                     // Don't have n/t/s for mcp-common-scripts repo, therefore use master
@@ -210,12 +210,17 @@ parameters:
                         mcpCommonScriptsBranch = 'master'
                     }
                 }
-                def config_drive_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${mcpCommonScriptsBranch}/config-drive/create_config_drive.sh"
-                def user_data_script_url = "https://raw.githubusercontent.com/Mirantis/mcp-common-scripts/${mcpCommonScriptsBranch}/config-drive/master_config.sh"
-                common.retry(3, 5) {
-                    sh "wget -O create-config-drive ${config_drive_script_url} && chmod +x create-config-drive"
-                    sh "wget -O user_data.sh ${user_data_script_url}"
-                }
+
+                def commonScriptsRepoUrl = 'https://gerrit.mcp.mirantis.net/mcp/mcp-common-scripts'
+                checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: 'FETCH_HEAD'],],
+                        extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'mcp-common-scripts']],
+                        userRemoteConfigs: [[url: commonScriptsRepoUrl, refspec: mcpCommonScriptsBranch],],
+                ])
+
+                sh "cp mcp-common-scripts/config-drive/create_config_drive.sh create-config-drive && chmod +x create-config-drive"
+                sh "cp mcp-common-scripts/config-drive/master_config.sh user_data.sh"
 
                 sh "git clone --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
                 sh "git clone --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
