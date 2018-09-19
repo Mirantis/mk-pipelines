@@ -26,13 +26,16 @@ def probe = 1
 def command = 'cmd.shell'
 
 def controlPkgs = 'contrail-config,contrail-config-openstack,contrail-control,contrail-dns,contrail-lib,contrail-nodemgr,contrail-utils,contrail-web-controller,contrail-web-core,neutron-plugin-contrail,python-contrail,contrail-database'
+def thirdPartyControlPkgsToRemove = 'redis-server,ifmap-server,supervisor'
 def analyticsPkgs = 'contrail-analytics,contrail-lib,contrail-nodemgr,contrail-utils,python-contrail,contrail-database'
+def thirdPartyAnalyticsPkgsToRemove = 'redis-server,supervisor'
 //def cmpPkgs = ['contrail-lib', 'contrail-nodemgr', 'contrail-utils', 'contrail-vrouter-agent', 'contrail-vrouter-utils', 'python-contrail', 'python-contrail-vrouter-api', 'python-opencontrail-vrouter-netns', 'contrail-vrouter-dkms']
 def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
 def KERNEL_MODULE_RELOAD = 'service supervisor-vrouter stop;ifdown vhost0;rmmod vrouter;modprobe vrouter;ifup vhost0;service supervisor-vrouter start;'
-def analyticsServices = ['supervisor-analytics', 'supervisor-database', 'zookeeper']
+def analyticsServices = ['supervisor-analytics', 'supervisor-database', 'zookeeper', 'redis-server']
 def configServices = ['contrail-webui-jobserver', 'contrail-webui-webserver', 'supervisor-config', 'supervisor-database', 'zookeeper']
-def controlServices = ['ifmap-server', 'supervisor-control']
+def controlServices = ['ifmap-server', 'supervisor-control', 'redis-server']
+def thirdPartyServicesToDisable = ['kafka', 'zookeeper', 'cassandra']
 def config4Services = ['zookeeper', 'contrail-webui-middleware', 'contrail-webui', 'contrail-api', 'contrail-schema', 'contrail-svc-monitor', 'contrail-device-manager', 'contrail-config-nodemgr', 'contrail-database']
 
 def void runCommonCommands(target, command, args, check, salt, pepperEnv, common) {
@@ -107,7 +110,7 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg('Cassandra failed to backup. Please fix it before continuing.')
                     throw er
                 }
-                
+
                 salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'])
 
                 try {
@@ -167,14 +170,14 @@ timeout(time: 12, unit: 'HOURS') {
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'archive.tar', ['zcvf', '/root/contrail-zookeeper.tgz', '/var/lib/zoopeeker'])
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'archive.tar', ['zcvf', '/root/contrail-analytics-database.tgz', '/var/lib/cassandra'])
             salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'archive.tar', ['zcvf', '/root/contrail-analytics-zookeeper.tgz', '/var/lib/zookeeper'])
-            //salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'pkg.remove', [controlPkgs])
-            //salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'pkg.remove', [analyticsPkgs])
-            for (service in controlServices) {
+            for (service in (controlServices + thirdPartyServicesToDisable)) {
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.disable', [service])
             }
-            for (service in analyticsServices) {
+            for (service in (analyticsServices + thirdPartyServicesToDisable)) {
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'service.disable', [service])
-                }
+            }
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'pkg.remove', [controlPkgs + ',' + thirdPartyControlPkgsToRemove])
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'pkg.remove', [analyticsPkgs + ',' + thirdPartyAnalyticsPkgsToRemove])
         }
 
 
@@ -305,6 +308,12 @@ timeout(time: 12, unit: 'HOURS') {
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+                for (service in (controlServices + thirdPartyServicesToDisable)) {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.enable', [service])
+                }
+                for (service in (analyticsServices + thirdPartyServicesToDisable)) {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'service.enable', [service])
+                }
             }
         }
 
