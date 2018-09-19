@@ -17,7 +17,7 @@ gerrit = new com.mirantis.mk.Gerrit()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 
-slaveNode = env.SLAVE_NODE ?: 'python&&docker'
+slaveNode = env.SLAVE_NODE ?: 'docker'
 
 // Global var's
 alreadyMerged = false
@@ -32,12 +32,14 @@ gerritConData = [credentialsId       : env.CREDENTIALS_ID,
                  GERRIT_CHANGE_NUMBER: null]
 //
 //ccTemplatesRepo = env.COOKIECUTTER_TEMPLATE_URL ?: 'ssh://mcp-jenkins@gerrit.mcp.mirantis.net:29418/mk/cookiecutter-templates'
+gerritDataCCHEAD = [:]
 gerritDataCC = [:]
 gerritDataCC << gerritConData
 gerritDataCC['gerritBranch'] = env.COOKIECUTTER_TEMPLATE_BRANCH ?: 'master'
 gerritDataCC['gerritProject'] = 'mk/cookiecutter-templates'
 //
 //reclassSystemRepo = env.RECLASS_SYSTEM_URL ?: 'ssh://mcp-jenkins@gerrit.mcp.mirantis.net:29418/salt-models/reclass-system'
+gerritDataRSHEAD = [:]
 gerritDataRS = [:]
 gerritDataRS << gerritConData
 gerritDataRS['gerritBranch'] = env.RECLASS_MODEL_BRANCH ?: 'master'
@@ -134,7 +136,7 @@ def getAndUnpackNodesInfoArtifact(jobName, copyTo, build) {
     return {
         dir(copyTo) {
             copyArtifacts(projectName: jobName, selector: specific(build), filter: "nodesinfo.tar.gz")
-            sh "tar -xvf nodesinfo.tar.gz"
+            sh "tar -xf nodesinfo.tar.gz"
             sh "rm -v nodesinfo.tar.gz"
         }
     }
@@ -256,15 +258,18 @@ def globalVariatorsUpdate() {
         currentBuild.description = currentBuild.description ? message + "<br/>" + currentBuild.description : message
     } else {
         // Check for passed variables:
-        if (env.RECLASS_SYSTEM_GIT_REF) {
-            gerritDataRS['gerritRefSpec'] = RECLASS_SYSTEM_GIT_REF
-        }
-        if (env.COOKIECUTTER_TEMPLATE_REF) {
-            gerritDataCC['gerritRefSpec'] = COOKIECUTTER_TEMPLATE_REF
-        }
-        message = "<font color='red'>Manual run detected!</font>" + "<br/>"
+        gerritDataRS['gerritRefSpec'] = env.RECLASS_SYSTEM_GIT_REF ?: null
+        gerritDataCC['gerritRefSpec'] = env.COOKIECUTTER_TEMPLATE_REF ?: null
+        message = "<font color='red'>Non-gerrit trigger run detected!</font>" + "<br/>"
         currentBuild.description = currentBuild.description ? message + "<br/>" + currentBuild.description : message
     }
+    gerritDataCCHEAD << gerritDataCC
+    gerritDataCCHEAD['gerritRefSpec'] = null
+    gerritDataCCHEAD['GERRIT_CHANGE_NUMBER'] = null
+    gerritDataRSHEAD << gerritDataRS
+    gerritDataRSHEAD['gerritRefSpec'] = null
+    gerritDataRSHEAD['GERRIT_CHANGE_NUMBER'] = null
+
 }
 
 def replaceGeneratedValues(path) {
@@ -293,35 +298,32 @@ def linkReclassModels(contextList, envPath, archiveName) {
     // tar.gz
     // ├── contexts
     // │   └── ceph.yml
-    // ├── global_reclass <<< reclass system
+    // ├── ${reclassDirName} <<< reclass system
     // ├── model
     // │   └── ceph       <<< from `context basename`
     // │       ├── classes
     // │       │   ├── cluster
-    // │       │   └── system -> ../../../global_reclass
+    // │       │   └── system -> ../../../${reclassDirName}
     // │       └── nodes
     // │           └── cfg01.ceph-cluster-domain.local.yml
     dir(envPath) {
         for (String context : contextList) {
             def basename = common.GetBaseName(context, '.yml')
             dir("${envPath}/model/${basename}") {
-                sh(script: 'mkdir -p classes/; ln -sfv ../../../../global_reclass classes/system ')
+                sh(script: "mkdir -p classes/; ln -sfv ../../../../${common.GetBaseName(archiveName, '.tar.gz')} classes/system ")
             }
         }
         // replace all generated passwords/secrets/keys with hardcode value for infra/secrets.yaml
         replaceGeneratedValues("${envPath}/model")
-        // Save all models and all contexts. Warning! `h` flag must be used.
-        sh(script: "set -ex; tar -chzf ${archiveName} --exclude='*@tmp' model contexts", returnStatus: true)
-        archiveArtifacts artifacts: archiveName
-        // move for "Compare Pillars" stage
-        sh(script: "mv -v ${archiveName} ${env.WORKSPACE}")
+        // Save all models and all contexts. Warning! `h` flag must be used!
+        sh(script: "set -ex; tar -czhf ${env.WORKSPACE}/${archiveName} --exclude='*@tmp' model contexts", returnStatus: true)
     }
+    archiveArtifacts artifacts: archiveName
 }
 
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
         globalVariatorsUpdate()
-        def gerritDataCCHEAD = [:]
         def templateEnvHead = "${env.WORKSPACE}/EnvHead/"
         def templateEnvPatched = "${env.WORKSPACE}/EnvPatched/"
         def contextFileListHead = []
@@ -338,16 +340,24 @@ timeout(time: 1, unit: 'HOURS') {
                 // Prepare 2 env - for patchset, and for HEAD
                 def paralellEnvs = [:]
                 paralellEnvs.failFast = true
-                paralellEnvs['downloadEnvPatched'] = StepPrepareGit(templateEnvPatched, gerritDataCC)
-                gerritDataCCHEAD << gerritDataCC
-                gerritDataCCHEAD['gerritRefSpec'] = null; gerritDataCCHEAD['GERRIT_CHANGE_NUMBER'] = null
                 paralellEnvs['downloadEnvHead'] = StepPrepareGit(templateEnvHead, gerritDataCCHEAD)
-                parallel paralellEnvs
+                if (gerritDataCC.get('gerritRefSpec', null)) {
+                    paralellEnvs['downloadEnvPatched'] = StepPrepareGit(templateEnvPatched, gerritDataCC)
+                    parallel paralellEnvs
+                } else {
+                    paralellEnvs['downloadEnvPatched'] = { common.warningMsg('No need to process: downloadEnvPatched') }
+                    parallel paralellEnvs
+                    sh("rsync -a --exclude '*@tmp' ${templateEnvHead} ${templateEnvPatched}")
+                }
             }
             stage("Check workflow_definition") {
                 // Check only for patchset
                 python.setupVirtualenv(vEnv, 'python2', [], "${templateEnvPatched}/requirements.txt")
-                common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
+                if (gerritDataCC.get('gerritRefSpec', null)) {
+                    common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
+                } else {
+                    common.infoMsg('No need to process: workflow_definition')
+                }
             }
 
             stage("generate models") {
@@ -364,18 +374,29 @@ timeout(time: 1, unit: 'HOURS') {
                 // Generate over 2env's - for patchset, and for HEAD
                 def paralellEnvs = [:]
                 paralellEnvs.failFast = true
-                paralellEnvs['GenerateEnvPatched'] = StepGenerateModels(contextFileListPatched, vEnv, templateEnvPatched)
                 paralellEnvs['GenerateEnvHead'] = StepGenerateModels(contextFileListHead, vEnv, templateEnvHead)
-                parallel paralellEnvs
-
-                // Collect artifacts
-                dir(templateEnvPatched) {
-                    // Collect only models. For backward comparability - who know, probably someone use it..
-                    sh(script: "tar -czf model.tar.gz -C model ../contexts .", returnStatus: true)
-                    archiveArtifacts artifacts: "model.tar.gz"
+                if (gerritDataCC.get('gerritRefSpec', null)) {
+                    paralellEnvs['GenerateEnvPatched'] = StepGenerateModels(contextFileListPatched, vEnv, templateEnvPatched)
+                    parallel paralellEnvs
+                } else {
+                    paralellEnvs['GenerateEnvPatched'] = { common.warningMsg('No need to process: GenerateEnvPatched') }
+                    parallel paralellEnvs
+                    sh("rsync -a --exclude '*@tmp' ${templateEnvHead} ${templateEnvPatched}")
                 }
 
-                StepPrepareGit("${env.WORKSPACE}/global_reclass/", gerritDataRS).call()
+                // We need 2 git's, one for HEAD, one for PATCHed.
+                // if no patch, use head for both
+                RSHeadDir = common.GetBaseName(headReclassArtifactName, '.tar.gz')
+                RSPatchedDir = common.GetBaseName(patchedReclassArtifactName, '.tar.gz')
+                common.infoMsg("gerritDataRS= ${gerritDataRS}")
+                common.infoMsg("gerritDataRSHEAD= ${gerritDataRSHEAD}")
+                if (gerritDataRS.get('gerritRefSpec', null)) {
+                    StepPrepareGit("${env.WORKSPACE}/${RSPatchedDir}/", gerritDataRS).call()
+                    StepPrepareGit("${env.WORKSPACE}/${RSHeadDir}/", gerritDataRSHEAD).call()
+                } else {
+                    StepPrepareGit("${env.WORKSPACE}/${RSHeadDir}/", gerritDataRS).call()
+                    sh("cd ${env.WORKSPACE} ; ln -svf ${RSHeadDir} ${RSPatchedDir}")
+                }
                 // link all models, to use one global reclass
                 // For HEAD
                 linkReclassModels(contextFileListHead, templateEnvHead, headReclassArtifactName)
@@ -392,7 +413,7 @@ timeout(time: 1, unit: 'HOURS') {
                    tar -xzf ${headReclassArtifactName}  --directory ${compareRoot}/old
                    """)
                 common.warningMsg('infra/secrets.yml has been skipped from compare!')
-                result = '\n' + common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml\'")
+                result = '\n' + common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml|\\.git\'")
                 currentBuild.description = currentBuild.description ? currentBuild.description + result : result
             }
             stage("TestContexts Head/Patched") {
