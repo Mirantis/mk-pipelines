@@ -12,7 +12,6 @@ def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
 def checkouted = false
 def merged = false
 def systemRefspec = "HEAD"
-def formulasRevision = 'testing'
 
 timeout(time: 12, unit: 'HOURS') {
     node(slaveNode) {
@@ -60,8 +59,7 @@ timeout(time: 12, unit: 'HOURS') {
                                         [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
                                         [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
                                         [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
-                                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec],
-                                        [$class: 'StringParameterValue', name: 'FORMULAS_REVISION', value: formulasRevision],
+                                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec]
                                     ]
                                 }
                             }
@@ -71,9 +69,7 @@ timeout(time: 12, unit: 'HOURS') {
                         branches["cookiecutter"] = {
                             build job: "test-mk-cookiecutter-templates", parameters: [
                                 [$class: 'StringParameterValue', name: 'RECLASS_SYSTEM_URL', value: defaultGitUrl],
-                                [$class: 'StringParameterValue', name: 'RECLASS_SYSTEM_GIT_REF', value: systemRefspec],
-                                [$class: 'StringParameterValue', name: 'DISTRIB_REVISION', value: formulasRevision]
-
+                                [$class: 'StringParameterValue', name: 'RECLASS_SYSTEM_GIT_REF', value: systemRefspec]
                             ]
                         }
                         parallel branches
