@@ -2,34 +2,18 @@ def gerrit = new com.mirantis.mk.Gerrit()
 def common = new com.mirantis.mk.Common()
 
 
-slaveNode = env.SLAVE_NODE ?: 'python&&docker'
+def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
+def gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
 
-def gerritCredentials
-try {
-    gerritCredentials = CREDENTIALS_ID
-} catch (MissingPropertyException e) {
-    gerritCredentials = "gerrit"
-}
+def gerritRef = env.GERRIT_REFSPEC ?: null
+def defaultGitRef = env.DEFAULT_GIT_REF ?: null
+def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
 
-def gerritRef
-try {
-    gerritRef = GERRIT_REFSPEC
-} catch (MissingPropertyException e) {
-    gerritRef = null
-}
-
-def defaultGitRef, defaultGitUrl
-try {
-    defaultGitRef = DEFAULT_GIT_REF
-    defaultGitUrl = DEFAULT_GIT_URL
-} catch (MissingPropertyException e) {
-    defaultGitRef = null
-    defaultGitUrl = null
-}
 def checkouted = false
 def merged = false
 def systemRefspec = "HEAD"
 def formulasRevision = 'testing'
+
 timeout(time: 12, unit: 'HOURS') {
     node(slaveNode) {
         try {
@@ -67,18 +51,22 @@ timeout(time: 12, unit: 'HOURS') {
 
                         def branches = [:]
                         def testModels = documentationOnly ? [] : TEST_MODELS.split(',')
-                        for (int i = 0; i < testModels.size(); i++) {
-                            def cluster = testModels[i]
-                            def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
-                            branches["${cluster}"] = {
-                                build job: "test-salt-model-${cluster}", parameters: [
-                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
-                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
-                                    [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
-                                    [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec],
-                                    [$class: 'StringParameterValue', name: 'FORMULAS_REVISION', value: formulasRevision],
-                                ]
+                        if (['master'].contains(env.GERRIT_BRANCH)) {
+                            for (int i = 0; i < testModels.size(); i++) {
+                                def cluster = testModels[i]
+                                def clusterGitUrl = defaultGitUrl.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
+                                branches["${cluster}"] = {
+                                    build job: "test-salt-model-${cluster}", parameters: [
+                                        [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
+                                        [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
+                                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
+                                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: systemRefspec],
+                                        [$class: 'StringParameterValue', name: 'FORMULAS_REVISION', value: formulasRevision],
+                                    ]
+                                }
                             }
+                        } else {
+                            common.warningMsg("Tests for ${testModels} skipped!")
                         }
                         branches["cookiecutter"] = {
                             build job: "test-mk-cookiecutter-templates", parameters: [
@@ -90,12 +78,11 @@ timeout(time: 12, unit: 'HOURS') {
                         }
                         parallel branches
                     } else {
-                        throw new Exception("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
+                        error("Cannot checkout gerrit patchset, GERRIT_REFSPEC and DEFAULT_GIT_REF is null")
                     }
                 }
             }
         } catch (Throwable e) {
-            // If there was an error or exception thrown, the build failed
             currentBuild.result = "FAILURE"
             currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
             throw e
