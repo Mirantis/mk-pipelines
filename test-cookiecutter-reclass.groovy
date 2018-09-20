@@ -253,7 +253,7 @@ def globalVariatorsUpdate() {
             "<br/>Test env variables has been changed:" +
             "<br/>COOKIECUTTER_TEMPLATE_BRANCH => ${gerritDataCC['gerritBranch']}" +
             "<br/>DISTRIB_REVISION =>${testDistribRevision}" +
-            "<br/>RECLASS_MODEL_BRANCH=> ${gerritDataRS['gerritBranch']}" + message
+            "<br/>RECLASS_MODEL_BRANCH=> ${gerritDataRS['gerritBranch']}" + message + "<br/>"
         common.warningMsg(message)
         currentBuild.description = currentBuild.description ? message + "<br/>" + currentBuild.description : message
     } else {
@@ -447,6 +447,44 @@ timeout(time: 1, unit: 'HOURS') {
                 // Compare patched and HEAD reclass pillars
                 result = '\n' + common.comparePillars(reclassNodeInfoDir, env.BUILD_URL, '')
                 currentBuild.description = currentBuild.description ? currentBuild.description + result : result
+            }
+            stage('Check include order') {
+                def correctIncludeOrder = ["service", "system", "cluster"]
+                dir(reclassInfoPatchedPath) {
+                    def nodeInfoFiles = findFiles(glob: "**/*.reclass.nodeinfo")
+                    def messages = ["<b>Wrong include ordering found</b><ul>"]
+                    def stepsForParallel = [:]
+                    nodeInfoFiles.each { nodeInfo ->
+                        stepsForParallel.put("Checking ${nodeInfo.path}:", {
+                            def node = readYaml file: nodeInfo.path
+                            def classes = node['classes']
+                            def curClassID = 0
+                            def prevClassID = 0
+                            def wrongOrder = false
+                            for(String className in classes) {
+                                def currentClass = className.tokenize('.')[0]
+                                curClassID = correctIncludeOrder.indexOf(currentClass)
+                                if (currentClass != correctIncludeOrder[prevClassID]) {
+                                    if (prevClassID > curClassID) {
+                                        wrongOrder = true
+                                        common.warningMsg("File ${nodeInfo.path} contains wrong order of classes including: Includes for ${className} should be declared before ${correctIncludeOrder[prevClassID]} includes")
+                                    } else {
+                                        prevClassID = curClassID
+                                    }
+                                }
+                            }
+                            if(wrongOrder) {
+                                messages.add("<li>${nodeInfo.path} contains wrong order of classes including</li>")
+                            }
+                        })
+                    }
+                    parallel stepsForParallel
+                    def includerOrder = '<b>No wrong include order</b>'
+                    if (messages.size() != 1) {
+                        includerOrder = messages.join('')
+                    }
+                    currentBuild.description = currentBuild.description ? currentBuild.description + includerOrder : includerOrder
+                }
             }
             sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
 
