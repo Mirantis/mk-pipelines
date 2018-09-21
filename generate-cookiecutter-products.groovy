@@ -256,7 +256,7 @@ parameters:
 
                 if (templateContext['default_context']['local_repositories'] == 'True') {
                     def aptlyServerHostname = templateContext.default_context.aptly_server_hostname
-                    sh "cp mcp-common-scripts/config-drive/mirror_config.sh mirror_config.sh"
+                    sh "[ -f mcp-common-scripts/config-drive/mirror_config.yaml ] && cp mcp-common-scripts/config-drive/mirror_config.yaml mirror_config || cp mcp-common-scripts/config-drive/mirror_config.sh mirror_config"
 
                     def smc_apt = [:]
                     smc_apt['SALT_MASTER_DEPLOY_IP'] = templateContext['default_context']['salt_master_management_address']
@@ -265,11 +265,11 @@ parameters:
                     smc_apt['APTLY_MINION_ID'] = "${aptlyServerHostname}.${clusterDomain}"
 
                     for (i in common.entries(smc_apt)) {
-                        sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" mirror_config.sh"
+                        sh "sed -i \"s,export ${i[0]}=.*,export ${i[0]}=${i[1]},\" mirror_config"
                     }
 
                     // create apt config-drive
-                    sh "./create-config-drive --user-data mirror_config.sh --hostname ${aptlyServerHostname} ${aptlyServerHostname}.${clusterDomain}-config.iso"
+                    sh "./create-config-drive --user-data mirror_config --hostname ${aptlyServerHostname} ${aptlyServerHostname}.${clusterDomain}-config.iso"
                     sh("mv ${aptlyServerHostname}.${clusterDomain}-config.iso output-${clusterName}/")
 
                     // save apt iso to artifacts
