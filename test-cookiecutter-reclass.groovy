@@ -100,17 +100,8 @@ def generateModel(contextFile, virtualenv, templateEnvDir) {
         for (product in productList) {
 
             // get templateOutputDir and productDir
-            if (product.startsWith("stacklight")) {
-                templateOutputDir = "${templateEnvDir}/output/stacklight"
-                try {
-                    productDir = "stacklight" + templateContext.default_context['stacklight_version']
-                } catch (Throwable e) {
-                    productDir = "stacklight1"
-                }
-            } else {
-                templateOutputDir = "${templateEnvDir}/output/${product}"
-                productDir = product
-            }
+            templateOutputDir = "${templateEnvDir}/output/${product}"
+            productDir = product
 
             if (product == "infra" || (templateContext.default_context["${product}_enabled"]
                 && templateContext.default_context["${product}_enabled"].toBoolean())) {

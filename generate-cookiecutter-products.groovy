@@ -104,26 +104,8 @@ timeout(time: 2, unit: 'HOURS') {
             for (product in productList) {
 
                 // get templateOutputDir and productDir
-                if (product.startsWith("stacklight")) {
-                    templateOutputDir = "${env.WORKSPACE}/output/stacklight"
-
-                    def stacklightVersion
-                    try {
-                        stacklightVersion = templateContext.default_context['stacklight_version']
-                    } catch (Throwable e) {
-                        common.warningMsg('Stacklight version loading failed')
-                    }
-
-                    if (stacklightVersion) {
-                        productDir = "stacklight" + stacklightVersion
-                    } else {
-                        productDir = "stacklight1"
-                    }
-
-                } else {
-                    templateOutputDir = "${env.WORKSPACE}/output/${product}"
-                    productDir = product
-                }
+                templateOutputDir = "${env.WORKSPACE}/output/${product}"
+                productDir = product
 
                 if (product == "infra" || (templateContext.default_context["${product}_enabled"]
                     && templateContext.default_context["${product}_enabled"].toBoolean())) {
