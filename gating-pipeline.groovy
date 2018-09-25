@@ -47,10 +47,23 @@ timeout(time: 12, unit: 'HOURS') {
                         if (isJobExists(testJob)) {
                             common.infoMsg("Test job ${testJob} found, running")
                             def patchsetVerified = gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")
-                            build job: testJob, parameters: [
-                                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
-                                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
-                            ]
+                            // temp workaround, will be removed after full switch
+                            if (gerritProject == "cookiecutter-templates" || gerritProject == "reclass-system") {
+                                def gerritVars = '\n---'
+                                for (envVar in env.getEnvironment()) {
+                                    if (envVar.key.startsWith("GERRIT_")) {
+                                        gerritVars += "\n${envVar}"
+                                    }
+                                }
+                                build job: testJob, parameters: [
+                                    [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: gerritVars ]
+                                ]
+                            } else {
+                                build job: testJob, parameters: [
+                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
+                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
+                                ]
+                            }
                             giveVerify = true
                         } else {
                             common.infoMsg("Test job ${testJob} not found")

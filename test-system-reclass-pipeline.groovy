@@ -1,13 +1,15 @@
 def gerrit = new com.mirantis.mk.Gerrit()
 def common = new com.mirantis.mk.Common()
 
+if (env.EXTRA) {
+    common.mergeEnv(env, env.EXTRA)
+}
 
 def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 def gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
 
 def gerritRef = env.GERRIT_REFSPEC ?: null
-def defaultGitRef = env.DEFAULT_GIT_REF ?: null
-def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
+def defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
 
 def checkouted = false
 def merged = false
@@ -28,10 +30,8 @@ timeout(time: 12, unit: 'HOURS') {
                         ])
                         systemRefspec = GERRIT_REFSPEC
                     }
-                    // change defaultGit variables if job triggered from Gerrit
-                    defaultGitUrl = "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"
-                } else if (defaultGitRef && defaultGitUrl) {
-                    checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", gerritCredentials)
+                } else if (gerritRef && defaultGitUrl) {
+                    checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, gerritRef, "HEAD", gerritCredentials)
                 }
             }
 
