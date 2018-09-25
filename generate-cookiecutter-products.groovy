@@ -111,7 +111,7 @@ timeout(time: 2, unit: 'HOURS') {
                 if (product.startsWith("stacklight") && (!fileExists(templateDir))) {
                     common.warningMsg("Old release detected! productDir => 'stacklight2' ")
                     productDir = "stacklight2"
-                    templateDir = "${templateEnvDir}/cluster_product/${productDir}"
+                    templateDir = "${templateEnv}/cluster_product/${productDir}"
                 }
 
                 if (product == "infra" || (templateContext.default_context["${product}_enabled"]
