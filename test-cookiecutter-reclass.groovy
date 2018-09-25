@@ -103,11 +103,16 @@ def generateModel(contextFile, virtualenv, templateEnvDir) {
             // get templateOutputDir and productDir
             templateOutputDir = "${templateEnvDir}/output/${product}"
             productDir = product
-
+            templateDir = "${templateEnvDir}/cluster_product/${productDir}"
+            // Bw for 2018.8.1 and older releases
+            if (product.startsWith("stacklight") && (!fileExists(templateDir))) {
+                common.warningMsg("Old release detected! productDir => 'stacklight2' ")
+                productDir = "stacklight2"
+                templateDir = "${templateEnvDir}/cluster_product/${productDir}"
+            }
             if (product == "infra" || (templateContext.default_context["${product}_enabled"]
                 && templateContext.default_context["${product}_enabled"].toBoolean())) {
 
-                templateDir = "${templateEnvDir}/cluster_product/${productDir}"
                 common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
 
                 sh "rm -rf ${templateOutputDir} || true"

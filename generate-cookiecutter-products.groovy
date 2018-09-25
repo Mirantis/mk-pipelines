@@ -106,11 +106,17 @@ timeout(time: 2, unit: 'HOURS') {
                 // get templateOutputDir and productDir
                 templateOutputDir = "${env.WORKSPACE}/output/${product}"
                 productDir = product
+                templateDir = "${templateEnv}/cluster_product/${productDir}"
+                // Bw for 2018.8.1 and older releases
+                if (product.startsWith("stacklight") && (!fileExists(templateDir))) {
+                    common.warningMsg("Old release detected! productDir => 'stacklight2' ")
+                    productDir = "stacklight2"
+                    templateDir = "${templateEnvDir}/cluster_product/${productDir}"
+                }
 
                 if (product == "infra" || (templateContext.default_context["${product}_enabled"]
                     && templateContext.default_context["${product}_enabled"].toBoolean())) {
 
-                    templateDir = "${templateEnv}/cluster_product/${productDir}"
                     common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
 
                     sh "rm -rf ${templateOutputDir} || true"
@@ -161,12 +167,12 @@ parameters:
                     common.infoMsg("Attempt to run test against formula-version: ${mcpVersion}")
                     try {
                         def config = [
-                            'dockerHostname': "${saltMaster}.${clusterDomain}",
-                            'reclassEnv': testEnv,
-                            'formulasRevision': mcpVersion,
-                            'reclassVersion': reclassVersion,
+                            'dockerHostname'     : "${saltMaster}.${clusterDomain}",
+                            'reclassEnv'         : testEnv,
+                            'formulasRevision'   : mcpVersion,
+                            'reclassVersion'     : reclassVersion,
                             'dockerContainerName': DockerCName,
-                            'testContext': 'salt-model-node'
+                            'testContext'        : 'salt-model-node'
                         ]
                         testResult = saltModelTesting.testNode(config)
                         common.infoMsg("Test finished: SUCCESS")
@@ -195,10 +201,10 @@ parameters:
 
                 def commonScriptsRepoUrl = 'https://gerrit.mcp.mirantis.net/mcp/mcp-common-scripts'
                 checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: 'FETCH_HEAD'],],
-                        extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'mcp-common-scripts']],
-                        userRemoteConfigs: [[url: commonScriptsRepoUrl, refspec: mcpCommonScriptsBranch],],
+                    $class           : 'GitSCM',
+                    branches         : [[name: 'FETCH_HEAD'],],
+                    extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'mcp-common-scripts']],
+                    userRemoteConfigs: [[url: commonScriptsRepoUrl, refspec: mcpCommonScriptsBranch],],
                 ])
 
                 sh "cp mcp-common-scripts/config-drive/create_config_drive.sh create-config-drive && chmod +x create-config-drive"
