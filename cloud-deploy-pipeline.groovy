@@ -413,6 +413,8 @@ timeout(time: 12, unit: 'HOURS') {
                     }
 
                     orchestrate.installKubernetesCompute(venvPepper, extra_tgt)
+                    // Setup kubernetes addons for opencontrail. More info in the definition of the func.
+                    orchestrate.setupKubeAddonForContrail(venvPepper, extra_tgt)
                 }
             }
 
