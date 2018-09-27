@@ -1,8 +1,8 @@
 def gerrit = new com.mirantis.mk.Gerrit()
 def common = new com.mirantis.mk.Common()
 
-if (env.EXTRA) {
-    common.mergeEnv(env, env.EXTRA)
+if (env.EXTRA_VARIABLES_YAML) {
+    common.mergeEnv(env, env.EXTRA_VARIABLES_YAML)
 }
 
 def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
