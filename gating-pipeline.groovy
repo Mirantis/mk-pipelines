@@ -15,6 +15,18 @@ def isJobExists(jobName) {
     return Jenkins.instance.items.find { it -> it.name.equals(jobName) }
 }
 
+def callJobWithExtraVars(String jobName) {
+    def gerritVars = '\n---'
+    for (envVar in env.getEnvironment()) {
+        if (envVar.key.startsWith("GERRIT_")) {
+            gerritVars += "\n${envVar.key}: '${envVar.value}'"
+        }
+    }
+    build job: jobName, parameters: [
+        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: gerritVars ]
+    ]
+}
+
 slaveNode = env.SLAVE_NODE ?: 'docker'
 
 timeout(time: 12, unit: 'HOURS') {
@@ -44,16 +56,22 @@ timeout(time: 12, unit: 'HOURS') {
                             gerritProject = gerritProject + "-latest"
                         }
                         def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
-                        if (isJobExists(testJob)) {
-                            common.infoMsg("Test job ${testJob} found, running")
-                            def patchsetVerified = gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")
-                            build job: testJob, parameters: [
-                                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
-                                [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
-                            ]
-                            giveVerify = true
+                        if (gerritProject == "cookiecutter-templates") {
+                            callJobWithExtraVars("test-mk-cookiecutter-templates")
+                        } else if (gerritProject == "reclass-system") {
+                            callJobWithExtraVars("test-salt-model-reclass-system")
                         } else {
-                            common.infoMsg("Test job ${testJob} not found")
+                            if (isJobExists(testJob)) {
+                                common.infoMsg("Test job ${testJob} found, running")
+                                def patchsetVerified = gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")
+                                build job: testJob, parameters: [
+                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
+                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
+                                ]
+                                giveVerify = true
+                            } else {
+                                common.infoMsg("Test job ${testJob} not found")
+                            }
                         }
                     } else {
                         common.errorMsg("Change don't have a CodeReview, skipping gate")
