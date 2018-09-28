@@ -17,6 +17,11 @@ gerrit = new com.mirantis.mk.Gerrit()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 
+def extraVarsYAML = env.EXTRA_VARIABLES_YAML ?: false
+if (extraVarsYAML) {
+    common.mergeEnv(env, extraVarsYAML)
+}
+
 slaveNode = env.SLAVE_NODE ?: 'docker'
 checkIncludeOrder = env.CHECK_INCLUDE_ORDER ?: false
 
