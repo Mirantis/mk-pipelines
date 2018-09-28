@@ -10,6 +10,8 @@
  *   CTL_TARGET                 Salt targeted kubernetes CTL nodes (ex. I@kubernetes:master). Kubernetes control plane
  *   CMP_TARGET                 Salt targeted compute nodes (ex. cmp* and 'I@kubernetes:pool') Kubernetes computes
  *   PER_NODE                   Target nodes will be managed one by one (bool)
+ *   SIMPLE_UPGRADE             Use previous version of upgrade without conron/drain abilities
+ *   UPGRADE_DOCKER             Upgrade docker component
  *
 **/
 def common = new com.mirantis.mk.Common()
@@ -50,6 +52,51 @@ def performKubernetesControlUpdate(pepperEnv, target) {
     }
 }
 
+def cordonNode(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def originalTarget = "I@kubernetes:master and not ${target}"
+
+    stage("Cordoning ${target} kubernetes node") {
+        def nodeShortName = target.tokenize(".")[0]
+        salt.cmdRun(pepperEnv, originalTarget, "kubectl cordon ${nodeShortName}", true, 1)
+    }
+}
+
+def uncordonNode(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def originalTarget = "I@kubernetes:master and not ${target}"
+
+    stage("Uncordoning ${target} kubernetes node") {
+        def nodeShortName = target.tokenize(".")[0]
+        salt.cmdRun(pepperEnv, originalTarget, "kubectl uncordon ${nodeShortName}", true, 1)
+    }
+}
+
+def drainNode(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def originalTarget = "I@kubernetes:master and not ${target}"
+
+    stage("Draining ${target} kubernetes node") {
+        def nodeShortName = target.tokenize(".")[0]
+        salt.cmdRun(pepperEnv, originalTarget, "kubectl drain --force --ignore-daemonsets --grace-period 100 --timeout 300s --delete-local-data ${nodeShortName}", true, 1)
+    }
+}
+
+def regenerateCerts(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Regenerate certs for ${target}") {
+        salt.enforceState(pepperEnv, target, 'salt.minion.cert')
+    }
+}
+
+def upgradeDocker(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Upgrading docker at ${target}") {
+        salt.enforceState(pepperEnv, target, 'docker.host')
+    }
+}
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -73,7 +120,18 @@ timeout(time: 12, unit: 'HOURS') {
                     def targetHosts = salt.getMinionsSorted(pepperEnv, target)
 
                     for (t in targetHosts) {
-                        performKubernetesControlUpdate(pepperEnv, t)
+                        if (SIMPLE_UPGRADE.toBoolean()) {
+                            performKubernetesControlUpdate(pepperEnv, t)
+                        } else {
+                            cordonNode(pepperEnv, t)
+                            drainNode(pepperEnv, t)
+                            regenerateCerts(pepperEnv, t)
+                            if (UPGRADE_DOCKER.toBoolean()) {
+                                upgradeDocker(pepperEnv, t)
+                            }
+                            performKubernetesControlUpdate(pepperEnv, t)
+                            uncordonNode(pepperEnv, t)
+                        }
                     }
                 } else {
                     performKubernetesControlUpdate(pepperEnv, target)
@@ -87,7 +145,18 @@ timeout(time: 12, unit: 'HOURS') {
                     def targetHosts = salt.getMinionsSorted(pepperEnv, target)
 
                     for (t in targetHosts) {
-                        performKubernetesComputeUpdate(pepperEnv, t)
+                        if (SIMPLE_UPGRADE.toBoolean()) {
+                            performKubernetesComputeUpdate(pepperEnv, t)
+                        } else {
+                            cordonNode(pepperEnv, t)
+                            drainNode(pepperEnv, t)
+                            regenerateCerts(pepperEnv, t)
+                            if (UPGRADE_DOCKER.toBoolean()) {
+                                upgradeDocker(pepperEnv, t)
+                            }
+                            performKubernetesComputeUpdate(pepperEnv, t)
+                            uncordonNode(pepperEnv, t)
+                        }
                     }
                 } else {
                     performKubernetesComputeUpdate(pepperEnv, target)
