@@ -1,6 +1,19 @@
 def gerrit = new com.mirantis.mk.Gerrit()
 def common = new com.mirantis.mk.Common()
 
+// extraVarsYaml contains GERRIT_ vars from gate job
+// or will contain GERRIT_ vars from reclass-system patch
+def extraVarsYaml = env.EXTRA_VARIABLES_YAML ?: ''
+if (extraVarsYaml != '') {
+    common.mergeEnv(env, extraVarsYaml)
+} else {
+    extraVarsYaml = '\n---'
+    for (envVar in env.getEnvironment()) {
+        if (envVar.key.startsWith("GERRIT_")) {
+            extraVarsYaml += "\n${envVar.key}: '${envVar.value}'"
+        }
+    }
+}
 
 def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 def gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
@@ -69,7 +82,8 @@ timeout(time: 12, unit: 'HOURS') {
                         branches["cookiecutter"] = {
                             build job: "test-mk-cookiecutter-templates", parameters: [
                                 [$class: 'StringParameterValue', name: 'RECLASS_SYSTEM_URL', value: defaultGitUrl],
-                                [$class: 'StringParameterValue', name: 'RECLASS_SYSTEM_GIT_REF', value: systemRefspec]
+                                [$class: 'StringParameterValue', name: 'RECLASS_SYSTEM_GIT_REF', value: systemRefspec],
+                                [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: extraVarsYaml ]
                             ]
                         }
                         parallel branches
