@@ -9,6 +9,8 @@ def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
 
+slaveNode = env.SLAVE_NODE ?: 'docker'
+giveVerify = false
 
 @NonCPS
 def isJobExists(jobName) {
@@ -22,12 +24,15 @@ def callJobWithExtraVars(String jobName) {
             gerritVars += "\n${envVar.key}: '${envVar.value}'"
         }
     }
-    build job: jobName, parameters: [
-        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: gerritVars ]
+    testJob = build job: jobName, parameters: [
+        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: gerritVars]
     ]
+    if (testJob.getResult() != 'SUCCESS') {
+        error("Gate job ${testJob.getBuildUrl().toString()}  finished with ${testJob.getResult()} !")
+    }
+    giveVerify = true
 }
 
-slaveNode = env.SLAVE_NODE ?: 'docker'
 
 timeout(time: 12, unit: 'HOURS') {
     node(slaveNode) {
@@ -37,7 +42,6 @@ timeout(time: 12, unit: 'HOURS') {
             ssh.ensureKnownHosts(GERRIT_HOST)
             def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
             def doSubmit = false
-            def giveVerify = false
             stage("test") {
                 if (gerritChange.status != "MERGED" && !SKIP_TEST.equals("true")) {
                     // test max CodeReview
@@ -56,10 +60,10 @@ timeout(time: 12, unit: 'HOURS') {
                             gerritProject = gerritProject + "-latest"
                         }
                         def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
-                        if (gerritProject == "cookiecutter-templates") {
-                            callJobWithExtraVars("test-mk-cookiecutter-templates")
-                        } else if (gerritProject == "reclass-system") {
-                            callJobWithExtraVars("test-salt-model-reclass-system")
+                        if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates') {
+                            callJobWithExtraVars('test-mk-cookiecutter-templates')
+                        } else if (env.GERRIT_PROJECT == 'salt-models/reclass-system') {
+                            callJobWithExtraVars('test-salt-model-reclass-system')
                         } else {
                             if (isJobExists(testJob)) {
                                 common.infoMsg("Test job ${testJob} found, running")
