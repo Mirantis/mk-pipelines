@@ -13,7 +13,7 @@ timeout(time: 12, unit: 'HOURS') {
                 sh("rm -rf * || true")
             }
 
-            def workingDir = "src/gerrit.mcp.mirantis.net/debian"
+            def workingDir = "src/gerrit.mcp.mirantis.com/debian"
             stage("checkout") {
                 git.checkoutGitRepository(
                     "${workingDir}/prometheus-relay",
@@ -53,7 +53,7 @@ timeout(time: 12, unit: 'HOURS') {
                             export GOROOT=\$PWD/go &&
                             export GOPATH=\$PWD &&
                             export PATH=\$PATH:\$GOPATH/bin:\$GOROOT/bin &&
-                            cd src/gerrit.mcp.mirantis.net/debian/prometheus-relay &&
+                            cd src/gerrit.mcp.mirantis.com/debian/prometheus-relay &&
                             make""")
                     }
                     archiveArtifacts artifacts: "${workingDir}/prometheus-relay/build/*.deb"

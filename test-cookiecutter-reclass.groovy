@@ -29,7 +29,7 @@ checkIncludeOrder = env.CHECK_INCLUDE_ORDER ?: false
 alreadyMerged = false
 gerritConData = [credentialsId       : env.CREDENTIALS_ID,
                  gerritName          : env.GERRIT_NAME ?: 'mcp-jenkins',
-                 gerritHost          : env.GERRIT_HOST ?: 'gerrit.mcp.mirantis.net',
+                 gerritHost          : env.GERRIT_HOST ?: 'gerrit.mcp.mirantis.com',
                  gerritScheme        : env.GERRIT_SCHEME ?: 'ssh',
                  gerritPort          : env.GERRIT_PORT ?: '29418',
                  gerritRefSpec       : null,
@@ -37,7 +37,7 @@ gerritConData = [credentialsId       : env.CREDENTIALS_ID,
                  withWipeOut         : true,
                  GERRIT_CHANGE_NUMBER: null]
 //
-//ccTemplatesRepo = env.COOKIECUTTER_TEMPLATE_URL ?: 'ssh://mcp-jenkins@gerrit.mcp.mirantis.net:29418/mk/cookiecutter-templates'
+//ccTemplatesRepo = env.COOKIECUTTER_TEMPLATE_URL ?: 'ssh://mcp-jenkins@gerrit.mcp.mirantis.com:29418/mk/cookiecutter-templates'
 gerritDataCCHEAD = [:]
 gerritDataCC = [:]
 gerritDataCC << gerritConData
@@ -45,7 +45,7 @@ gerritDataCC['gerritBranch'] = env.COOKIECUTTER_TEMPLATE_BRANCH ?: 'master'
 gerritDataCC['gerritRefSpec'] = env.COOKIECUTTER_TEMPLATE_REF ?: null
 gerritDataCC['gerritProject'] = 'mk/cookiecutter-templates'
 //
-//reclassSystemRepo = env.RECLASS_SYSTEM_URL ?: 'ssh://mcp-jenkins@gerrit.mcp.mirantis.net:29418/salt-models/reclass-system'
+//reclassSystemRepo = env.RECLASS_SYSTEM_URL ?: 'ssh://mcp-jenkins@gerrit.mcp.mirantis.com:29418/salt-models/reclass-system'
 gerritDataRSHEAD = [:]
 gerritDataRS = [:]
 gerritDataRS << gerritConData

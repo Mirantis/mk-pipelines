@@ -199,7 +199,7 @@ parameters:
                     }
                 }
 
-                def commonScriptsRepoUrl = 'https://gerrit.mcp.mirantis.net/mcp/mcp-common-scripts'
+                def commonScriptsRepoUrl = 'https://gerrit.mcp.mirantis.com/mcp/mcp-common-scripts'
                 checkout([
                     $class           : 'GitSCM',
                     branches         : [[name: 'FETCH_HEAD'],],
