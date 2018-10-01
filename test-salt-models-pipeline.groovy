@@ -61,36 +61,26 @@ failedNodes = false
 common = new com.mirantis.mk.Common()
 
 def setupRunner() {
-
-  def branches = [:]
-  for (int i = 0; i < PARALLEL_NODE_GROUP_SIZE.toInteger() && i < futureNodes.size(); i++) {
-    branches["Runner ${i}"] = {
-      while (futureNodes && !failedNodes) {
-        def currentNode = futureNodes[0] ? futureNodes[0] : null
+    def branches = [:]
+    branches.failFast = true
+    for(int i = 0; i < futureNodes.size(); i++) {
+        def currentNode = futureNodes[i] ? futureNodes[i] : null
         if (!currentNode) {
-          continue
+            continue
         }
-
-        def clusterName = currentNode[2]
-        futureNodes.remove(currentNode)
-        try {
-            triggerTestNodeJob(currentNode[0], currentNode[1], currentNode[2], currentNode[3], currentNode[4])
-        } catch (Exception e) {
-          if (e.getMessage().contains("completed with status ABORTED")) {
-            common.warningMsg("Test of ${clusterName} failed because the test was aborted :  ${e}")
-            futureNodes << currentNode
-          } else {
-            common.warningMsg("Test of ${clusterName} failed :  ${e}")
-            failedNodes = true
-          }
+        branches["Runner ${i}"] = {
+            try {
+                triggerTestNodeJob(currentNode[0], currentNode[1], currentNode[2], currentNode[3], currentNode[4])
+            } catch (Exception e) {
+                  common.warningMsg("Test of ${currentNode[2]} failed :  ${e}")
+                  throw e
+            }
         }
-      }
     }
-  }
 
-  if (branches) {
-    parallel branches
-  }
+    if (branches) {
+        common.runParallel(branches, PARALLEL_NODE_GROUP_SIZE.toInteger())
+    }
 }
 
 def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, formulasSource) {
