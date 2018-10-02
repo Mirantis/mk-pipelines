@@ -31,9 +31,12 @@
   * @param apiUrl               The base dashboard api url
   * @param cloudName            The cloud name (mostly, the given node's domain name)
   * @param nodeName             The node name
-  * @param results              The scanning results
+  * @param reportType           Type of the report to create/use, either 'openscap' or 'cve'
+  * @param reportId             Report Id to re-use, if empty report will be created
+  * @param results              The scanning results as a json file content (string)
+  * @return reportId            The Id of the report created if incoming reportId was empty, otherwise incoming reportId
   */
-def uploadResultToDashboard(apiUrl, cloudName, nodeName, results) {
+def uploadResultToDashboard(apiUrl, cloudName, nodeName, reportType, reportId, results) {
     def common = new com.mirantis.mk.Common()
     def http = new com.mirantis.mk.Http()
 
@@ -43,9 +46,13 @@ def uploadResultToDashboard(apiUrl, cloudName, nodeName, results) {
     def cloudId
     def nodeId
 
+    def worpApi = [:]
+    worpApi["url"] = apiUrl
+
     // Let's take a look, may be our minion is already presented on the dashboard
     // Get available environments
-    environments = common.parseJSON(http.sendHttpGetRequest("${apiUrl}/environment/"))
+    common.infoMsg("Making GET to ${worpApi.url}/environment/")
+    environments = http.restGet(worpApi, "/environment/")
     for (environment in environments) {
         if (environment['name'] == cloudName) {
             cloudId = environment['uuid']
@@ -55,22 +62,27 @@ def uploadResultToDashboard(apiUrl, cloudName, nodeName, results) {
     // Cloud wasn't presented, let's create it
     if (! cloudId ) {
         // Create cloud
-        resuestData['name'] = cloudName
-        cloudId = common.parseJSON(http.sendHttpPostRequest("${apiUrl}/environment/", requestData))['env']['uuid']
+        requestData = [:]
+        requestData['name'] = cloudName
+        common.infoMsg("Making POST to ${worpApi.url}/environment/ with ${requestData}")
+        cloudId = http.restPost(worpApi, "/environment/", requestData)['env']['uuid']
 
         // And the node
         // It was done here to reduce count of requests to the api.
         // Because if there was not cloud presented on the dashboard, then the node was not presented as well.
+        requestData = [:]
         requestData['nodes'] = [nodeName]
-        nodeId = common.parseJSON(http.sendHttpPutRequest("${apiUrl}/environment/${cloudId}/nodes/", requestData))['uuid']
+        common.infoMsg("Making PUT to ${worpApi.url}/environment/${cloudId}/nodes/ with ${requestData}")
+        nodeId = http.restCall(worpApi, "/environment/${cloudId}/nodes/", "PUT", requestData)['uuid']
     }
 
     if (! nodeId ) {
         // Get available nodes in our environment
-        nodes = common.parseJSON(http.sendHttpGetRequest("${apiUrl}/environment/${cloudId}/nodes/"))
+        common.infoMsg("Making GET to ${worpApi.url}/environment/${cloudId}/nodes/")
+        nodes = http.restGet(worpApi, "/environment/${cloudId}/nodes/")
         for (node in nodes) {
             if (node['name'] == nodeName) {
-                nodeId = node['id']
+                nodeId = node['uuid']
                 break
             }
         }
@@ -79,18 +91,29 @@ def uploadResultToDashboard(apiUrl, cloudName, nodeName, results) {
     // Node wasn't presented, let's create it
     if (! nodeId ) {
         // Create node
+        requestData = [:]
         requestData['nodes'] = [nodeName]
-        nodeId = common.parseJSON(http.sendHttpPutRequest("${apiUrl}/environment/${cloudId}/nodes/", requestData))['uuid']
+        common.infoMsg("Making PUT to ${worpApi.url}/environment/${cloudId}/nodes/ with ${requestData}")
+        nodeId = http.restCall(worpApi, "/environment/${cloudId}/nodes/", "PUT", requestData)['uuid']
     }
 
-    // Get report_id
-    requestData['env_uuid'] = cloudId
-    def reportId = common.parseJSON(http.sendHttpPostRequest("${apiUrl}/reports/openscap/", requestData))['report']['uuid']
+    // Create report if needed
+    if (! reportId ) {
+        requestData = [:]
+        requestData['env_uuid'] = cloudId
+        common.infoMsg("Making POST to ${worpApi.url}/reports/${reportType}/ with ${requestData}")
+        reportId = http.restPost(worpApi, "/reports/${reportType}/", requestData)['report']['uuid']
+    }
 
     // Upload results
-    requestData['results'] = results
+    // NOTE(pas-ha) results should already be a dict with 'results' key
+    requestData = common.parseJSON(results)
     requestData['node_name'] = nodeName
-    http.sendHttpPutRequest("${apiUrl}/reports/openscap/${reportId}/", requestData)
+    common.infoMsg("First result in results to PUT is ${requestData['results'][0]}")
+    // NOTE(pas-ha) not logging whole results to be sent, is too large and just spams the logs
+    common.infoMsg("Making PUT to ${worpApi.url}/reports/${reportType}/${reportId}/ with node name ${requestData['node_name']} and results")
+    http.restCall(worpApi, "/reports/${reportType}/${reportId}/", "PUT", requestData)
+    return reportId
 }
 
 
@@ -137,6 +160,7 @@ node('python') {
             deleteDir()
         }
 
+        def reportId
         for (minion in liveMinions) {
 
             // Iterate oscap evaluation over the benchmarks
@@ -179,7 +203,7 @@ node('python') {
                 if (UPLOAD_TO_DASHBOARD.toBoolean()) {
                     if (common.validInputParam('DASHBOARD_API_URL')) {
                         def cloudName = salt.getGrain(pepperEnv, minion, 'domain')['return'][0].values()[0].values()[0]
-                        uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, salt.getFileContent(pepperEnv, minion, "${resultsDir}/results.json"))
+                        reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, "openscap", reportId, salt.getFileContent(pepperEnv, minion, "${resultsDir}/results.json"))
                     } else {
                         throw new Exception('Uploading to the dashboard is enabled but the DASHBOARD_API_URL was not set')
                     }
