@@ -34,6 +34,9 @@
   * @param results              The scanning results
   */
 def uploadResultToDashboard(apiUrl, cloudName, nodeName, results) {
+    def common = new com.mirantis.mk.Common()
+    def http = new com.mirantis.mk.Http()
+
     // Yes, we do not care of performance and will create at least 4 requests per each result
     def requestData = [:]
 
@@ -110,10 +113,11 @@ node('python') {
     def scanUUID = UUID.randomUUID().toString()
 
     def artifactsArchiveName = "openscap-${scanUUID}.zip"
-    def resultsBaseDir = "/tmp/openscap/${scanUUID}"
-    def artifactsDir = "${env.WORKSPACE}/openscap/${scanUUID}/artifacts"
+    def resultsBaseDir = "/var/log/openscap/${scanUUID}"
+    def artifactsDir = "openscap"
 
     def liveMinions
+
 
     stage ('Setup virtualenv for Pepper') {
         python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
@@ -128,6 +132,11 @@ node('python') {
 
         common.infoMsg("Scan UUID: ${scanUUID}")
 
+        // Clean all results before proceeding with results from every minion
+        dir(artifactsDir) {
+            deleteDir()
+        }
+
         for (minion in liveMinions) {
 
             // Iterate oscap evaluation over the benchmarks
@@ -136,10 +145,18 @@ node('python') {
 
                 // Remove extension from the benchmark name
                 def benchmarkPathWithoutExtension = benchmarkFilePath.replaceFirst('[.][^.]+$', '')
+
+                // Get benchmark name
+                def benchmarkName = benchmarkPathWithoutExtension.tokenize('/')[-1]
+
                 // And build resultsDir based on this path
                 def resultsDir = "${resultsBaseDir}/${benchmarkPathWithoutExtension}"
 
                 def benchmarkFile = "${benchmarksDir}${benchmarkFilePath}"
+
+                def nodeShortName = minion.tokenize('.')[0]
+
+                def archiveName = "${scanUUID}_${nodeShortName}_${benchmarkName}.tar"
 
                 // Evaluate the benchmark
                 salt.runSaltProcessStep(pepperEnv, minion, 'oscap.eval', [
@@ -147,6 +164,16 @@ node('python') {
                     "profile=${profile}", "xccdf_version=${xccdfVersion}",
                     "tailoring_id=${xccdfTailoringId}"
                 ])
+
+                salt.cmdRun(pepperEnv, minion, "tar -cf /tmp/${archiveName} -C ${resultsBaseDir} .")
+                fileContents = salt.cmdRun(pepperEnv, minion, "cat /tmp/${archiveName}", true, null, false)['return'][0].values()[0].replaceAll('Salt command execution success', '')
+
+                sh "mkdir -p ${artifactsDir}/${scanUUID}/${nodeShortName}"
+                writeFile file: "${archiveName}", text: fileContents
+                sh "tar --strip-components 1 -xf ${archiveName} --directory ${artifactsDir}/${scanUUID}/${nodeShortName}; rm -f ${archiveName}"
+
+                // Remove archive which is not needed anymore
+                salt.runSaltProcessStep(pepperEnv, minion, 'file.remove', "/tmp/${archiveName}")
 
                 // Attempt to upload the scanning results to the dashboard
                 if (UPLOAD_TO_DASHBOARD.toBoolean()) {
@@ -159,6 +186,12 @@ node('python') {
                 }
             }
         }
+
+        // Prepare archive
+        sh "tar -cJf ${artifactsDir}.tar.xz ${artifactsDir}"
+
+        // Archive the build output artifacts
+        archiveArtifacts artifacts: "*.xz"
     }
 
 /*  // Will be implemented later
