@@ -64,7 +64,9 @@ timeout(time: 4, unit: 'HOURS') {
                     // https://github.com/jenkinsci/docker-workflow-plugin/blob/docker-workflow-1.17/src/main/resources/org/jenkinsci/plugins/docker/workflow/Docker.groovy#L168-L170
                     sh("docker tag ${srcImage.id} ${targetImageFull}")
                     common.infoMsg("Attempt to push docker image into remote registry: ${env.REGISTRY_URL}")
-                    sh("docker push ${targetImageFull}")
+                    docker.withRegistry(env.REGISTRY_URL, env.TARGET_REGISTRY_CREDENTIALS_ID) {
+                        sh("docker push ${targetImageFull}")
+                    }
                     if (targetImageFull.contains(externalMarker)) {
                         external = true
                     }
