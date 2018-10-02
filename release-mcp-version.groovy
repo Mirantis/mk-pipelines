@@ -46,7 +46,7 @@ def triggerDockerMirrorJob(dockerCredentials, dockerRegistryUrl, targetTag, imag
         [$class: 'StringParameterValue', name: 'TARGET_REGISTRY_CREDENTIALS_ID', value: dockerCredentials],
         [$class: 'StringParameterValue', name: 'REGISTRY_URL', value: dockerRegistryUrl],
         [$class: 'StringParameterValue', name: 'IMAGE_TAG', value: targetTag],
-        [$class: 'StringParameterValue', name: 'IMAGE_LIST', value: imageList],
+        [$class: 'TextParameterValue', name: 'IMAGE_LIST', value: imageList],
         [$class: 'StringParameterValue', name: 'SOURCE_IMAGE_TAG', value: sourceImageTag],
     ]
 }
@@ -67,7 +67,7 @@ def triggerEbfRepoJob(snapshotId, snapshotName) {
 
 def triggerGitTagJob(gitRepoList, gitCredentials, tag, sourceTag) {
     build job: "tag-git-repos-all", parameters: [
-        [$class: 'StringParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
+        [$class: 'TextParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
         [$class: 'StringParameterValue', name: 'GIT_CREDENTIALS', value: gitCredentials],
         [$class: 'StringParameterValue', name: 'TAG', value: tag],
         [$class: 'StringParameterValue', name: 'SOURCE_TAG', value: sourceTag],
@@ -76,7 +76,7 @@ def triggerGitTagJob(gitRepoList, gitCredentials, tag, sourceTag) {
 
 def triggerPromoteVCPJob(VcpImageList, tag, sourceTag) {
     build job: "promote-vcp-images-all", parameters: [
-        [$class: 'StringParameterValue', name: 'VCP_IMAGE_LIST', value: VcpImageList],
+        [$class: 'TextParameterValue', name: 'VCP_IMAGE_LIST', value: VcpImageList],
         [$class: 'StringParameterValue', name: 'TAG', value: tag],
         [$class: 'StringParameterValue', name: 'SOURCE_TAG', value: sourceTag]
     ]
