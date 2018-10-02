@@ -17,6 +17,8 @@ def jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 slaveNode = env.SLAVE_NODE ?: 'jsl23.mcp.mirantis.net'
 def job_env = env.getEnvironment().findAll { k, v -> v }
 def verify = job_env.VERIFY_DOWNLOAD ?: true
+def overwrite = job_env.FORCE_OVERWRITE.toBoolean() ?: false
+
 
 
 timeout(time: 6, unit: 'HOURS') {
@@ -91,7 +93,7 @@ timeout(time: 6, unit: 'HOURS') {
                         remoteImageStatus = ''
                         remoteImageStatus = sh(script: "wget  --auth-no-challenge --spider ${targetImageUrl} 2>/dev/null", returnStatus: true)
                         // wget return code 8 ,if file not exist
-                        if (remoteImageStatus != '8') {
+                        if (remoteImageStatus != 8 && !overwrite) {
                             error("Attempt to overwrite existing release! Target: ${targetImage} already exist!")
                         }
                     }

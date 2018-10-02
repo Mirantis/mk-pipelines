@@ -78,7 +78,8 @@ def triggerPromoteVCPJob(VcpImageList, tag, sourceTag) {
     build job: "promote-vcp-images-all", parameters: [
         [$class: 'TextParameterValue', name: 'VCP_IMAGE_LIST', value: VcpImageList],
         [$class: 'StringParameterValue', name: 'TAG', value: tag],
-        [$class: 'StringParameterValue', name: 'SOURCE_TAG', value: sourceTag]
+        [$class: 'StringParameterValue', name: 'SOURCE_TAG', value: sourceTag],
+        [$class: 'BooleanParameterValue', name: 'FORCE_OVERWRITE', value: true],
     ]
 }
 
