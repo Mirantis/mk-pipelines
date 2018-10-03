@@ -17,15 +17,17 @@
  *   GIT_CREDENTIALS
  *   GIT_REPO_LIST
  *   VCP_IMAGE_LIST - list of images
+ *   SYNC_VCP_IMAGE_TO_S3 - boolean
  *   RELEASE_VCP_IMAGES - boolean
  *   EMAIL_NOTIFY
  *   NOTIFY_RECIPIENTS
- *   NOTIFY_TEXT
- *
+  *
  */
 
 common = new com.mirantis.mk.Common()
-git = new com.mirantis.mk.Git()
+
+syncVcpImagesToS3 = env.SYNC_VCP_IMAGE_TO_S3.toBoolean() ?: false
+emailNotify = env.EMAIL_NOTIFY.toBoolean() ?: false
 
 def triggerAptlyPromoteJob(aptlyUrl, components, diffOnly, dumpPublish, packages, recreate, source, storages, target) {
     build job: "aptly-promote-all-testing-stable", parameters: [
@@ -86,6 +88,13 @@ def triggerPromoteVCPJob(VcpImageList, tag, sourceTag) {
     ]
 }
 
+def triggerSyncVCPJob(VcpImageList) {
+    build job: "upload-to-s3", parameters: [
+            [$class: 'TextParameterValue', name: 'FILENAMES',
+             value: VcpImageList + VcpImageList.collect({it + '.md5'})]
+    ]
+}
+
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
@@ -120,9 +129,14 @@ timeout(time: 12, unit: 'HOURS') {
                     triggerPromoteVCPJob(VCP_IMAGE_LIST, TARGET_REVISION, SOURCE_REVISION)
 
                 }
-                if (EMAIL_NOTIFY.toBoolean()) {
+                if (syncVcpImagesToS3) {
+                    common.infoMsg("Syncing VCP images from internal: http://apt.mcp.mirantis.net/images  to s3: images.mirantis.com")
+                    triggerSyncVCPJob('')
+                }
+                if (emailNotify) {
+                    notify_text = "MCP Promotion  ${env.SOURCE_REVISION} => ${env.TARGET_REVISION} has been done"
                     emailext(to: NOTIFY_RECIPIENTS,
-                        body: NOTIFY_TEXT,
+                        body: notify_text,
                         subject: "MCP Promotion has been done")
                 }
             }
