@@ -59,13 +59,17 @@ timeout(time: 4, unit: 'HOURS') {
                     imageName = getImageName(sourceImage)
                     targetImageFull = "${targetRegistryPath}/${imageName}:${env.IMAGE_TAG}"
                     srcImage = docker.image(sourceImage)
-                    srcImage.pull()
+                    common.retry(3, 5) {
+                        srcImage.pull()
+                    }
                     // Use sh-docker call for tag, due magic code in plugin:
                     // https://github.com/jenkinsci/docker-workflow-plugin/blob/docker-workflow-1.17/src/main/resources/org/jenkinsci/plugins/docker/workflow/Docker.groovy#L168-L170
                     sh("docker tag ${srcImage.id} ${targetImageFull}")
                     common.infoMsg("Attempt to push docker image into remote registry: ${env.REGISTRY_URL}")
-                    docker.withRegistry(env.REGISTRY_URL, env.TARGET_REGISTRY_CREDENTIALS_ID) {
-                        sh("docker push ${targetImageFull}")
+                    common.retry(3, 5) {
+                        docker.withRegistry(env.REGISTRY_URL, env.TARGET_REGISTRY_CREDENTIALS_ID) {
+                            sh("docker push ${targetImageFull}")
+                        }
                     }
                     if (targetImageFull.contains(externalMarker)) {
                         external = true
@@ -97,7 +101,9 @@ timeout(time: 4, unit: 'HOURS') {
                                 common.infoMsg("artifactoryProperties=> ${artifactoryProperties}")
                                 // Call pipeline-library routine to set properties
                                 def mcp_artifactory = new com.mirantis.mcp.MCPArtifactory()
-                                mcp_artifactory.setProperties(imgUrl - '/manifest.json', artifactoryProperties)
+                                common.retry(3, 5) {
+                                    mcp_artifactory.setProperties(imgUrl - '/manifest.json', artifactoryProperties)
+                                }
                             }
                         }
                     }
