@@ -159,6 +159,7 @@ timeout(time: 12, unit: 'HOURS') {
     for (target in upgradeTargets){
       common.stageWrapper(upgradeStageMap, "Pre upgrade", target, interactive) {
         openstack.runOpenStackUpgradePhase(env, target, 'pre')
+        openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
     }
 
