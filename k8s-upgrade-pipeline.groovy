@@ -90,6 +90,15 @@ def regenerateCerts(pepperEnv, target) {
     }
 }
 
+def updateAddons(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Upgrading Addons at ${target}") {
+        salt.enforceState(pepperEnv, target, "kubernetes.master.addons")
+        salt.enforceState(pepperEnv, target, "kubernetes.master.setup")
+    }
+}
+
 def upgradeDocker(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
 
@@ -130,6 +139,7 @@ timeout(time: 12, unit: 'HOURS') {
                                 upgradeDocker(pepperEnv, t)
                             }
                             performKubernetesControlUpdate(pepperEnv, t)
+                            updateAddons(pepperEnv, t)
                             uncordonNode(pepperEnv, t)
                         }
                     }
