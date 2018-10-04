@@ -458,7 +458,8 @@ def highstate(pepperEnv, target, type) {
         stage("Apply highstate on ${target} nodes") {
             try {
                 common.retry(3){
-                    salt.enforceHighstate(pepperEnv, target)
+                    out = salt.enforceHighstate(pepperEnv, target)
+                    salt.printSaltCommandResult(out)
                 }
             } catch (Exception e) {
                 common.errorMsg(e)
