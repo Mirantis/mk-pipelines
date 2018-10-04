@@ -94,7 +94,7 @@ def updateAddons(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
 
     stage("Upgrading Addons at ${target}") {
-        salt.enforceState(pepperEnv, target, "kubernetes.master.addons")
+        salt.enforceState(pepperEnv, target, "kubernetes.master.kube-addons")
         salt.enforceState(pepperEnv, target, "kubernetes.master.setup")
     }
 }
