@@ -8,7 +8,7 @@
  *  NODE_TARGET
  *  SYSTEM_GIT_URL
  *  SYSTEM_GIT_REF
- *  RECLASS_VERSION
+ *  DISTRIB_REVISION of apt mirrror to be used (http://mirror.mirantis.com/DISTRIB_REVISION/ by default)
  *  MAX_CPU_PER_JOB
  *  LEGACY_TEST_MODE
  *  RECLASS_IGNORE_CLASS_NOTFOUND
@@ -22,15 +22,11 @@ def git = new com.mirantis.mk.Git()
 def ssh = new com.mirantis.mk.Ssh()
 def saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
-def defaultGitRef = DEFAULT_GIT_REF
-def defaultGitUrl = DEFAULT_GIT_URL
+def defaultGitRef = env.DEFAULT_GIT_REF ?: null
+def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
 
+def distribRevision = env.DISTRIB_REVISION ?: 'nightly'
 def checkouted = false
-
-def reclassVersion = 'v1.5.4'
-if (common.validInputParam('RECLASS_VERSION')) {
-  reclassVersion = RECLASS_VERSION
-}
 
 throttle(['test-model']) {
   timeout(time: 1, unit: 'HOURS') {
@@ -72,8 +68,7 @@ throttle(['test-model']) {
               'dockerHostname': NODE_TARGET,
               'clusterName': CLUSTER_NAME,
               'reclassEnv': workspace,
-              'formulasRevision': FORMULAS_REVISION,
-              'reclassVersion': reclassVersion,
+              'distribRevision': distribRevision,
               'dockerMaxCpus': MAX_CPU_PER_JOB.toInteger(),
               'ignoreClassNotfound': RECLASS_IGNORE_CLASS_NOTFOUND,
               'aptRepoUrl': APT_REPOSITORY,

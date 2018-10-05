@@ -53,12 +53,8 @@ gerritDataRS['gerritBranch'] = env.RECLASS_MODEL_BRANCH ?: 'master'
 gerritDataRS['gerritRefSpec'] = env.RECLASS_SYSTEM_GIT_REF ?: null
 gerritDataRS['gerritProject'] = 'salt-models/reclass-system'
 
-// version of debRepos, aka formulas\reclass
+// version of debRepos, aka formulas\reclass\ubuntu
 testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
-reclassVersion = 'v1.5.4'
-if (env.RECLASS_VERSION) {
-    reclassVersion = env.RECLASS_VERSION
-}
 // Name of sub-test chunk job
 chunkJobName = "test-mk-cookiecutter-templates-chunk"
 testModelBuildsData = [:]
@@ -157,7 +153,6 @@ def testModel(modelFile, reclassArtifactName, artifactCopyPath) {
   testReclassEnv: "model/${modelFile}/"
   modelFile: "contexts/${modelFile}.yml"
   DISTRIB_REVISION: "${testDistribRevision}"
-  reclassVersion: "${reclassVersion}"
   """
     def chunkJob = build job: chunkJobName, parameters: [
         [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML',

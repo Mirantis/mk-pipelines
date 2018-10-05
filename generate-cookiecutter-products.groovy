@@ -13,7 +13,6 @@ python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 ssh = new com.mirantis.mk.Ssh()
 
-reclassVersion = env.RECLASS_VERSION ?: 'v1.5.4'
 slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 
 timeout(time: 2, unit: 'HOURS') {
@@ -162,15 +161,26 @@ parameters:
 
             stage("Test") {
                 if (TEST_MODEL.toBoolean() && sharedReclassUrl != '') {
+                    distribRevision = mcpVersion
+                    if (['master'].contains(mcpVersion)) {
+                        distribRevision = 'nightly'
+                    }
+                    if (distribRevision.contains('/')) {
+                        distribRevision = distribRevision.split('/')[-1]
+                    }
+                    // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
+                    if (!common.checkRemoteBinary([apt_mk_version: distribRevision]).linux_system_repo_url) {
+                        common.errorMsg("Binary release: ${distribRevision} not exist. Fallback to 'proposed'! ")
+                        distribRevision = 'proposed'
+                    }
                     sh("cp -r ${modelEnv} ${testEnv}")
                     def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
-                    common.infoMsg("Attempt to run test against formula-version: ${mcpVersion}")
+                    common.infoMsg("Attempt to run test against distribRevision: ${distribRevision}")
                     try {
                         def config = [
                             'dockerHostname'     : "${saltMaster}.${clusterDomain}",
                             'reclassEnv'         : testEnv,
-                            'formulasRevision'   : mcpVersion,
-                            'reclassVersion'     : reclassVersion,
+                            'distribRevision'    : distribRevision,
                             'dockerContainerName': DockerCName,
                             'testContext'        : 'salt-model-node'
                         ]

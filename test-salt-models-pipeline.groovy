@@ -9,56 +9,28 @@
  *  TEST_CLUSTER_NAMES list of comma separated cluster names to test (optional, default all cluster levels)
  *  LEGACY_TEST_MODE legacy test mode flag
  *  RECLASS_IGNORE_CLASS_NOTFOUND ignore missing class flag for reclass config
- *  RECLASS_VERSION Version of reclass to be used (branch, ...)
+ *  DISTRIB_REVISION of apt mirrror to be used (http://mirror.mirantis.com/DISTRIB_REVISION/ by default)
  *  APT_REPOSITORY extra apt repository url
  *  APT_REPOSITORY_GPG extra apt repository url GPG
  */
 
 def gerrit = new com.mirantis.mk.Gerrit()
+def common = new com.mirantis.mk.Common()
 def ssh = new com.mirantis.mk.Ssh()
 def git = new com.mirantis.mk.Git()
 
-def config_node_name_pattern
-try {
-  config_node_name_pattern = CONFIG_NODE_NAME_PATTERN
-} catch (MissingPropertyException e) {
-  config_node_name_pattern = "cfg01"
-}
+def config_node_name_pattern = env.CONFIG_NODE_NAME_PATTERN ?: 'cfg01'
+def gerritRef = env.GERRIT_REFSPEC ?: GERRIT_REFSPEC
+def formulasSource = env.FORMULAS_SOURCE ?: 'pkg'
 
-def gerritRef
-try {
-  gerritRef = GERRIT_REFSPEC
-} catch (MissingPropertyException e) {
-  gerritRef = null
-}
-
-def formulasSource
-try {
-  formulasSource = FORMULAS_SOURCE
-} catch (MissingPropertyException e) {
-  formulasSource = "pkg"
-}
-
-def testClusterNames
-try {
-  testClusterNames = TEST_CLUSTER_NAMES
-} catch (MissingPropertyException e) {
-  testClusterNames = ""
-}
-
-def defaultGitRef, defaultGitUrl
-try {
-    defaultGitRef = DEFAULT_GIT_REF
-    defaultGitUrl = DEFAULT_GIT_URL
-} catch (MissingPropertyException e) {
-    defaultGitRef = null
-    defaultGitUrl = null
-}
+def testClusterNames = env.TEST_CLUSTER_NAMES ?: ''
+def defaultGitRef = env.DEFAULT_GIT_REF ?: null
+def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
 
 def checkouted = false
 futureNodes = []
 failedNodes = false
-common = new com.mirantis.mk.Common()
+
 
 def setupRunner() {
     def branches = [:]
@@ -91,10 +63,9 @@ def triggerTestNodeJob(defaultGitUrl, defaultGitRef, clusterName, testTarget, fo
     [$class: 'StringParameterValue', name: 'CLUSTER_NAME', value: clusterName],
     [$class: 'StringParameterValue', name: 'NODE_TARGET', value: testTarget],
     [$class: 'StringParameterValue', name: 'FORMULAS_SOURCE', value: formulasSource],
-    [$class: 'StringParameterValue', name: 'FORMULAS_REVISION', value: FORMULAS_REVISION],
     [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: CREDENTIALS_ID],
     [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: SYSTEM_GIT_URL],
-    [$class: 'StringParameterValue', name: 'RECLASS_VERSION', value: RECLASS_VERSION],
+    [$class: 'StringParameterValue', name: 'DISTRIB_REVISION', value: distribRevision],
     [$class: 'StringParameterValue', name: 'MAX_CPU_PER_JOB', value: MAX_CPU_PER_JOB],
     [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: SYSTEM_GIT_REF],
     [$class: 'BooleanParameterValue', name: 'LEGACY_TEST_MODE', value: LEGACY_TEST_MODE.toBoolean()],
