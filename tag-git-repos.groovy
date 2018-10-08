@@ -16,7 +16,21 @@ git = new com.mirantis.mk.Git()
 
 def gitRepoAddTag(repoURL, repoName, tag, credentials, ref = "HEAD"){
   common.infoMsg("Tagging: ${repoURL} ${ref} => ${tag}")
-  git.checkoutGitRepository(repoName, repoURL, "master", credentials)
+  checkout([
+    $class: 'GitSCM',
+    branches: [
+      [name: 'FETCH_HEAD'],
+    ],
+    userRemoteConfigs: [
+      [url: repoURL, refspec: ref, credentialsId: credentials],
+    ],
+    extensions: [
+      [$class: 'PruneStaleBranch'],
+      [$class: 'RelativeTargetDirectory', relativeTargetDir: repoName],
+      [$class: 'SubmoduleOption', disableSubmodules: true],
+      [$class: 'UserIdentity', name: 'MCP CI', email: 'ci+infra@mirantis.com'],
+    ],
+  ])
   dir(repoName) {
     sh "git tag -f -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
     sshagent([credentials]) {
