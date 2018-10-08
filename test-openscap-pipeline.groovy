@@ -3,13 +3,16 @@
  * Run openscap xccdf evaluation on given nodes
  *
  * Expected parametes:
+ *  OPENSCAP_TEST_TYPE          Type of OpenSCAP evaluation to run, either 'xccdf' or 'oval'
  *  SALT_MASTER_URL             Full Salt API address.
  *  SALT_MASTER_CREDENTIALS     Credentials to the Salt API.
  *
- *  XCCDF_BENCHMARKS_DIR        The XCCDF benchmarks base directory (default /usr/share/xccdf-benchmarks/mirantis/)
+ *  XCCDF_BENCHMARKS_DIR        Base directory for XCCDF benchmarks (default /usr/share/xccdf-benchmarks/mirantis/)
+ *                              or OVAL devinitions (default /usr/share/oval-definitions/mirantis/)
  *  XCCDF_BENCHMARKS            List of pairs XCCDF benchmark filename and corresponding profile separated with ','
- *                                  these pairs are separated with semicolon.
- *                                  (e.g. manila/openstack_manila-xccdf.xml,profilename;horizon/openstack_horizon-xccdf.xml,profile)
+ *                                  these pairs are separated with semicolon
+ *                                  (e.g. manila/openstack_manila-xccdf.xml,profilename;horizon/openstack_horizon-xccdf.xml,profile).
+ *                              For OVAL definitions, paths to OVAL definition files separated by semicolon, profile is ignored.
  *  XCCDF_VERSION               The XCCDF version (default 1.2)
  *  XCCDF_TAILORING_ID          The tailoring id (default None)
  *
@@ -118,19 +121,34 @@ def uploadResultToDashboard(apiUrl, cloudName, nodeName, reportType, reportId, r
 
 
 node('python') {
-    def pepperEnv = 'pepperEnv'
-
-    // XCCDF related variables
-    def benchmarksAndProfilesArray = XCCDF_BENCHMARKS.tokenize(';')
-    def benchmarksDir = XCCDF_BENCHMARKS_DIR ?: '/usr/share/xccdf-benchmarks/mirantis/'
-    def xccdfVersion = XCCDF_VERSION ?: '1.2'
-    def xccdfTailoringId = XCCDF_TAILORING_ID ?: 'None'
-    def targetServers = TARGET_SERVERS ?: '*'
-
     def salt = new com.mirantis.mk.Salt()
     def python = new com.mirantis.mk.Python()
     def common = new com.mirantis.mk.Common()
     def http = new com.mirantis.mk.Http()
+
+    def pepperEnv = 'pepperEnv'
+
+    def benchmarkType = OPENSCAP_TEST_TYPE ?: 'xccdf'
+    def reportType
+    def benchmarksDir
+
+    switch (benchmarkType) {
+        case 'xccdf':
+            reportType = 'openscap';
+            benchmarksDir = XCCDF_BENCHMARKS_DIR ?: '/usr/share/xccdf-benchmarks/mirantis/';
+            break;
+        case 'oval':
+            reportType = 'cve';
+            benchmarksDir = XCCDF_BENCHMARKS_DIR ?: '/usr/share/oval-definitions/mirantis/';
+            break;
+        default:
+            throw new Exception('Unsupported value for OPENSCAP_TEST_TYPE, must be "oval" or "xccdf".')
+    }
+    // XCCDF related variables
+    def benchmarksAndProfilesArray = XCCDF_BENCHMARKS.tokenize(';')
+    def xccdfVersion = XCCDF_VERSION ?: '1.2'
+    def xccdfTailoringId = XCCDF_TAILORING_ID ?: 'None'
+    def targetServers = TARGET_SERVERS ?: '*'
 
     // To have an ability to work in heavy concurrency conditions
     def scanUUID = UUID.randomUUID().toString()
@@ -146,7 +164,7 @@ node('python') {
         python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
     }
 
-    stage ('Run openscap xccdf evaluation and attempt to upload the results to a dashboard') {
+    stage ('Run openscap evaluation and attempt to upload the results to a dashboard') {
         liveMinions = salt.getMinions(pepperEnv, targetServers)
 
         if (liveMinions.isEmpty()) {
@@ -178,11 +196,10 @@ node('python') {
 
             // Evaluate the benchmark on all minions at once
             salt.runSaltProcessStep(pepperEnv, targetServers, 'oscap.eval', [
-                'xccdf', benchmarkFile, "results_dir=${resultsDir}",
+                benchmarkType, benchmarkFile, "results_dir=${resultsDir}",
                 "profile=${profile}", "xccdf_version=${xccdfVersion}",
                 "tailoring_id=${xccdfTailoringId}"
             ])
-
             // fetch, store and publish results one by one
             for (minion in liveMinions) {
 
@@ -193,7 +210,6 @@ node('python') {
                 // TODO(pas-ha) when using Salt >= 2017.7.0, use file.read(path) module
                 // also investigate compressing to gz/xz and reading with binary=True (for less traffic)
                 salt.cmdRun(pepperEnv, minion, "tar -cf /tmp/${archiveName} -C ${resultsBaseDir} .")
-                // NOTE(pas-ha) salt.getFileContent does not pass extra args to cmdRun that we need
                 fileContents = salt.getFileContent(pepperEnv, minion, "/tmp/${archiveName}", true, null, false)
 
                 sh "mkdir -p ${localResultsDir}"
@@ -208,7 +224,7 @@ node('python') {
                     if (common.validInputParam('DASHBOARD_API_URL')) {
                         def cloudName = salt.getGrain(pepperEnv, minion, 'domain')['return'][0].values()[0].values()[0]
                         def nodeResults = readFile "${localResultsDir}/${benchmarkPathWithoutExtension}/results.json"
-                        reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, "openscap", reportId, nodeResults)
+                        reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, reportType, reportId, nodeResults)
                     } else {
                         throw new Exception('Uploading to the dashboard is enabled but the DASHBOARD_API_URL was not set')
                     }
