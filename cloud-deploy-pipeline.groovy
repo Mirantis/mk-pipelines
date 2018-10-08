@@ -469,6 +469,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                     if (common.checkContains('STACK_INSTALL', 'contrail')) {
                         orchestrate.installContrailCompute(venvPepper, extra_tgt)
+                        orchestrate.installBackup(venvPepper, 'contrail', extra_tgt)
                     }
                 }
 
