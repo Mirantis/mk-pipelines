@@ -32,7 +32,7 @@ def gitRepoAddTag(repoURL, repoName, tag, credentials, ref = "HEAD"){
     ],
   ])
   dir(repoName) {
-    sh "git tag -f -a ${tag} ${ref} -m \"Release of mcp version ${tag}\""
+    sh "git tag -f -a ${tag} -m \"Release of mcp version ${tag}\""
     sshagent([credentials]) {
       sh "git push -f origin ${tag}:refs/tags/${tag}"
     }
