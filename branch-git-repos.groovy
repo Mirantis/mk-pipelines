@@ -116,19 +116,9 @@ node() {
                 sh "git branch -d '${gitBranchNew}' && git push origin ':${gitBranchNew}' || :"
                 sh "git tag    -d '${gitBranchNew}' && git push origin ':refs/tags/${gitBranchNew}' || :"
 
-                // Check if gitSrcObj is a branch
-                gitCommit = sh (script: "git ls-remote --heads --quiet origin '${gitSrcObj}' | awk '{print \$1}'",
-                                returnStdout: true).trim()
-                if (gitCommit) {
-                // Rename existing branch
-                    sh "git checkout -b '${gitSrcObj}' -t 'origin/${gitSrcObj}'" // Checkout old branch
-                    sh "git branch -m '${gitSrcObj}' '${gitBranchNew}'"          // ... rename it
-                    sh "git push origin ':${gitSrcObj}'"                         // ... remove old remote branch
-                } else {
                 // Create new branch
-                    sh "git checkout -b '${gitBranchNew}' '${gitSrcObj}'"        // Create new local branch
-                }
-                sh "git push origin '${gitBranchNew}'"                           // ... push new branch
+                sh "git checkout -b '${gitBranchNew}' '${gitSrcObj}'" // Create new local branch
+                sh "git push origin '${gitBranchNew}'"                // ... push new branch
             }
         }
     }
