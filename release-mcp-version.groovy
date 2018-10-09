@@ -66,6 +66,9 @@ def triggerEbfRepoJob(snapshotId, snapshotName) {
 }
 
 def triggerGitTagJob(gitRepoList, gitCredentials, tag, sourceTag) {
+    // There is no `nightly` and `testing` build-IDs` in release process
+    // for git repos
+    if ( sourceTag in ['nightly', 'testing'] ) sourceTag = 'master'
     build job: "tag-git-repos-all", parameters: [
         [$class: 'TextParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
         [$class: 'StringParameterValue', name: 'GIT_CREDENTIALS', value: gitCredentials],
