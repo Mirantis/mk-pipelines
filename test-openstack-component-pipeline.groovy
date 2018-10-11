@@ -4,8 +4,6 @@
 
  * Flow parameters:
  *   CREDENTIALS_ID
- *   FORMULAS_REVISION
- *   FORMULAS_SOURCE
  *   SALT_OPTS
  *   STACK_DEPLOY_JOB
 

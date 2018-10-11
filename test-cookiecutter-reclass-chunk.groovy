@@ -30,8 +30,7 @@ timeout(time: 1, unit: 'HOURS') {
                     'dockerHostname': "cfg01.${templateContext.default_context.cluster_domain}",
                     'clusterName': templateContext.default_context.cluster_name,
                     'reclassEnv': extraVars.testReclassEnv,
-                    'formulasRevision': extraVars.DISTRIB_REVISION,
-                    'reclassVersion': extraVars.reclassVersion,
+                    'distribRevision': extraVars.DISTRIB_REVISION,
                     'dockerContainerName': extraVars.DockerCName,
                     'testContext': extraVars.modelFile
                 ]
