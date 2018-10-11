@@ -1,6 +1,6 @@
 /**
  *
- * Launch validation of the cloud
+ * Launch CVP Tempest verification of the cloud
  *
  * Expected parameters:
 
@@ -14,7 +14,7 @@
  *   SKIP_LIST_PATH              Path to tempest skip list file in TOOLS_REPO
  *   TARGET_NODE                 Node to run container with Tempest/Rally
  *   TEMPEST_REPO                Tempest repo to clone and use
- *   TEMPEST_TEST_PATTERN        Tests to run during HA scenarios
+ *   TEMPEST_TEST_PATTERN        Tests to run
  *   TEMPEST_ENDPOINT_TYPE       Type of OS endpoint to use during test run
  *
  */
@@ -26,15 +26,20 @@ validate = new com.mirantis.mcp.Validate()
 def saltMaster
 def artifacts_dir = 'validation_artifacts/'
 def remote_artifacts_dir = '/root/qa_results/'
+def container_name = "${env.JOB_NAME}"
 
 node() {
     try{
         stage('Initialization') {
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-            validate.runBasicContainer(saltMaster, TARGET_NODE, TEST_IMAGE)
             sh "rm -rf ${artifacts_dir}"
+            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_artifacts_dir}")
             salt.cmdRun(saltMaster, TARGET_NODE, "mkdir -p ${remote_artifacts_dir}")
+            keystone_creds = validate._get_keystone_creds_v3(saltMaster)
+            if (!keystone_creds) {
+                keystone_creds = validate._get_keystone_creds_v2(saltMaster)
+            }
+            validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, container_name, keystone_creds)
             validate.configureContainer(saltMaster, TARGET_NODE, PROXY, TOOLS_REPO, TEMPEST_REPO, TEMPEST_ENDPOINT_TYPE)
         }
 
