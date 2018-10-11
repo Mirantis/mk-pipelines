@@ -15,13 +15,14 @@
  */
 
 def gerrit = new com.mirantis.mk.Gerrit()
-def common = new com.mirantis.mk.Common()
+common = new com.mirantis.mk.Common()
 def ssh = new com.mirantis.mk.Ssh()
 def git = new com.mirantis.mk.Git()
 
 def config_node_name_pattern = env.CONFIG_NODE_NAME_PATTERN ?: 'cfg01'
-def gerritRef = env.GERRIT_REFSPEC ?: GERRIT_REFSPEC
+def gerritRef = env.GERRIT_REFSPEC ?: null
 def formulasSource = env.FORMULAS_SOURCE ?: 'pkg'
+distribRevision = env.DISTRIB_REVISION ?: 'nightly'
 
 def testClusterNames = env.TEST_CLUSTER_NAMES ?: ''
 def defaultGitRef = env.DEFAULT_GIT_REF ?: null
