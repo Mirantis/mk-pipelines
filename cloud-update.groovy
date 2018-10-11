@@ -573,14 +573,12 @@ def rollbackLiveSnapshot(pepperEnv, tgt, generalTarget) {
     }
     try {
         salt.minionsReachable(pepperEnv, 'I@salt:master', tgt)
-        // purge and setup previous repos
-        salt.enforceState(pepperEnv, tgt, 'linux.system.repo')
     } catch (Exception e) {
         common.errorMsg(e)
         if (INTERACTIVE.toBoolean()) {
-            input message: "Salt state linux.system.repo on ${tgt} failed. Do you want to PROCEED?."
+            input message: "Not all minions ${tgt} returned after snapshot revert. Do you want to PROCEED?."
         } else {
-            throw new Exception("Salt state linux.system.repo on ${tgt} failed")
+            throw new Exception("Not all minions ${tgt} returned after snapshot revert")
         }
     }
 }
