@@ -53,7 +53,7 @@ gerritDataRS['gerritBranch'] = env.RECLASS_MODEL_BRANCH ?: 'master'
 gerritDataRS['gerritRefSpec'] = env.RECLASS_SYSTEM_GIT_REF ?: null
 gerritDataRS['gerritProject'] = 'salt-models/reclass-system'
 
-// version of debRepos, aka formulas\reclass\ubuntu
+// version of debRepos, aka formulas|reclass|ubuntu
 testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
 // Name of sub-test chunk job
 chunkJobName = "test-mk-cookiecutter-templates-chunk"
