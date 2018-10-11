@@ -1,6 +1,6 @@
 /**
  *
- * Launch HA test for the cloud
+ * Launch CVP HA testing for the cloud (virtualized control plane only)
  *
  * Expected parameters:
  *
@@ -28,6 +28,7 @@ validate = new com.mirantis.mcp.Validate()
 def saltMaster
 def artifacts_dir = 'validation_artifacts/'
 def remote_artifacts_dir = '/root/qa_results/'
+def container_name = "${env.JOB_NAME}"
 def current_target_node = null
 def first_node = null
 def tempest_result = ''
@@ -36,11 +37,15 @@ timeout(time: 12, unit: 'HOURS') {
         def num_retries = Integer.parseInt(RETRY_CHECK_STATUS)
         try {
             stage('Initialization') {
-                saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-                validate.runBasicContainer(saltMaster, TEMPEST_TARGET_NODE, TEST_IMAGE)
                 sh "rm -rf ${artifacts_dir}"
+                saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
                 salt.cmdRun(saltMaster, TEMPEST_TARGET_NODE, "rm -rf ${remote_artifacts_dir}")
                 salt.cmdRun(saltMaster, TEMPEST_TARGET_NODE, "mkdir -p ${remote_artifacts_dir}")
+                keystone_creds = validate._get_keystone_creds_v3(saltMaster)
+                if (!keystone_creds) {
+                    keystone_creds = validate._get_keystone_creds_v2(saltMaster)
+                }
+                validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, container_name, keystone_creds)
                 validate.configureContainer(saltMaster, TEMPEST_TARGET_NODE, PROXY, TOOLS_REPO, TEMPEST_REPO)
             }
 
