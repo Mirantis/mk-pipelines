@@ -125,6 +125,7 @@ node('python') {
     def python = new com.mirantis.mk.Python()
     def common = new com.mirantis.mk.Common()
     def http = new com.mirantis.mk.Http()
+    def validate = new com.mirantis.mcp.Validate()
 
     def pepperEnv = 'pepperEnv'
 
@@ -182,7 +183,7 @@ node('python') {
         def lastError
         // Iterate oscap evaluation over the benchmarks
         for (benchmark in benchmarksAndProfilesArray) {
-            def (benchmarkFilePath, profile) = benchmark.tokenize(',').collect({it.trim()})
+            def (benchmarkFilePath, profileName) = benchmark.tokenize(',').collect({it.trim()})
 
             // Remove extension from the benchmark name
             def benchmarkPathWithoutExtension = benchmarkFilePath.replaceFirst('[.][^.]+$', '')
@@ -191,42 +192,54 @@ node('python') {
             def benchmarkName = benchmarkPathWithoutExtension.tokenize('/')[-1]
 
             // And build resultsDir based on this path
-            def resultsDir = "${resultsBaseDir}/${benchmarkPathWithoutExtension}"
+            def resultsDir = "${resultsBaseDir}/${benchmarkName}"
+            if (profileName) {
+                resultsDir = "${resultsDir}/${profileName}"
+            }
 
             def benchmarkFile = "${benchmarksDir}${benchmarkFilePath}"
 
             // Evaluate the benchmark on all minions at once
             salt.runSaltProcessStep(pepperEnv, targetServers, 'oscap.eval', [
                 benchmarkType, benchmarkFile, "results_dir=${resultsDir}",
-                "profile=${profile}", "xccdf_version=${xccdfVersion}",
+                "profile=${profileName}", "xccdf_version=${xccdfVersion}",
                 "tailoring_id=${xccdfTailoringId}"
             ])
-            // fetch, store and publish results one by one
-            for (minion in liveMinions) {
 
+            salt.cmdRun(pepperEnv, targetServers, "rm -f /tmp/${scanUUID}.tar.xz; tar -cJf /tmp/${scanUUID}.tar.xz -C ${resultsBaseDir} .")
+
+            // fetch and store results one by one
+            for (minion in liveMinions) {
                 def nodeShortName = minion.tokenize('.')[0]
-                def archiveName = "${scanUUID}_${nodeShortName}_${benchmarkName}.tar"
                 def localResultsDir = "${artifactsDir}/${scanUUID}/${nodeShortName}"
 
-                // TODO(pas-ha) when using Salt >= 2017.7.0, use file.read(path) module
-                // also investigate compressing to gz/xz and reading with binary=True (for less traffic)
-                salt.cmdRun(pepperEnv, minion, "tar -cf /tmp/${archiveName} -C ${resultsBaseDir} .")
-                fileContents = salt.getFileContent(pepperEnv, minion, "/tmp/${archiveName}", true, null, false)
+                fileContentBase64 = validate.getFileContentEncoded(pepperEnv, minion, "/tmp/${scanUUID}.tar.xz")
+                writeFile file: "${scanUUID}.base64", text: fileContentBase64
 
                 sh "mkdir -p ${localResultsDir}"
-                writeFile file: "${archiveName}", text: fileContents
-                sh "tar --strip-components 1 -xf ${archiveName} --directory ${localResultsDir}; rm -f ${archiveName}"
+                sh "base64 -d ${scanUUID}.base64 | tar -xJ --strip-components 1 --directory ${localResultsDir}"
+                sh "rm -f ${scanUUID}.base64"
+            }
 
-                // Remove archive which is not needed anymore
-                salt.runSaltProcessStep(pepperEnv, minion, 'file.remove', "/tmp/${archiveName}")
+            // Remove archives which is not needed anymore
+            salt.runSaltProcessStep(pepperEnv, targetServers, 'file.remove', "/tmp/${scanUUID}.tar.xz")
+
+            // publish results one by one
+            for (minion in liveMinions) {
+                def nodeShortName = minion.tokenize('.')[0]
+                def benchmarkResultsDir = "${artifactsDir}/${scanUUID}/${nodeShortName}/${benchmarkName}"
+                if (profileName) {
+                    benchmarkResultsDir = "${benchmarkResultsDir}/${profileName}"
+                }
 
                 // Attempt to upload the scanning results to the dashboard
                 if (UPLOAD_TO_DASHBOARD.toBoolean()) {
                     if (common.validInputParam('DASHBOARD_API_URL')) {
                         def cloudName = salt.getGrain(pepperEnv, minion, 'domain')['return'][0].values()[0].values()[0]
-                        def nodeResults = readFile "${localResultsDir}/${benchmarkPathWithoutExtension}/results.json"
                         try {
+                            def nodeResults = readFile "${benchmarkResultsDir}/results.json"
                             reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, reportType, reportId, nodeResults)
+                            common.infoMsg("Report ID is ${reportId}.")
                         } catch (Exception e) {
                             lastError = e
                         }
