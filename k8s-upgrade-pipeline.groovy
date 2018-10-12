@@ -12,6 +12,10 @@
  *   PER_NODE                   Target nodes will be managed one by one (bool)
  *   SIMPLE_UPGRADE             Use previous version of upgrade without conron/drain abilities
  *   UPGRADE_DOCKER             Upgrade docker component
+ *   CONFORMANCE_RUN_AFTER      Run Kubernetes conformance tests after update
+ *   CONFORMANCE_RUN_BEFORE     Run Kubernetes conformance tests before update
+ *   TEST_K8S_API_SERVER        Kubernetes API server address for test execution
+ *   ARTIFACTORY_URL            Artifactory URL where docker images located. Needed to correctly fetch conformance images.
  *
 **/
 def common = new com.mirantis.mk.Common()
@@ -114,12 +118,72 @@ def upgradeDocker(pepperEnv, target) {
     }
 }
 
+def runConformance(pepperEnv, target, k8s_api, image) {
+    def salt = new com.mirantis.mk.Salt()
+    def containerName = 'conformance_tests'
+    output_file = image.replaceAll('/', '-') + '.output'
+    def output_file_full_path = "/tmp/" + image.replaceAll('/', '-') + '.output'
+    def artifacts_dir = '_artifacts/'
+    salt.cmdRun(pepperEnv, target, "docker rm -f ${containerName}", false)
+    salt.cmdRun(pepperEnv, target, "docker run -d --name ${containerName} --net=host -e API_SERVER=${k8s_api} ${image}")
+    sleep(10)
+
+    print("Waiting for tests to run...")
+    salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', ["docker wait ${containerName}"], null, false)
+
+    print("Writing test results to output file...")
+    salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', ["docker logs -t ${containerName} > ${output_file_full_path}"])
+    print("Conformance test output saved in " + output_file_full_path)
+
+    // collect output
+    sh "mkdir -p ${artifacts_dir}"
+    file_content = salt.getFileContent(pepperEnv, target, '/tmp/' + output_file)
+    writeFile file: "${artifacts_dir}${output_file}", text: file_content
+    sh "cat ${artifacts_dir}${output_file}"
+    try {
+      sh "cat ${artifacts_dir}${output_file} | grep 'Test Suite Failed' && exit 1 || exit 0"
+    } catch (Throwable e) {
+      print("Conformance tests failed. Please check output")
+      currentBuild.result = "FAILURE"
+      currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
+      throw e
+    }
+}
+
+def buildImageURL(pepperEnv, target, mcp_repo) {
+    def salt = new com.mirantis.mk.Salt()
+    def raw_version = salt.cmdRun(pepperEnv, target, "kubectl version --short -o json")['return'][0].values()[0].replaceAll('Salt command execution success','')
+    print("Kubernetes version: " + raw_version)
+    def serialized_version = readJSON text: raw_version
+    def short_version = (serialized_version.serverVersion.gitVersion =~ /([v])(\d+\.)(\d+\.)(\d+\-)(\d+)/)[0][0]
+    print("Kubernetes short version: " + short_version)
+    def conformance_image = mcp_repo + "/mirantis/kubernetes/k8s-conformance:" + short_version
+    return conformance_image
+}
+
+def executeConformance(pepperEnv, target, k8s_api, mcp_repo) {
+    stage("Running conformance tests") {
+        def image = buildImageURL(pepperEnv, target, mcp_repo)
+        print("Using image: " + image)
+        runConformance(pepperEnv, target, k8s_api, image)
+    }
+}
+
+
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
 
             stage("Setup virtualenv for Pepper") {
                 python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            }
+
+            if (CONFORMANCE_RUN_BEFORE.toBoolean()) {
+                def target = CTL_TARGET
+                def mcp_repo = ARTIFACTORY_URL
+                def k8s_api = TEST_K8S_API_SERVER
+                firstTarget = salt.getFirstMinion(pepperEnv, target)
+                executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
             }
 
             if ((common.validInputParam('KUBERNETES_HYPERKUBE_IMAGE')) && (common.validInputParam('KUBERNETES_PAUSE_IMAGE'))) {
@@ -184,6 +248,14 @@ timeout(time: 12, unit: 'HOURS') {
                 } else {
                     performKubernetesComputeUpdate(pepperEnv, target)
                 }
+            }
+
+            if (CONFORMANCE_RUN_AFTER.toBoolean()) {
+                def target = CTL_TARGET
+                def mcp_repo = ARTIFACTORY_URL
+                def k8s_api = TEST_K8S_API_SERVER
+                firstTarget = salt.getFirstMinion(pepperEnv, target)
+                executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
             }
         } catch (Throwable e) {
             // If there was an error or exception thrown, the build failed
