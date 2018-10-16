@@ -179,6 +179,7 @@ node('python') {
         }
 
         def reportId
+        def lastError
         // Iterate oscap evaluation over the benchmarks
         for (benchmark in benchmarksAndProfilesArray) {
             def (benchmarkFilePath, profile) = benchmark.tokenize(',').collect({it.trim()})
@@ -224,7 +225,11 @@ node('python') {
                     if (common.validInputParam('DASHBOARD_API_URL')) {
                         def cloudName = salt.getGrain(pepperEnv, minion, 'domain')['return'][0].values()[0].values()[0]
                         def nodeResults = readFile "${localResultsDir}/${benchmarkPathWithoutExtension}/results.json"
-                        reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, reportType, reportId, nodeResults)
+                        try {
+                            reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, reportType, reportId, nodeResults)
+                        } catch (Exception e) {
+                            lastError = e
+                        }
                     } else {
                         throw new Exception('Uploading to the dashboard is enabled but the DASHBOARD_API_URL was not set')
                     }
@@ -237,6 +242,10 @@ node('python') {
 
         // Archive the build output artifacts
         archiveArtifacts artifacts: "*.xz"
+        if (lastError) {
+            common.infoMsg('Uploading some results to the dashboard report ${reportId} failed. Raising last error.')
+            throw lastError
+        }
     }
 
 /*  // Will be implemented later
