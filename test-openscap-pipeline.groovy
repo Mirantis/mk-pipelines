@@ -161,40 +161,44 @@ node('python') {
         }
 
         def reportId
-        for (minion in liveMinions) {
+        // Iterate oscap evaluation over the benchmarks
+        for (benchmark in benchmarksAndProfilesArray) {
+            def (benchmarkFilePath, profile) = benchmark.tokenize(',').collect({it.trim()})
 
-            // Iterate oscap evaluation over the benchmarks
-            for (benchmark in benchmarksAndProfilesArray) {
-                def (benchmarkFilePath, profile) = benchmark.tokenize(',').collect({it.trim()})
+            // Remove extension from the benchmark name
+            def benchmarkPathWithoutExtension = benchmarkFilePath.replaceFirst('[.][^.]+$', '')
 
-                // Remove extension from the benchmark name
-                def benchmarkPathWithoutExtension = benchmarkFilePath.replaceFirst('[.][^.]+$', '')
+            // Get benchmark name
+            def benchmarkName = benchmarkPathWithoutExtension.tokenize('/')[-1]
 
-                // Get benchmark name
-                def benchmarkName = benchmarkPathWithoutExtension.tokenize('/')[-1]
+            // And build resultsDir based on this path
+            def resultsDir = "${resultsBaseDir}/${benchmarkPathWithoutExtension}"
 
-                // And build resultsDir based on this path
-                def resultsDir = "${resultsBaseDir}/${benchmarkPathWithoutExtension}"
+            def benchmarkFile = "${benchmarksDir}${benchmarkFilePath}"
 
-                def benchmarkFile = "${benchmarksDir}${benchmarkFilePath}"
+            // Evaluate the benchmark on all minions at once
+            salt.runSaltProcessStep(pepperEnv, targetServers, 'oscap.eval', [
+                'xccdf', benchmarkFile, "results_dir=${resultsDir}",
+                "profile=${profile}", "xccdf_version=${xccdfVersion}",
+                "tailoring_id=${xccdfTailoringId}"
+            ])
+
+            // fetch, store and publish results one by one
+            for (minion in liveMinions) {
 
                 def nodeShortName = minion.tokenize('.')[0]
-
                 def archiveName = "${scanUUID}_${nodeShortName}_${benchmarkName}.tar"
+                def localResultsDir = "${artifactsDir}/${scanUUID}/${nodeShortName}"
 
-                // Evaluate the benchmark
-                salt.runSaltProcessStep(pepperEnv, minion, 'oscap.eval', [
-                    'xccdf', benchmarkFile, "results_dir=${resultsDir}",
-                    "profile=${profile}", "xccdf_version=${xccdfVersion}",
-                    "tailoring_id=${xccdfTailoringId}"
-                ])
-
+                // TODO(pas-ha) when using Salt >= 2017.7.0, use file.read(path) module
+                // also investigate compressing to gz/xz and reading with binary=True (for less traffic)
                 salt.cmdRun(pepperEnv, minion, "tar -cf /tmp/${archiveName} -C ${resultsBaseDir} .")
-                fileContents = salt.cmdRun(pepperEnv, minion, "cat /tmp/${archiveName}", true, null, false)['return'][0].values()[0].replaceAll('Salt command execution success', '')
+                // NOTE(pas-ha) salt.getFileContent does not pass extra args to cmdRun that we need
+                fileContents = salt.getFileContent(pepperEnv, minion, "/tmp/${archiveName}", true, null, false)
 
-                sh "mkdir -p ${artifactsDir}/${scanUUID}/${nodeShortName}"
+                sh "mkdir -p ${localResultsDir}"
                 writeFile file: "${archiveName}", text: fileContents
-                sh "tar --strip-components 1 -xf ${archiveName} --directory ${artifactsDir}/${scanUUID}/${nodeShortName}; rm -f ${archiveName}"
+                sh "tar --strip-components 1 -xf ${archiveName} --directory ${localResultsDir}; rm -f ${archiveName}"
 
                 // Remove archive which is not needed anymore
                 salt.runSaltProcessStep(pepperEnv, minion, 'file.remove', "/tmp/${archiveName}")
@@ -203,7 +207,8 @@ node('python') {
                 if (UPLOAD_TO_DASHBOARD.toBoolean()) {
                     if (common.validInputParam('DASHBOARD_API_URL')) {
                         def cloudName = salt.getGrain(pepperEnv, minion, 'domain')['return'][0].values()[0].values()[0]
-                        reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, "openscap", reportId, salt.getFileContent(pepperEnv, minion, "${resultsDir}/results.json"))
+                        def nodeResults = readFile "${localResultsDir}/${benchmarkPathWithoutExtension}/results.json"
+                        reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, "openscap", reportId, nodeResults)
                     } else {
                         throw new Exception('Uploading to the dashboard is enabled but the DASHBOARD_API_URL was not set')
                     }
