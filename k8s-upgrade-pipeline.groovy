@@ -95,6 +95,13 @@ def updateAddons(pepperEnv, target) {
 
     stage("Upgrading Addons at ${target}") {
         salt.enforceState(pepperEnv, target, "kubernetes.master.kube-addons")
+    }
+}
+
+def updateAddonManager(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Upgrading AddonManager at ${target}") {
         salt.enforceState(pepperEnv, target, "kubernetes.master.setup")
     }
 }
@@ -139,12 +146,18 @@ timeout(time: 12, unit: 'HOURS') {
                                 upgradeDocker(pepperEnv, t)
                             }
                             performKubernetesControlUpdate(pepperEnv, t)
-                            updateAddons(pepperEnv, t)
+                            updateAddonManager(pepperEnv, t)
                             uncordonNode(pepperEnv, t)
                         }
                     }
                 } else {
                     performKubernetesControlUpdate(pepperEnv, target)
+                }
+                if (!SIMPLE_UPGRADE.toBoolean()) {
+                    // Addons upgrade should be performed after all nodes will upgraded
+                    updateAddons(pepperEnv, target)
+                    // Wait for 90 sec for addons reconciling
+                    sleep(90)
                 }
             }
 
