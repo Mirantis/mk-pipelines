@@ -221,8 +221,13 @@ def globalVariatorsUpdate() {
     // Simple function, to check and define branch-around variables
     // In general, simply make transition updates for non-master branch
     // based on magic logic
-    def message = '<br/>'
+    def newline = '<br/>'
+    def messages = []
     if (env.GERRIT_PROJECT) {
+        messages.add("<font color='red'>GerritTrigger detected! We are in auto-mode:</font>")
+        messages.add("Test env variables has been changed:")
+        messages.add("COOKIECUTTER_TEMPLATE_BRANCH => ${gerritDataCC['gerritBranch']}")
+        messages.add("RECLASS_MODEL_BRANCH => ${gerritDataRS['gerritBranch']}")
         // TODO are we going to have such branches?
         if (!['nightly', 'testing', 'stable', 'proposed', 'master'].contains(env.GERRIT_BRANCH)) {
             gerritDataCC['gerritBranch'] = env.GERRIT_BRANCH
@@ -233,20 +238,16 @@ def globalVariatorsUpdate() {
         if (env.GERRIT_PROJECT == 'salt-models/reclass-system') {
             gerritDataRS['gerritRefSpec'] = env.GERRIT_REFSPEC
             gerritDataRS['GERRIT_CHANGE_NUMBER'] = env.GERRIT_CHANGE_NUMBER
-            message = message + "<br/>RECLASS_SYSTEM_GIT_REF =>${gerritDataRS['gerritRefSpec']}"
+            messages.add("RECLASS_SYSTEM_GIT_REF => ${gerritDataRS['gerritRefSpec']}")
         } else if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates') {
             gerritDataCC['gerritRefSpec'] = env.GERRIT_REFSPEC
             gerritDataCC['GERRIT_CHANGE_NUMBER'] = env.GERRIT_CHANGE_NUMBER
-            message = message + "<br/>COOKIECUTTER_TEMPLATE_REF =>${gerritDataCC['gerritRefSpec']}"
+            messages.add("COOKIECUTTER_TEMPLATE_REF => ${gerritDataCC['gerritRefSpec']}")
         } else {
             error("Unsuported gerrit-project triggered:${env.GERRIT_PROJECT}")
         }
-        message = "<font color='red'>GerritTrigger detected! We are in auto-mode:</font>" +
-            "<br/>Test env variables has been changed:" +
-            "<br/>COOKIECUTTER_TEMPLATE_BRANCH => ${gerritDataCC['gerritBranch']}" +
-            "<br/>RECLASS_MODEL_BRANCH=> ${gerritDataRS['gerritBranch']}" + message
     } else {
-        message = "<font color='red'>Non-gerrit trigger run detected!</font>" + message
+        messages.add("<font color='red'>Non-gerrit trigger run detected!</font>")
     }
     gerritDataCCHEAD << gerritDataCC
     gerritDataCCHEAD['gerritRefSpec'] = null
@@ -262,8 +263,9 @@ def globalVariatorsUpdate() {
     if (!common.checkRemoteBinary([apt_mk_version: testDistribRevision]).linux_system_repo_url) {
         common.errorMsg("Binary release: ${testDistribRevision} not exist. Fallback to 'proposed'! ")
         testDistribRevision = 'proposed'
-        message = "<br/>DISTRIB_REVISION =>${testDistribRevision}" + message
+        messages.add("DISTRIB_REVISION => ${testDistribRevision}")
     }
+    def message = messages.join(newline) + newline
     currentBuild.description = currentBuild.description ? message + currentBuild.description : message
 }
 
