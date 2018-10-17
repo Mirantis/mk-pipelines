@@ -26,7 +26,6 @@ validate = new com.mirantis.mcp.Validate()
 def saltMaster
 def artifacts_dir = 'validation_artifacts/'
 def remote_artifacts_dir = '/root/qa_results/'
-def container_name = "${env.JOB_NAME}"
 
 node() {
     try{
@@ -39,7 +38,7 @@ node() {
             if (!keystone_creds) {
                 keystone_creds = validate._get_keystone_creds_v2(saltMaster)
             }
-            validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, container_name, keystone_creds)
+            validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, 'cvp', keystone_creds)
             validate.configureContainer(saltMaster, TARGET_NODE, PROXY, TOOLS_REPO, TEMPEST_REPO, TEMPEST_ENDPOINT_TYPE)
         }
 
