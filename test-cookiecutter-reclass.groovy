@@ -295,25 +295,29 @@ def linkReclassModels(contextList, envPath, archiveName) {
     // tar.gz
     // ├── contexts
     // │   └── ceph.yml
-    // ├── ${reclassDirName} <<< reclass system
+    // ├── classes-system <<< reclass system
     // ├── model
     // │   └── ceph       <<< from `context basename`
     // │       ├── classes
     // │       │   ├── cluster
-    // │       │   └── system -> ../../../${reclassDirName}
+    // │       │   └── system -> ../../../classes-system
     // │       └── nodes
     // │           └── cfg01.ceph-cluster-domain.local.yml
+    def archiveBaseName = common.GetBaseName(archiveName, '.tar.gz')
+    def classesSystemDir = 'classes-system'
+    // copy reclass system under envPath with -R and trailing / to support symlinks direct copy
+    sh("cp -R ${archiveBaseName}/ ${envPath}/${classesSystemDir}")
     dir(envPath) {
         for (String context : contextList) {
             def basename = common.GetBaseName(context, '.yml')
-            dir("${envPath}/model/${basename}") {
-                sh(script: "mkdir -p classes/; ln -sfv ../../../../${common.GetBaseName(archiveName, '.tar.gz')} classes/system ")
+            dir("${envPath}/model/${basename}/classes") {
+                sh(script: "ln -sfv ../../../${classesSystemDir} system ")
             }
         }
         // replace all generated passwords/secrets/keys with hardcode value for infra/secrets.yaml
         replaceGeneratedValues("${envPath}/model")
         // Save all models and all contexts. Warning! `h` flag must be used!
-        sh(script: "set -ex; tar -czhf ${env.WORKSPACE}/${archiveName} --exclude='*@tmp' model contexts", returnStatus: true)
+        sh(script: "set -ex; tar -czhf ${env.WORKSPACE}/${archiveName} --exclude='*@tmp' contexts model ${classesSystemDir}", returnStatus: true)
     }
     archiveArtifacts artifacts: archiveName
 }
@@ -404,10 +408,12 @@ timeout(time: 1, unit: 'HOURS') {
             stage("Compare cluster lvl Head/Patched") {
                 // Compare patched and HEAD reclass pillars
                 compareRoot = "${env.WORKSPACE}/cluster_compare/"
+                // extract archive and drop all copied classes/system before comparing
                 sh(script: """
                    mkdir -pv ${compareRoot}/new ${compareRoot}/old
                    tar -xzf ${patchedReclassArtifactName}  --directory ${compareRoot}/new
                    tar -xzf ${headReclassArtifactName}  --directory ${compareRoot}/old
+                   find ${compareRoot} -name classes -type d -exec rm -rf '{}/system' \\;
                    """)
                 common.warningMsg('infra/secrets.yml has been skipped from compare!')
                 result = '\n' + common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml|\\.git\'")
