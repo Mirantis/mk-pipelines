@@ -25,9 +25,11 @@ def args
 def commandKwargs
 def probe = 1
 def errorOccured = false
-def command = 'cmd.run'
 
 def upgrade(master, target, service, pckg, state) {
+    def common = new com.mirantis.mk.Common()
+    def salt = new com.mirantis.mk.Salt()
+    def command = 'cmd.run'
     stage("Change ${target} repos") {
         salt.runSaltProcessStep(master, "${target}", 'saltutil.refresh_pillar', [], null, true, 5)
         salt.enforceState(master, "${target}", 'linux.system.repo', true)
@@ -42,22 +44,25 @@ def upgrade(master, target, service, pckg, state) {
             return
         }
     }
-    stage("Run ${state} on ${target}") {
+    stage("Run ${state} state on ${target} nodes") {
         try {
-            salt.enforceState(master, '${target}', '${state}')
+            salt.enforceState(master, "${target}", ["${state}"], true)
         } catch (Exception er) {
             errorOccured = true
-            common.errorMsg('${state} state was executed and failed. Please fix it manually.')
+            common.errorMsg("${state} state was executed and failed. Please fix it manually.")
         }
     }
-    out = salt.runSaltCommand(master, 'local', ['expression': '${target}', 'type': 'compound'], command, null, 'systemctl status ${service}.service', null)
+    out = salt.runSaltCommand(master, 'local', ['expression': "${target}", 'type': 'compound'], command, null, "systemctl status ${service}.service", null)
     salt.printSaltCommandResult(out)
 
-    common.warningMsg('Please check \'systemctl status ${service}.service\' on ${target} nodes if ${service} is running.')
+    common.warningMsg("Please check \'systemctl status ${service}.service\' on ${target} nodes if ${service} is running.")
     return
 }
 
 def upgrade_es_kibana(master) {
+    def common = new com.mirantis.mk.Common()
+    def salt = new com.mirantis.mk.Salt()
+    def command = 'cmd.run'
     stage('Elasticsearch upgrade') {
         try {
             salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl stop elasticsearch"], null, true)
@@ -76,6 +81,7 @@ def upgrade_es_kibana(master) {
             def retries_wait = 20
             def retries = 15
             def elasticsearch_vip
+            def pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host')
             if(!pillar['return'].isEmpty()) {
                 elasticsearch_vip = pillar['return'][0].values()[0]
             } else {
@@ -136,9 +142,10 @@ timeout(time: 12, unit: 'HOURS') {
             if (salt.testTarget(pepperEnv, "I@prometheus:exporters:jmx")) {
                 upgrade(pepperEnv, "I@prometheus:exporters:jmx", "jmx-exporter", "jmx-exporter", "prometheus")
             }
-            if (STAGE_UPGRADE_ES_KIBANA.toBoolean() == true && !errorOccured) {
-                upgrade_es_kibana(pepperEnv)
-            }
+        }
+
+        if (STAGE_UPGRADE_ES_KIBANA.toBoolean() == true && !errorOccured) {
+            upgrade_es_kibana(pepperEnv)
         }
 
         if (STAGE_UPGRADE_DOCKER_COMPONENTS.toBoolean() == true && !errorOccured) {
@@ -146,9 +153,9 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Docker components upgrade') {
 
                 try {
-                    salt.runSaltProcessStep(pepperEnv, 'I@docker:swarm:role:master and I@prometheus:server', command, ["docker stack rm monitoring"], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@docker:swarm:role:master and I@prometheus:server', 'cmd.run', ["docker stack rm monitoring"], null, true)
                     salt.enforceState(pepperEnv, 'I@docker:swarm and I@prometheus:server', 'prometheus')
-                    salt.runSaltProcessStep(pepperEnv, 'I@docker:swarm:role:master and I@prometheus:server', command, ["docker stack rm dashboard"], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@docker:swarm:role:master and I@prometheus:server', 'cmd.run', ["docker stack rm dashboard"], null, true)
                     salt.enforceState(pepperEnv, 'I@docker:swarm:role:master and I@prometheus:server', 'docker')
                     salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.sync_all', [], null, true)
                     salt.enforceState(pepperEnv, 'I@grafana:client', 'grafana.client')
