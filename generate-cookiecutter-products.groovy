@@ -29,8 +29,6 @@ timeout(time: 2, unit: 'HOURS') {
             def clusterDomain = templateContext.default_context.cluster_domain
             def clusterName = templateContext.default_context.cluster_name
             def saltMaster = templateContext.default_context.salt_master_hostname
-            def localRepositories = templateContext.default_context.local_repositories.toBoolean()
-            def offlineDeployment = templateContext.default_context.offline_deployment.toBoolean()
             def cutterEnv = "${env.WORKSPACE}/cutter"
             def jinjaEnv = "${env.WORKSPACE}/jinja"
             def outputDestination = "${modelEnv}/classes/cluster/${clusterName}"
@@ -99,63 +97,9 @@ timeout(time: 2, unit: 'HOURS') {
                 git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
             }
 
-            def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "oss", "stacklight", "ceph"]
-            for (product in productList) {
-
-                // get templateOutputDir and productDir
-                templateOutputDir = "${env.WORKSPACE}/output/${product}"
-                productDir = product
-                templateDir = "${templateEnv}/cluster_product/${productDir}"
-                // Bw for 2018.8.1 and older releases
-                if (product.startsWith("stacklight") && (!fileExists(templateDir))) {
-                    common.warningMsg("Old release detected! productDir => 'stacklight2' ")
-                    productDir = "stacklight2"
-                    templateDir = "${templateEnv}/cluster_product/${productDir}"
-                }
-
-                if (product == "infra" || (templateContext.default_context["${product}_enabled"]
-                    && templateContext.default_context["${product}_enabled"].toBoolean())) {
-
-                    common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
-
-                    sh "rm -rf ${templateOutputDir} || true"
-                    sh "mkdir -p ${templateOutputDir}"
-                    sh "mkdir -p ${outputDestination}"
-
-                    python.setupCookiecutterVirtualenv(cutterEnv)
-                    python.buildCookiecutterTemplate(templateDir, COOKIECUTTER_TEMPLATE_CONTEXT, templateOutputDir, cutterEnv, templateBaseDir)
-                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-                } else {
-                    common.warningMsg("Product " + product + " is disabled")
-                }
-            }
-
-            if (localRepositories && !offlineDeployment) {
-                def aptlyModelUrl = templateContext.default_context.local_model_url
-                dir(path: modelEnv) {
-                    ssh.agentSh "git submodule add \"${aptlyModelUrl}\" \"classes/cluster/${clusterName}/cicd/aptly\""
-                    if (!(mcpVersion in ["nightly", "testing", "stable"])) {
-                        ssh.agentSh "cd \"classes/cluster/${clusterName}/cicd/aptly\";git fetch --tags;git checkout ${mcpVersion}"
-                    }
-                }
-            }
-
-            stage('Generate new SaltMaster node') {
-                def nodeFile = "${modelEnv}/nodes/${saltMaster}.${clusterDomain}.yml"
-                def nodeString = """classes:
-- cluster.${clusterName}.infra.config
-parameters:
-  _param:
-    linux_system_codename: xenial
-    reclass_data_revision: master
-  linux:
-    system:
-      name: ${saltMaster}
-      domain: ${clusterDomain}
-    """
-                sh "mkdir -p ${modelEnv}/nodes/"
-                writeFile(file: nodeFile, text: nodeString)
-
+            stage('Generate model') {
+                python.setupCookiecutterVirtualenv(cutterEnv)
+                python.generateModel(COOKIECUTTER_TEMPLATE_CONTEXT, 'default_context', saltMaster, cutterEnv, modelEnv, templateEnv, false)
                 git.commitGitChanges(modelEnv, "Create model ${clusterName}", "${user}@localhost", "${user}")
             }
 

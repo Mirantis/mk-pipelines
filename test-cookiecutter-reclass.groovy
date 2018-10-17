@@ -59,79 +59,6 @@ testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
 chunkJobName = "test-mk-cookiecutter-templates-chunk"
 testModelBuildsData = [:]
 
-def generateSaltMaster(modEnv, clusterDomain, clusterName) {
-    def nodeFile = "${modEnv}/nodes/cfg01.${clusterDomain}.yml"
-    def nodeString = """classes:
-- cluster.${clusterName}.infra.config
-parameters:
-    _param:
-        linux_system_codename: xenial
-        reclass_data_revision: master
-    linux:
-        system:
-            name: cfg01
-            domain: ${clusterDomain}
-"""
-    sh "mkdir -p ${modEnv}/nodes/"
-    println "Create file ${nodeFile}"
-    writeFile(file: nodeFile, text: nodeString)
-}
-
-/**
- *
- * @param contextFile - path to `contexts/XXX.yaml file`
- * @param virtualenv - pyvenv with CC and dep's
- * @param templateEnvDir - root of CookieCutter
- * @return
- */
-
-def generateModel(contextFile, virtualenv, templateEnvDir) {
-    def modelEnv = "${templateEnvDir}/model"
-    def basename = common.GetBaseName(contextFile, '.yml')
-    def generatedModel = "${modelEnv}/${basename}"
-    def content = readFile(file: "${templateEnvDir}/contexts/${contextFile}")
-    def templateContext = readYaml text: content
-    def clusterDomain = templateContext.default_context.cluster_domain
-    def clusterName = templateContext.default_context.cluster_name
-    def outputDestination = "${generatedModel}/classes/cluster/${clusterName}"
-    def templateBaseDir = templateEnvDir
-    def templateDir = "${templateEnvDir}/dir"
-    def templateOutputDir = templateBaseDir
-    dir(templateEnvDir) {
-        sh(script: "rm -rf ${generatedModel} || true")
-        common.infoMsg("Generating model from context ${contextFile}")
-        def productList = ["infra", "cicd", "opencontrail", "kubernetes", "openstack", "oss", "stacklight", "ceph"]
-        for (product in productList) {
-
-            // get templateOutputDir and productDir
-            templateOutputDir = "${templateEnvDir}/output/${product}"
-            productDir = product
-            templateDir = "${templateEnvDir}/cluster_product/${productDir}"
-            // Bw for 2018.8.1 and older releases
-            if (product.startsWith("stacklight") && (!fileExists(templateDir))) {
-                common.warningMsg("Old release detected! productDir => 'stacklight2' ")
-                productDir = "stacklight2"
-                templateDir = "${templateEnvDir}/cluster_product/${productDir}"
-            }
-            if (product == "infra" || (templateContext.default_context["${product}_enabled"]
-                && templateContext.default_context["${product}_enabled"].toBoolean())) {
-
-                common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
-
-                sh "rm -rf ${templateOutputDir} || true"
-                sh "mkdir -p ${templateOutputDir}"
-                sh "mkdir -p ${outputDestination}"
-
-                python.buildCookiecutterTemplate(templateDir, content, templateOutputDir, virtualenv, templateBaseDir)
-                sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-            } else {
-                common.warningMsg("Product " + product + " is disabled")
-            }
-        }
-        generateSaltMaster(generatedModel, clusterDomain, clusterName)
-    }
-}
-
 def getAndUnpackNodesInfoArtifact(jobName, copyTo, build) {
     return {
         dir(copyTo) {
@@ -212,7 +139,9 @@ def StepPrepareGit(templateEnvFolder, gerrit_data) {
 def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
     return {
         for (contextFile in _contextFileList) {
-            generateModel(contextFile, _virtualenv, _templateEnvDir)
+            def basename = common.GetBaseName(contextFile, '.yml')
+            def context = readFile(file: "${_templateEnvDir}/contexts/${contextFile}")
+            python.generateModel(context, basename, 'cfg01', _virtualenv, "${_templateEnvDir}/model", _templateEnvDir)
         }
     }
 }
