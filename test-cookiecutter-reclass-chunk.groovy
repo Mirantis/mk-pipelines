@@ -34,9 +34,6 @@ timeout(time: 1, unit: 'HOURS') {
                     'dockerContainerName': extraVars.DockerCName,
                     'testContext': extraVars.modelFile
                 ]
-                if (extraVars.useExtraRepos) {
-                    config['extraReposYaml'] = extraVars.extraReposYaml
-                }
                 saltModelTesting.testNode(config)
             } catch (Throwable e) {
                 // If there was an error or exception thrown, the build failed
