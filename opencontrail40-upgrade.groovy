@@ -63,6 +63,15 @@ timeout(time: 12, unit: 'HOURS') {
 
         if (STAGE_CONTROLLERS_UPGRADE.toBoolean() == true) {
 
+            stage('Opencontrail controllers health check') {
+                try {
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'opencontrail.upgrade.verify', true, true)
+                } catch (Exception er) {
+                    common.errorMsg("Opencontrail controllers health check stage found issues with services. Please take a look at the logs above.")
+                    throw er
+                }
+            }
+
             stage('Opencontrail controllers upgrade') {
                 try {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server', 'saltutil.refresh_pillar', [], null, true)
@@ -198,6 +207,15 @@ timeout(time: 12, unit: 'HOURS') {
                     targetLiveAll = minions.join(' or ')
                     common.infoMsg("Found nodes: ${targetLiveAll}")
                     common.infoMsg("Selected sample nodes: ${targetLiveSubset}")
+                }
+
+                stage('Compute nodes health check') {
+                    try {
+                        salt.enforceState(pepperEnv, targetLiveAll, 'opencontrail.upgrade.verify', true, true)
+                    } catch (Exception er) {
+                        common.errorMsg("Opencontrail compute nodes health check stage found issues with services. Please take a look at the logs above.")
+                        throw er
+                    }
                 }
 
                 stage('Confirm upgrade on sample nodes') {
