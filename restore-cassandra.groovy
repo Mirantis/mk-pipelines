@@ -19,6 +19,19 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
+        stage('Opencontrail controllers health check') {
+            try {
+                salt.enforceState(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'opencontrail.upgrade.verify', true, true)
+            } catch (Exception er) {
+                common.errorMsg("Opencontrail controllers health check stage found issues with services. Please take a look at the logs above.")
+                throw er
+            }
+        }
+
+        stage('Backup') {
+            salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', 'bash /usr/local/bin/cassandra-backup-runner-call.sh')
+        }
+
         stage('Restore') {
             // get opencontrail version
             def _pillar = salt.getPillar(pepperEnv, "I@opencontrail:control", '_param:opencontrail_version')
@@ -55,11 +68,9 @@ timeout(time: 12, unit: 'HOURS') {
                 // the lovely wait-60-seconds mantra before restarting supervisor-database service
                 sleep(60)
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "doctrail controller systemctl restart contrail-database")
-                // another mantra
+                // another mantra, wait till all services are up
                 sleep(60)
-                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "doctrail controller contrail-status")
-            }
-            else {
+            } else {
                 try {
                     salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'], null, true)
                 } catch (Exception er) {
@@ -123,6 +134,13 @@ timeout(time: 12, unit: 'HOURS') {
 
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "nodetool status")
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "contrail-status")
+            }
+        }
+
+        stage('Opencontrail controllers health check') {
+            common.retry(3, 20){
+                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "doctrail controller contrail-status")
+                salt.enforceState(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'opencontrail.upgrade.verify', true, true)
             }
         }
     }
