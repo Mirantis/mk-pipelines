@@ -44,7 +44,7 @@ timeout(time: 12, unit: 'HOURS') {
                 if (!keystone_creds) {
                     keystone_creds = validate._get_keystone_creds_v2(saltMaster)
                 }
-                validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, 'cvp', keystone_creds)
+                validate.runContainer(saltMaster, TEMPEST_TARGET_NODE, TEST_IMAGE, 'cvp', keystone_creds)
                 validate.configureContainer(saltMaster, TEMPEST_TARGET_NODE, PROXY, TOOLS_REPO, TEMPEST_REPO)
             }
 
