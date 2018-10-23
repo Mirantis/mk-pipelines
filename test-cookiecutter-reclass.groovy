@@ -55,6 +55,7 @@ gerritDataRS['gerritProject'] = 'salt-models/reclass-system'
 
 // version of debRepos, aka formulas|reclass|ubuntu
 testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
+
 // Name of sub-test chunk job
 chunkJobName = "test-mk-cookiecutter-templates-chunk"
 testModelBuildsData = [:]
@@ -69,18 +70,20 @@ def getAndUnpackNodesInfoArtifact(jobName, copyTo, build) {
     }
 }
 
-def testModel(modelFile, reclassArtifactName, artifactCopyPath) {
+def testModel(modelFile, reclassArtifactName, artifactCopyPath, useExtraRepos = false) {
     // modelFile - `modelfiname` from model/modelfiname/modelfiname.yaml
     //* Grub all models and send it to check in paralell - by one in thread.
     def _uuid = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}_${modelFile.toLowerCase()}_" + UUID.randomUUID().toString().take(8)
     def _values_string = """
-  ---
-  MODELS_TARGZ: "${env.BUILD_URL}/artifact/${reclassArtifactName}"
-  DockerCName: "${_uuid}"
-  testReclassEnv: "model/${modelFile}/"
-  modelFile: "contexts/${modelFile}.yml"
-  DISTRIB_REVISION: "${testDistribRevision}"
-  """
+---
+MODELS_TARGZ: "${env.BUILD_URL}/artifact/${reclassArtifactName}"
+DockerCName: "${_uuid}"
+testReclassEnv: "model/${modelFile}/"
+modelFile: "contexts/${modelFile}.yml"
+DISTRIB_REVISION: "${testDistribRevision}"
+useExtraRepos: ${useExtraRepos}
+${extraVarsYAML.replaceAll('---', '')}
+"""
     def chunkJob = build job: chunkJobName, parameters: [
         [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML',
          value : _values_string.stripIndent()],
@@ -91,7 +94,7 @@ def testModel(modelFile, reclassArtifactName, artifactCopyPath) {
                                     'buildId'  : "${chunkJob.number}"])
 }
 
-def StepTestModel(basename, reclassArtifactName, artifactCopyPath) {
+def StepTestModel(basename, reclassArtifactName, artifactCopyPath, useExtraRepos = false) {
     // We need to wrap what we return in a Groovy closure, or else it's invoked
     // when this method is called, not when we pass it to parallel.
     // To do this, you need to wrap the code below in { }, and either return
@@ -99,7 +102,7 @@ def StepTestModel(basename, reclassArtifactName, artifactCopyPath) {
     // return node object
     return {
         node(slaveNode) {
-            testModel(basename, reclassArtifactName, artifactCopyPath)
+            testModel(basename, reclassArtifactName, artifactCopyPath, useExtraRepos)
         }
     }
 }
@@ -359,7 +362,7 @@ timeout(time: 1, unit: 'HOURS') {
                 common.infoMsg("Found: ${contextFileListPatched.size()} patched contexts to test.")
                 for (String context : contextFileListPatched) {
                     def basename = common.GetBaseName(context, '.yml')
-                    stepsForParallel.put("ContextPatchedTest:${basename}", StepTestModel(basename, patchedReclassArtifactName, reclassInfoPatchedPath))
+                    stepsForParallel.put("ContextPatchedTest:${basename}", StepTestModel(basename, patchedReclassArtifactName, reclassInfoPatchedPath, true))
                 }
                 parallel stepsForParallel
                 common.infoMsg('All TestContexts tests done')
