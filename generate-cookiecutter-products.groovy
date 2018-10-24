@@ -4,7 +4,7 @@
  * Expected parameters:
  *   COOKIECUTTER_TEMPLATE_CONTEXT      Context parameters for the template generation.
  *   EMAIL_ADDRESS                      Email to send a created tar file
- *
+ *   CREDENTIALS_ID                     Credentials id for git
  **/
 
 common = new com.mirantis.mk.Common()
@@ -14,6 +14,7 @@ saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 ssh = new com.mirantis.mk.Ssh()
 
 slaveNode = env.SLAVE_NODE ?: 'python&&docker'
+gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
 
 timeout(time: 2, unit: 'HOURS') {
     node(slaveNode) {
@@ -42,7 +43,6 @@ timeout(time: 2, unit: 'HOURS') {
             wrap([$class: 'BuildUser']) {
                 user = env.BUILD_USER_ID
             }
-
             currentBuild.description = clusterName
             print("Using context:\n" + COOKIECUTTER_TEMPLATE_CONTEXT)
 
@@ -50,11 +50,13 @@ timeout(time: 2, unit: 'HOURS') {
                 sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
                 def cookiecutterTemplateUrl = templateContext.default_context.cookiecutter_template_url
                 def cookiecutterTemplateBranch = templateContext.default_context.cookiecutter_template_branch
-                git.checkoutGitRepository(templateEnv, cookiecutterTemplateUrl, 'master')
+                git.checkoutGitRepository(templateEnv, cookiecutterTemplateUrl, 'master', gerritCredentials)
                 // Use refspec if exists first of all
                 if (cookiecutterTemplateBranch.toString().startsWith('refs/')) {
                     dir(templateEnv) {
-                        ssh.agentSh("git fetch ${cookiecutterTemplateUrl} ${cookiecutterTemplateBranch} && git checkout FETCH_HEAD")
+                        withCredentials(gerritCredentials){
+                            ssh.agentSh("git fetch ${cookiecutterTemplateUrl} ${cookiecutterTemplateBranch} && git checkout FETCH_HEAD")
+                        }
                     }
                 } else {
                     // Use mcpVersion git tag if not specified branch for cookiecutter-templates
