@@ -11,7 +11,6 @@ common = new com.mirantis.mk.Common()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
-ssh = new com.mirantis.mk.Ssh()
 
 slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
@@ -50,52 +49,48 @@ timeout(time: 2, unit: 'HOURS') {
                 sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
                 def cookiecutterTemplateUrl = templateContext.default_context.cookiecutter_template_url
                 def cookiecutterTemplateBranch = templateContext.default_context.cookiecutter_template_branch
-                git.checkoutGitRepository(templateEnv, cookiecutterTemplateUrl, 'master', gerritCredentials)
-                // Use refspec if exists first of all
-                if (cookiecutterTemplateBranch.toString().startsWith('refs/')) {
-                    dir(templateEnv) {
-                        withCredentials(gerritCredentials){
-                            ssh.agentSh("git fetch ${cookiecutterTemplateUrl} ${cookiecutterTemplateBranch} && git checkout FETCH_HEAD")
-                        }
+                // Use mcpVersion git tag if not specified branch for cookiecutter-templates
+                if (cookiecutterTemplateBranch == '') {
+                    cookiecutterTemplateBranch = mcpVersion
+                    // Don't have nightly/testing/stable for cookiecutter-templates repo, therefore use master
+                    if (["nightly", "testing", "stable"].contains(mcpVersion)) {
+                        cookiecutterTemplateBranch = 'master'
                     }
-                } else {
-                    // Use mcpVersion git tag if not specified branch for cookiecutter-templates
-                    if (cookiecutterTemplateBranch == '') {
-                        cookiecutterTemplateBranch = mcpVersion
-                        // Don't have nightly/testing/stable for cookiecutter-templates repo, therefore use master
-                        if (["nightly", "testing", "stable"].contains(mcpVersion)) {
-                            cookiecutterTemplateBranch = 'master'
-                        }
-                    }
-                    git.changeGitBranch(templateEnv, cookiecutterTemplateBranch)
                 }
+                checkout([
+                    $class           : 'GitSCM',
+                    branches         : [[name: 'FETCH_HEAD'],],
+                    extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: templateEnv]],
+                    userRemoteConfigs: [[url: cookiecutterTemplateUrl, refspec: cookiecutterTemplateBranch, credentialsId: gerritCredentials],],
+                ])
             }
-
             stage('Create empty reclass model') {
                 dir(path: modelEnv) {
                     sh "rm -rfv .git"
                     sh "git init"
-                    ssh.agentSh("git submodule add ${sharedReclassUrl} 'classes/system'")
+                    if (sharedReclassUrl.startsWith("ssh")){
+                      error("You can't use ssh proto to fetch reclass-system. Please use https protocol")
+                    } else {
+                      sh "git submodule add ${sharedReclassUrl} 'classes/system'"
+                    }
                 }
 
                 def sharedReclassBranch = templateContext.default_context.shared_reclass_branch
-                // Use refspec if exists first of all
-                if (sharedReclassBranch.toString().startsWith('refs/')) {
-                    dir(systemEnv) {
-                        ssh.agentSh("git fetch ${sharedReclassUrl} ${sharedReclassBranch} && git checkout FETCH_HEAD")
+                // Use mcpVersion git tag if not specified branch for reclass-system
+                if (sharedReclassBranch == '') {
+                    sharedReclassBranch = mcpVersion
+                    // Don't have nightly/testing for reclass-system repo, therefore use master
+                    if (["nightly", "testing", "stable"].contains(mcpVersion)) {
+                        common.warningMsg("Fetching reclass-system from master!")
+                        sharedReclassBranch = 'master'
                     }
-                } else {
-                    // Use mcpVersion git tag if not specified branch for reclass-system
-                    if (sharedReclassBranch == '') {
-                        sharedReclassBranch = mcpVersion
-                        // Don't have nightly/testing for reclass-system repo, therefore use master
-                        if (["nightly", "testing", "stable"].contains(mcpVersion)) {
-                            common.warningMsg("Fetching reclass-system from master!")
-                            sharedReclassBranch = 'master'
-                        }
-                    }
-                    git.changeGitBranch(systemEnv, sharedReclassBranch)
                 }
+                checkout([
+                    $class           : 'GitSCM',
+                    branches         : [[name: 'FETCH_HEAD'],],
+                    extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: systemEnv]],
+                    userRemoteConfigs: [[url: sharedReclassUrl, refspec: sharedReclassBranch, credentialsId: gerritCredentials],],
+                ])
                 git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
             }
 
@@ -154,13 +149,12 @@ timeout(time: 2, unit: 'HOURS') {
                         mcpCommonScriptsBranch = 'master'
                     }
                 }
-
-                def commonScriptsRepoUrl = 'https://gerrit.mcp.mirantis.com/mcp/mcp-common-scripts'
+                def commonScriptsRepoUrl = 'ssh://gerrit.mcp.mirantis.com:29418/mcp/mcp-common-scripts'
                 checkout([
                     $class           : 'GitSCM',
                     branches         : [[name: 'FETCH_HEAD'],],
                     extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'mcp-common-scripts']],
-                    userRemoteConfigs: [[url: commonScriptsRepoUrl, refspec: mcpCommonScriptsBranch],],
+                    userRemoteConfigs: [[url: commonScriptsRepoUrl, refspec: mcpCommonScriptsBranch, credentialsId: gerritCredentials],],
                 ])
 
                 sh "cp mcp-common-scripts/config-drive/create_config_drive.sh create-config-drive && chmod +x create-config-drive"
