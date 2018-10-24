@@ -49,7 +49,7 @@ gerritDataCC['gerritProject'] = 'mk/cookiecutter-templates'
 gerritDataRSHEAD = [:]
 gerritDataRS = [:]
 gerritDataRS << gerritConData
-gerritDataRS['gerritBranch'] = env.RECLASS_MODEL_BRANCH ?: 'master'
+gerritDataRS['gerritBranch'] = env.RECLASS_SYSTEM_BRANCH ?: 'master'
 gerritDataRS['gerritRefSpec'] = env.RECLASS_SYSTEM_GIT_REF ?: null
 gerritDataRS['gerritProject'] = 'salt-models/reclass-system'
 
