@@ -35,7 +35,7 @@ def updateSaltStack(target, pkgs){
         salt.runSaltProcessStep(venvPepper, target, 'pkg.install', ["force_yes=True", "pkgs='$pkgs'"], null, true, 5)
     }catch(Exception ex){}
 
-    common.retry(10, 30){
+    common.retry(20, 60){
         salt.minionsReachable(venvPepper, 'I@salt:master', '*')
         def running = salt.runSaltProcessStep(venvPepper, target, 'saltutil.running', [], null, true, 5)
         for(value in running.get("return")[0].values()){
@@ -95,8 +95,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     def dateTime = common.getDatetime()
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs sed -i 's/apt_mk_version: .*/apt_mk_version: \"$MCP_VERSION\"/g'")
                     common.infoMsg("The following changes were made to the cluster model and will be commited. Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
-                    salt.cmdRun(venvPepper, 'I@salt.master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git status && git add -u && git commit -m 'Cluster model update to the release $MCP_VERSION on $dateTime'")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git status && git add -u && git commit --allow-empty -m 'Cluster model update to the release $MCP_VERSION on $dateTime'")
                 }
 
                 try{
@@ -106,13 +106,19 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     error("You have unstaged changes in your Reclass system model repository. Please reset them and rerun the pipeline.")
                 }
                 salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $gitMcpVersion")
+                // Add new defaults
+                common.infoMsg("Add new defaults")
+                salt.cmdRun(venvPepper, 'I@salt:master', "grep '^- system.defaults\$'  /srv/salt/reclass/classes/cluster/*/infra/init.yml || " +
+                "sed -i 's/^classes:/classes:\\n- system.defaults/' /srv/salt/reclass/classes/cluster/*/infra/init.yml")
+                salt.enforceState(venvPepper, 'I@salt:master', 'reclass.storage', true)
             }
 
             if(UPDATE_LOCAL_REPOS.toBoolean()){
+                def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_name").get("return")[0].values()[0]
                 stage("Update local repos"){
                     common.infoMsg("Updating local repositories")
 
-                    def engine = salt.getPillar(venvPepper, 'I@aptly:server', "aptly:server:source:engine")
+                    def engine = salt.getPillar(venvPepper, 'I@aptly:publisher', "aptly:publisher:source:engine")
                     runningOnDocker = engine.get("return")[0].containsValue("docker")
 
                     if (runningOnDocker) {
@@ -122,39 +128,41 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         common.infoMsg("Aptly isn't running as Docker container. Going to use aptly user for executing aptly commands")
                     }
 
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name/cicd/aptly && git checkout $MCP_VERSION")
-
                     if(runningOnDocker){
-                        salt.cmdRun(venvPepper, 'I@aptly:server', "aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", true, null, true)
+                        salt.cmdRun(venvPepper, 'I@aptly:publisher', "aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", true, null, true)
                     }
                     else{
-                       salt.cmdRun(venvPepper, 'I@aptly:server', "aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", true, null, true, ['runas=aptly'])
+                       salt.cmdRun(venvPepper, 'I@aptly:publisher', "aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", true, null, true, ['runas=aptly'])
                     }
 
-                    salt.enforceState(venvPepper, 'I@aptly:server', 'aptly', true)
+                    salt.enforceState(venvPepper, 'I@aptly:publisher', 'aptly', true)
 
                     if(runningOnDocker){
-                        salt.runSaltProcessStep(venvPepper, 'I@aptly:server', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv"], null, true)
-                        salt.runSaltProcessStep(venvPepper, 'I@aptly:server', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-frv -u http://10.99.0.1:8080"], null, true)
+                        salt.runSaltProcessStep(venvPepper, 'I@aptly:publisher', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv"], null, true)
+                        salt.runSaltProcessStep(venvPepper, 'I@aptly:publisher', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-frv -u http://10.99.0.1:8080"], null, true)
                     }
                     else{
-                        salt.runSaltProcessStep(venvPepper, 'I@aptly:server', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", 'runas=aptly'], null, true)
-                        salt.runSaltProcessStep(venvPepper, 'I@aptly:server', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-afrv", 'runas=aptly'], null, true)
+                        salt.runSaltProcessStep(venvPepper, 'I@aptly:publisher', 'cmd.script', ['salt://aptly/files/aptly_mirror_update.sh', "args=-sv", 'runas=aptly'], null, true)
+                        salt.runSaltProcessStep(venvPepper, 'I@aptly:publisher', 'cmd.script', ['salt://aptly/files/aptly_publish_update.sh', "args=-afrv", 'runas=aptly'], null, true)
                     }
 
-                    salt.enforceState(venvPepper, 'I@aptly:server', 'docker.client.registry', true)
+                    salt.enforceState(venvPepper, 'I@aptly:publisher', 'docker.client.registry', true)
 
-                    salt.enforceState(venvPepper, 'I@aptly:server', 'debmirror', true)
+                    salt.enforceState(venvPepper, 'I@aptly:publisher', 'debmirror', true)
 
-                    salt.enforceState(venvPepper, 'I@aptly:server', 'git.server', true)
+                    salt.enforceState(venvPepper, 'I@aptly:publisher', 'git.server', true)
 
-                    salt.enforceState(venvPepper, 'I@aptly:server', 'linux.system.file', true)
+                    salt.enforceState(venvPepper, 'I@aptly:publisher', 'linux.system.file', true)
                 }
             }
 
             stage("Update Drivetrain"){
                 salt.cmdRun(venvPepper, 'I@salt:master', "sed -i -e 's/[^ ]*[^ ]/$MCP_VERSION/4' /etc/apt/sources.list.d/mcp_salt.list")
                 salt.cmdRun(venvPepper, 'I@salt:master', "apt-get -o Dir::Etc::sourcelist='/etc/apt/sources.list.d/mcp_salt.list' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0' update")
+                // Workaround for PROD-22108
+                salt.cmdRun(venvPepper, 'I@salt:master', "apt-get purge -y salt-formula-octavia && " +
+                "apt-get install -y salt-formula-octavia")
+                // End workaround for PROD-22108
                 salt.cmdRun(venvPepper, 'I@salt:master', "apt-get install -y --allow-downgrades salt-formula-*")
 
                 def inventoryBeforeFilename = "reclass-inventory-before.out"
