@@ -26,9 +26,9 @@ def probe = 1
 def command = 'cmd.shell'
 
 def controlPkgs = 'contrail-config,contrail-config-openstack,contrail-control,contrail-dns,contrail-lib,contrail-nodemgr,contrail-utils,contrail-web-controller,contrail-web-core,neutron-plugin-contrail,python-contrail,contrail-database'
-def thirdPartyControlPkgsToRemove = 'redis-server,ifmap-server,supervisor'
+def thirdPartyControlPkgsToRemove = 'zookeeper,libzookeeper-java,kafka,cassandra,redis-server,ifmap-server,supervisor'
 def analyticsPkgs = 'contrail-analytics,contrail-lib,contrail-nodemgr,contrail-utils,python-contrail,contrail-database'
-def thirdPartyAnalyticsPkgsToRemove = 'redis-server,supervisor'
+def thirdPartyAnalyticsPkgsToRemove = 'zookeeper,libzookeeper-java,kafka,cassandra,python-cassandra,cassandra-cpp-driver,redis-server,supervisor'
 //def cmpPkgs = ['contrail-lib', 'contrail-nodemgr', 'contrail-utils', 'contrail-vrouter-agent', 'contrail-vrouter-utils', 'python-contrail', 'python-contrail-vrouter-api', 'python-opencontrail-vrouter-netns', 'contrail-vrouter-dkms']
 def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
 def KERNEL_MODULE_RELOAD = 'service supervisor-vrouter stop; rmmod vrouter; sync && echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory; service contrail-vrouter-agent start; service contrail-vrouter-nodemgr start'
@@ -164,20 +164,44 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg("Opencontrail Controller failed to be upgraded.")
                     throw er
                 }
+            }
 
+            stage('Opencontrail controllers backup and cleanup') {
+                try {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'archive.tar', ['zcvf', '/root/contrail-database.tgz', '/var/lib/cassandra'])
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'archive.tar', ['zcvf', '/root/contrail-zookeeper.tgz', '/var/lib/zoopeeker'])
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'archive.tar', ['zcvf', '/root/contrail-analytics-database.tgz', '/var/lib/cassandra'])
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'archive.tar', ['zcvf', '/root/contrail-analytics-zookeeper.tgz', '/var/lib/zookeeper'])
+
+                    for (service in (controlServices + thirdPartyServicesToDisable)) {
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.disable', [service])
+                    }
+                    for (service in (analyticsServices + thirdPartyServicesToDisable)) {
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'service.disable', [service])
+                    }
+
+                    def tmpCfgBackupDir = '/tmp/cfg_backup'
+                    def thirdPartyCfgFilesToBackup = ['/var/lib/zookeeper/myid', '/etc/zookeeper/conf/', '/usr/share/kafka/config/']
+
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'file.makedirs', [tmpCfgBackupDir])
+
+                    for (cfgFilePath in thirdPartyCfgFilesToBackup) {
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'file.makedirs', [tmpCfgBackupDir + cfgFilePath])
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'file.copy', [cfgFilePath, tmpCfgBackupDir + cfgFilePath, 'recurse=True'])
+                    }
+
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'pkg.remove', [controlPkgs + ',' + thirdPartyControlPkgsToRemove])
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'pkg.remove', [analyticsPkgs + ',' + thirdPartyAnalyticsPkgsToRemove])
+
+                    for (cfgFilePath in thirdPartyCfgFilesToBackup) {
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'file.makedirs', [cfgFilePath])
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'file.copy', [tmpCfgBackupDir + cfgFilePath, cfgFilePath, 'recurse=True'])
+                    }
+                } catch (Exception er) {
+                    common.errorMsg("Opencontrail Controllers backup and cleanup stage has failed.")
+                    throw er
+                }
             }
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'archive.tar', ['zcvf', '/root/contrail-database.tgz', '/var/lib/cassandra'])
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'archive.tar', ['zcvf', '/root/contrail-zookeeper.tgz', '/var/lib/zoopeeker'])
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'archive.tar', ['zcvf', '/root/contrail-analytics-database.tgz', '/var/lib/cassandra'])
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'archive.tar', ['zcvf', '/root/contrail-analytics-zookeeper.tgz', '/var/lib/zookeeper'])
-            for (service in (controlServices + thirdPartyServicesToDisable)) {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.disable', [service])
-            }
-            for (service in (analyticsServices + thirdPartyServicesToDisable)) {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'service.disable', [service])
-            }
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'pkg.remove', [controlPkgs + ',' + thirdPartyControlPkgsToRemove])
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'pkg.remove', [analyticsPkgs + ',' + thirdPartyAnalyticsPkgsToRemove])
         }
 
 
