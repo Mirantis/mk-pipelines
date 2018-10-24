@@ -846,7 +846,7 @@ def verifyCephOsds(pepperEnv, target) {
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
-            if(RUN_CVP_TESTS.toBoolean() == True){
+            if(RUN_CVP_TESTS.toBoolean() == true){
                 stage('Run CVP tests before upgrade.') {
                     build job: "cvp-sanity"
                     build job: "cvp-func"
@@ -1581,7 +1581,7 @@ timeout(time: 12, unit: 'HOURS') {
                 // verification is already present in restore pipelines
             }
 
-            if(RUN_CVP_TESTS.toBoolean() == True){
+            if(RUN_CVP_TESTS.toBoolean() == true){
                 stage('Run CVP tests after upgrade.') {
                     build job: "cvp-sanity"
                     build job: "cvp-func"
