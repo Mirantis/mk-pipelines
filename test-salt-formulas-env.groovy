@@ -64,8 +64,8 @@ throttle(['test-formula']) {
               common.infoMsg("Running part of kitchen test")
               if (KITCHEN_ENV != null && !KITCHEN_ENV.isEmpty() && KITCHEN_ENV != "") {
                 def cleanEnv = KITCHEN_ENV.replaceAll("\\s?SUITE=[^\\s]*", "")
-                sh("find . -type f -exec sed -i 's/apt.mirantis.com/apt.mirantis.net:8085/g' {} \\;")
-                sh("find . -type f -exec sed -i 's/apt-mk.mirantis.com/apt.mirantis.net:8085/g' {} \\;")
+                sh("find . -type f -exec sed -i 's/apt.mirantis.com/apt.mcp.mirantis.net/g' {} \\;")
+                sh("find . -type f -exec sed -i 's/apt-mk.mirantis.com/apt.mcp.mirantis.net/g' {} \\;")
                 def suite = ruby.getSuiteName(KITCHEN_ENV)
                 if (suite && suite != "") {
                   common.infoMsg("Running kitchen test with environment:" + KITCHEN_ENV.trim())
