@@ -77,9 +77,9 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 try {
-                    controllerImage = salt.getPillar(pepperEnv, "I@opencontrail:control and *01*", "docker:client:compose:opencontrail_api:service:controller:image")
-                    analyticsImage = salt.getPillar(pepperEnv, "I@opencontrail:collector and *01*", "docker:client:compose:opencontrail_api:service:analytics:image")
-                    analyticsdbImage = salt.getPillar(pepperEnv, "I@opencontrail:collector and *01*", "docker:client:compose:opencontrail_api:service:analyticsdb:image")
+                    controllerImage = salt.getPillar(pepperEnv, "I@opencontrail:control:role:primary", "docker:client:compose:opencontrail_api:service:controller:image")
+                    analyticsImage = salt.getPillar(pepperEnv, "I@opencontrail:collector:role:primary", "docker:client:compose:opencontrail_api:service:analytics:image")
+                    analyticsdbImage = salt.getPillar(pepperEnv, "I@opencontrail:collector:role:primary", "docker:client:compose:opencontrail_api:service:analyticsdb:image")
                     salt.enforceState(pepperEnv, 'I@opencontrail:database', 'docker.host')
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'dockerng.pull', [controllerImage])
@@ -124,7 +124,7 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                     check = 'doctrail all contrail-status'
                     salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'docker.client')
-                    runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
+                    runCommonCommands('I@opencontrail:collector:role:primary', command, args, check, salt, pepperEnv, common)
                 } catch (Exception er) {
                     common.errorMsg("Opencontrail Analytics failed to be upgraded.")
                     throw er
@@ -143,20 +143,20 @@ timeout(time: 12, unit: 'HOURS') {
                     }
 
                     for (service in controlServices) {
-                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *0[23]*', 'service.stop', [service])
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:secondary', 'service.stop', [service])
                     }
 
-                    salt.enforceState(pepperEnv, 'I@opencontrail:control and *0[23]*', 'docker.client')
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control:role:secondary', 'docker.client')
 
-                    runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
+                    runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv, common)
 
                     sleep(120)
 
                     for (service in controlServices) {
-                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'service.stop', [service])
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'service.stop', [service])
                     }
 
-                    salt.enforceState(pepperEnv, 'I@opencontrail:control and *01*', 'docker.client')
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control:role:primary', 'docker.client')
 
                     salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.install', ['neutron-plugin-contrail,contrail-heat,python-contrail'])
                     salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'])
@@ -319,19 +319,19 @@ timeout(time: 12, unit: 'HOURS') {
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
 
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *0[23]*', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:secondary', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
                 for (service in config4Services) {
-                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ["doctrail controller systemctl stop ${service}"], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'cmd.shell', ["doctrail controller systemctl stop ${service}"], null, true)
                 }
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *0[23]*', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:secondary', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
 
                 check = 'contrail-status'
-                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 sleep(120)
 
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
                 for (service in (controlServices + thirdPartyServicesToDisable)) {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.enable', [service])
                 }
