@@ -85,31 +85,27 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
 
             stage("Update Reclass"){
                 def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_name").get("return")[0].values()[0]
-                if(UPDATE_CLUSTER_MODEL.toBoolean()){
-                    try{
-                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/ && git diff-index --quiet HEAD --")
-                    }
-                    catch(Exception ex){
-                        error("You have uncommited changes in your Reclass cluster model repository. Please commit or reset them and rerun the pipeline.")
-                    }
-                    def dateTime = common.getDatetime()
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs sed -i 's/apt_mk_version: .*/apt_mk_version: \"$MCP_VERSION\"/g'")
-                    common.infoMsg("The following changes were made to the cluster model and will be commited. Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git status && git add -u && git commit --allow-empty -m 'Cluster model update to the release $MCP_VERSION on $dateTime'")
-                }
-
                 try{
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git diff-index --quiet HEAD --")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/ && git diff-index --quiet HEAD --")
                 }
                 catch(Exception ex){
-                    error("You have unstaged changes in your Reclass system model repository. Please reset them and rerun the pipeline.")
+                    error("You have uncommited changes in your Reclass cluster model repository. Please commit or reset them and rerun the pipeline.")
                 }
-                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $gitMcpVersion")
-                // Add new defaults
-                common.infoMsg("Add new defaults")
-                salt.cmdRun(venvPepper, 'I@salt:master', "grep '^- system.defaults\$'  /srv/salt/reclass/classes/cluster/*/infra/init.yml || " +
-                "sed -i 's/^classes:/classes:\\n- system.defaults/' /srv/salt/reclass/classes/cluster/*/infra/init.yml")
+                if(UPDATE_CLUSTER_MODEL.toBoolean()){
+                    def dateTime = common.getDatetime()
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                    "grep -r --exclude-dir=apty -l 'apt_mk_version: .*' * | xargs sed -i 's/apt_mk_version: .*/apt_mk_version: \"$MCP_VERSION\"/g'")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $gitMcpVersion")
+                    // Add new defaults
+                    common.infoMsg("Add new defaults")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "grep '^- system.defaults\$' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
+                    "sed -i 's/^classes:/classes:\\n- system.defaults/' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml")
+                    common.infoMsg("The following changes were made to the cluster model and will be commited. " +
+                    "Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git status && " +
+                    "git add -u && git commit --allow-empty -m 'Cluster model update to the release $MCP_VERSION on $dateTime'")
+                }
                 salt.enforceState(venvPepper, 'I@salt:master', 'reclass.storage', true)
             }
 
