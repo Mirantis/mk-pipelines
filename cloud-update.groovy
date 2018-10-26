@@ -58,7 +58,7 @@ def packages
 def command
 def commandKwargs
 
-def wait = 10
+wait = 10
 if (common.validInputParam('MINIONS_TEST_TIMEOUT') && MINIONS_TEST_TIMEOUT.isInteger()) {
     wait = "${MINIONS_TEST_TIMEOUT}".toInteger()
 }
