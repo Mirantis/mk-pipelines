@@ -194,7 +194,7 @@ timeout(time: 12, unit: 'HOURS') {
                         // XXX: retry to workaround magical VALUE_TRIMMED
                         // response from salt master + to give slow cloud some
                         // more time to settle down
-                        salt.cmdRun(pepperEnv, 'I@aptly:server', 'while true; do curl -sf http://apt.mcp.mirantis.net:8084/api/version >/dev/null && break; done')
+                        salt.cmdRun(pepperEnv, 'I@aptly:server', 'while true; do curl -sf http://apt.mcp.mirantis.net:8081/api/version >/dev/null && break; done')
                     }
                 }
                 salt.enforceState(pepperEnv, 'I@aptly:server', 'aptly', true)
