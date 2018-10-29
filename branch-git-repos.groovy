@@ -110,14 +110,14 @@ node() {
                 sh 'git config user.email "ci+infra@mirantis.com"'
 
                 // Update list of branches
-                sh 'git fetch --prune --tags'
+                sh 'git remote update origin --prune'
 
                 // Ensure there is no branch or tag with gitBranchNew name
                 sh "git branch -d '${gitBranchNew}' && git push origin ':${gitBranchNew}' || :"
                 sh "git tag    -d '${gitBranchNew}' && git push origin ':refs/tags/${gitBranchNew}' || :"
 
                 // Create new branch
-                sh "git branch '${gitBranchNew}' '${gitSrcObj}'"      // Create new local branch
+                sh "git checkout -b '${gitBranchNew}' '${gitSrcObj}'" // Create new local branch
                 sh "git push origin '${gitBranchNew}'"                // ... push new branch
             }
         }
