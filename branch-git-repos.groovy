@@ -81,17 +81,10 @@ node() {
             gitSrcObj = gitSrcObj.replace('SUBS_SOURCE_REF', srcObj)
         }
 
-        // Remove preifix `origin/` from gitSrcObj
-        java.util.regex.Pattern reOrigin = ~'^origin/'
-        gitSrcObj = gitSrcObj - reOrigin
-
         checkout([
             $class: 'GitSCM',
-            branches: [
-                [name: 'FETCH_HEAD'],
-            ],
             userRemoteConfigs: [
-                [url: gitRepoUrl, refspec: gitSrcObj, credentialsId: gitCredentialsId],
+                [url: gitRepoUrl, credentialsId: gitCredentialsId],
             ],
             extensions: [
                 [$class: 'PruneStaleBranch'],
@@ -110,15 +103,30 @@ node() {
                 sh 'git config user.email "ci+infra@mirantis.com"'
 
                 // Update list of branches
-                sh 'git remote update origin --prune'
+                sh 'git checkout master'
+
+                int is_branch = sh(script: "git ls-remote --exit-code --heads origin ${gitBranchNew}", returnStatus: true)
+                int is_tag    = sh(script: "git ls-remote --exit-code --tags  origin ${gitBranchNew}", returnStatus: true)
 
                 // Ensure there is no branch or tag with gitBranchNew name
-                sh "git branch -d '${gitBranchNew}' && git push origin ':${gitBranchNew}' || :"
-                sh "git tag    -d '${gitBranchNew}' && git push origin ':refs/tags/${gitBranchNew}' || :"
+                if (is_branch == 0) {
+                    sh """\
+                        git checkout 'origin/${gitBranchNew}' -t || :
+                        git checkout master
+                        git branch -d '${gitBranchNew}'
+                        git push origin ':refs/heads/${gitBranchNew}'
+                    """.stripIndent()
+                }
+                if (is_tag == 0) {
+                    sh """\
+                        git tag -d '${gitBranchNew}'
+                        git push origin ':refs/tags/${gitBranchNew}'
+                    """
+                }
 
                 // Create new branch
-                sh "git checkout -b '${gitBranchNew}' '${gitSrcObj}'" // Create new local branch
-                sh "git push origin '${gitBranchNew}'"                // ... push new branch
+                sh "git branch '${gitBranchNew}' '${gitSrcObj}'" // Create new local branch
+                sh "git push --force origin '${gitBranchNew}'"   // ... push new branch
             }
         }
     }
