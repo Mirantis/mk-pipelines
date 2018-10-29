@@ -119,7 +119,7 @@ timeout(time: 12, unit: 'HOURS') {
             throw e
         } finally{
             if(DELETE_STACK.toBoolean() && ENVIRONMENT_IP == ""){
-                mcpEnvJob = build(job: "delete-heat-stack-for-mcp-env", parameters: [
+                mcpEnvJob = build(job: "delete-heat-stack-for-mcp-env", wait: false, parameters: [
                     [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
                     [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
                 ])
