@@ -143,6 +143,10 @@ timeout(time: 12, unit: 'HOURS') {
                             }
                             currentBuild.description = STACK_NAME
                         }
+                    } else {
+                        // In case name was copied with unicode zero-width space chars -
+                        // remove them
+                        STACK_NAME = STACK_NAME.trim().replaceAll("\\p{C}", "")
                     }
 
                     // no underscore in STACK_NAME
