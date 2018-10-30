@@ -130,7 +130,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                 }
                 if (syncVcpImagesToS3) {
-                    common.infoMsg("Syncing VCP images from internal: http://apt.mcp.mirantis.net/images  to s3: images.mirantis.com")
+                    common.infoMsg("Syncing VCP images from internal: http://images.mcp.mirantis.net/ to s3: images.mirantis.com")
                     triggerSyncVCPJob('')
                 }
                 if (emailNotify) {

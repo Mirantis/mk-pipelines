@@ -114,7 +114,7 @@ timeout(time: 6, unit: 'HOURS') {
                     error("Uploading file: ${targetImage}.md5 failed!")
                 }
 
-                description += "<a href='http://apt.mcp.mirantis.net/images/${targetImage}'>${job_env.SOURCE_TAG}=>${targetImage}</a>"
+                description += "<a href='http://images.mcp.mirantis.net/${targetImage}'>${job_env.SOURCE_TAG}=>${targetImage}</a>"
             }
             currentBuild.description = description
         } catch (Throwable e) {
