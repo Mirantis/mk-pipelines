@@ -14,7 +14,7 @@ saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
 
 slaveNode = env.SLAVE_NODE ?: 'python&&docker'
-gerritCredentials = env.CREDENTIALS_ID ?: 'mcp-ci-gerrit'
+gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
 
 timeout(time: 2, unit: 'HOURS') {
     node(slaveNode) {
@@ -147,7 +147,7 @@ timeout(time: 2, unit: 'HOURS') {
                             mcpCommonScriptsBranch = 'master'
                         }
                     }
-                    def commonScriptsRepoUrl = 'ssh://gerrit.mcp.mirantis.com:29418/mcp/mcp-common-scripts'
+                    def commonScriptsRepoUrl = templateContext['default_context']['mcp_common_scripts_repo'] ?: 'ssh://gerrit.mcp.mirantis.com:29418/mcp/mcp-common-scripts'
                     checkout([
                         $class           : 'GitSCM',
                         branches         : [[name: 'FETCH_HEAD'],],

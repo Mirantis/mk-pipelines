@@ -64,7 +64,7 @@ timeout(time: 2, unit: 'HOURS') {
         }
 
         stage("Setup virtualenv for Pepper") {
-          python.setupPepperVirtualenv(pepperEnv, masterUrl, "salt-qa-credentials")
+          python.setupPepperVirtualenv(pepperEnv, masterUrl, SALT_MASTER_CREDENTIALS)
         }
 
         stage("Prepare AIO node"){
@@ -95,7 +95,7 @@ timeout(time: 2, unit: 'HOURS') {
         stage("Deploy Openstack") {
           build(job: 'deploy_openstack',
                 parameters: [
-                  [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: "salt-qa-credentials"],
+                  [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
                   [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: masterUrl],
                   [$class: 'StringParameterValue', name: 'STACK_INSTALL', value: 'openstack']
                 ])
