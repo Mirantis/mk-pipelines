@@ -29,16 +29,21 @@ timeout(time: 2, unit: 'HOURS') {
         def aioInternalAddress = templateContext.default_context.aio_internal_address
         def drivetrainInternalAddress = templateContext.default_context.drivetrain_internal_address
         def artifact_tar_file = "${clusterName}.tar.gz"
-        def rsyncUser = templateContext.default_context.rsync_user
         def masterIP = templateContext.default_context.drivetrain_external_address
+        if ( templateContext.default_context.get("docker_deployment", "False").toBoolean() ) {
+          masterIP = drivetrainInternalAddress
+        }
         def masterUrl = "http://" + masterIP + ":6969"
-        def rsyncLocation = templateContext.default_context.get("rsync_location", "/srv/salt/reclass/classes/cluster")
-        def rsyncPath = rsyncUser + "@" + masterIP + ":" + rsyncLocation
-        def rsyncSSHKey = templateContext.default_context.rsync_ssh_key
         def outputDirectory = env.WORKSPACE + "/"
-        def rsyncKeyFile = outputDirectory + "publication_key"
         def outputDestination = outputDirectory + artifact_tar_file
         def outputCluster = outputDirectory + "/classes/cluster/" + clusterName
+        def rsyncLocation = templateContext.default_context.get("rsync_location", "/srv/salt/reclass/classes/cluster")
+        def rsyncCredentials = templateContext.default_context.get("rsync_credentials", "lab")
+        c = common.getSshCredentials(rsyncCredentials)
+        def rsyncSSHKey = c.getPrivateKey()
+        def rsyncUser = c.getUsername()
+        def rsyncKeyFile = outputDirectory + "rsync_key"
+        def rsyncPath = rsyncUser + "@" + masterIP + ":" + rsyncLocation
         currentBuild.description = "Cluster " + clusterName + " on " + masterIP
 
         stage("Generate AIO model") {
