@@ -31,6 +31,8 @@ def analyticsPkgs = 'contrail-analytics,contrail-lib,contrail-nodemgr,contrail-u
 def thirdPartyAnalyticsPkgsToRemove = 'zookeeper,libzookeeper-java,kafka,cassandra,python-cassandra,cassandra-cpp-driver,redis-server,supervisor'
 //def cmpPkgs = ['contrail-lib', 'contrail-nodemgr', 'contrail-utils', 'contrail-vrouter-agent', 'contrail-vrouter-utils', 'python-contrail', 'python-contrail-vrouter-api', 'python-opencontrail-vrouter-netns', 'contrail-vrouter-dkms']
 def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
+def neutronServerPkgs = 'neutron-plugin-contrail,contrail-heat,python-contrail'
+def dashboardPanelPkg = 'openstack-dashboard-contrail-panels'
 def KERNEL_MODULE_RELOAD = 'service supervisor-vrouter stop; rmmod vrouter; sync && echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory; service contrail-vrouter-agent start; service contrail-vrouter-nodemgr start'
 def analyticsServices = ['supervisor-analytics', 'supervisor-database', 'zookeeper', 'redis-server']
 def configServices = ['contrail-webui-jobserver', 'contrail-webui-webserver', 'supervisor-config', 'supervisor-database', 'zookeeper']
@@ -74,14 +76,14 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Opencontrail controllers upgrade') {
                 try {
-                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server', 'saltutil.refresh_pillar', [], null, true)
-                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server', 'saltutil.sync_all', [], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.refresh_pillar', [], null, true)
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.sync_all', [], null, true)
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'file.remove', ["/etc/apt/sources.list.d/mcp_opencontrail.list"], null, true)
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'file.remove', ["/etc/apt/sources.list.d/cassandra.list"], null, true)
-                    salt.enforceState(pepperEnv, 'I@opencontrail:database or I@neutron:server', 'linux.system.repo')
+                    salt.enforceState(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'linux.system.repo')
 
                 } catch (Exception er) {
-                    common.errorMsg("Opencontrail component on I@opencontrail:control or I@opencontrail:collector or I@neutron:server probably failed to be replaced.")
+                    common.errorMsg("Opencontrail component on I@opencontrail:control, I@opencontrail:collector, I@neutron:server or I@horizon:server probably failed to be replaced.")
                     throw er
                 }
 
@@ -167,8 +169,10 @@ timeout(time: 12, unit: 'HOURS') {
 
                     salt.enforceState(pepperEnv, 'I@opencontrail:control:role:primary', 'docker.client')
 
-                    salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.install', ['neutron-plugin-contrail,contrail-heat,python-contrail'])
+                    salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.install', [neutronServerPkgs])
+                    salt.runSaltProcessStep(pepperEnv, 'I@horizon:server', 'pkg.install', [dashboardPanelPkg])
                     salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'])
+                    salt.enforceState(pepperEnv, 'I@horizon:server', 'horizon')
                 } catch (Exception er) {
                     common.errorMsg("Opencontrail Controller failed to be upgraded.")
                     throw er
@@ -331,8 +335,8 @@ timeout(time: 12, unit: 'HOURS') {
 
            stage('Opencontrail controllers rollback') {
 
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'saltutil.refresh_pillar', [], null, true)
-                salt.enforceState(pepperEnv, 'I@opencontrail:database', 'linux.system.repo')
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.refresh_pillar', [], null, true)
+                salt.enforceState(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'linux.system.repo')
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
@@ -350,6 +354,15 @@ timeout(time: 12, unit: 'HOURS') {
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'])
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.remove', [neutronServerPkgs])
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.install', [neutronServerPkgs])
+                salt.runSaltProcessStep(pepperEnv, 'I@horizon:server', 'pkg.remove', [dashboardPanelPkg])
+                salt.runSaltProcessStep(pepperEnv, 'I@horizon:server', 'pkg.install', [dashboardPanelPkg])
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'])
+
+                salt.enforceState(pepperEnv, 'I@horizon:server', 'horizon')
                 for (service in (controlServices + thirdPartyServicesToDisable)) {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.enable', [service])
                 }
