@@ -61,6 +61,7 @@ def triggerTestFormulaJob(testEnv, defaultGitRef, defaultGitUrl) {
     [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION]
   ]
 }
+
 timeout(time: 2, unit: 'HOURS') {
   node(slaveNode) {
     try {
@@ -132,8 +133,15 @@ timeout(time: 2, unit: 'HOURS') {
       }
     stage("kitchen") {
         if (checkouted) {
-          if (fileExists(".kitchen.yml")) {
-            common.infoMsg(".kitchen.yml found, running kitchen tests")
+          if (fileExists(".kitchen.yml") || fileExists(".kitchen.openstack.yml")) {
+            if (fileExists(".kitchen.openstack.yml")) {
+              common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
+              if (fileExists(".kitchen.yml")) {
+                common.infoMsg("Ignoring the docker Kitchen test configuration file.")
+              }
+            } else {
+              common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
+            }
             def kitchenEnvs = []
             def filteredEnvs = []
             if (fileExists(".travis.yml")) {
