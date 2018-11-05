@@ -31,7 +31,7 @@ timeout(time: 1, unit: 'HOURS') {
             // TODO add check's for critical var's
             def context = templateContext['default_context']
             // Use mcpVersion git tag if not specified branch for cookiecutter-templates
-            if (!context['cookiecutter_template_branch'] instanceof java.lang.String) {
+            if (!context.get('cookiecutter_template_branch', false)) {
                 context['cookiecutter_template_branch'] = context['mcp_version']
                 // Don't have nightly/testing/stable for cookiecutter-templates repo, therefore use master
                 if (["nightly", "testing", "stable"].contains(context['mcp_version'])) {
@@ -40,7 +40,7 @@ timeout(time: 1, unit: 'HOURS') {
                 }
             }
             // Use context['mcp_version'] git tag if not specified branch for reclass-system
-            if (!context['shared_reclass_branch'] instanceof java.lang.String) {
+            if (!context.get('shared_reclass_branch', false)) {
                 context['shared_reclass_branch'] = context['mcp_version']
                 // Don't have nightly/testing for reclass-system repo, therefore use master
                 if (["nightly", "testing", "stable"].contains(context['mcp_version'])) {
@@ -67,7 +67,6 @@ timeout(time: 1, unit: 'HOURS') {
             currentBuild.description = context['cluster_name']
             common.infoMsg("Using context:\n" + context)
             print prettyPrint(toJson(context))
-
             stage('Download Cookiecutter template') {
                 sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
                 checkout([
@@ -95,7 +94,7 @@ timeout(time: 1, unit: 'HOURS') {
 
             stage('Generate model') {
                 python.setupCookiecutterVirtualenv(cutterEnv)
-                // FIXME refector generateModel
+                // FIXME refactor generateModel
                 python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
                 git.commitGitChanges(modelEnv, "Create model ${context['cluster_name']}", "${user}@localhost", "${user}")
             }
