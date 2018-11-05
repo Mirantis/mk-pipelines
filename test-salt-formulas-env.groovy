@@ -18,6 +18,7 @@ try {
 }
 
 def checkouted = false
+def openstackTest = false
 
 throttle(['test-formula']) {
   timeout(time: 1, unit: 'HOURS') {
@@ -37,8 +38,16 @@ throttle(['test-formula']) {
         }
         stage("kitchen") {
           if (checkouted) {
-            if (fileExists(".kitchen.yml")) {
-              common.infoMsg(".kitchen.yml found, running kitchen tests")
+            if (fileExists(".kitchen.yml") || fileExists(".kitchen.openstack.yml")) {
+              if (fileExists(".kitchen.openstack.yml")) {
+                common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
+                if (fileExists(".kitchen.yml")) {
+                  common.infoMsg("Ignoring the docker Kitchen test configuration file.")
+                }
+                openstackTest = true
+              } else {
+                common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
+              }
               ruby.ensureRubyEnv()
               if (fileExists(".travis.yml")) {
                 common.infoMsg(".travis.yml found, running custom kitchen init")
@@ -46,11 +55,21 @@ throttle(['test-formula']) {
                 def kitchenInit = kitchenConfigYML["install"]
                 def kitchenInstalled = false
                 if (kitchenInit && !kitchenInit.isEmpty()) {
-                  for (int i = 0; i < kitchenInit.size(); i++) {
-                    if (kitchenInit[i].trim().startsWith("test -e Gemfile")) { //found Gemfile config
-                      common.infoMsg("Custom Gemfile configuration found, using them")
-                      ruby.installKitchen(kitchenInit[i].trim())
-                      kitchenInstalled = true
+                  if (!openstackTest) {
+                    for (int i = 0; i < kitchenInit.size(); i++) {
+                      if (kitchenInit[i].trim().startsWith("test -e Gemfile")) { //found Gemfile config
+                        common.infoMsg("Custom Gemfile configuration found, using them")
+                        ruby.installKitchen(kitchenInit[i].trim())
+                        kitchenInstalled = true
+                      }
+                    }
+                  } else {
+                    for (int i = 0; i < kitchenInit.size(); i++) {
+                      if (kitchenInit[i].trim().startsWith("git clone")) { //found Gemfile config TODO: Change keywords ??
+                        common.infoMsg("Custom Gemfile configuration found, using them")
+                        sh(kitchenInit[i].trim())
+                        kitchenInstalled = true
+                      }
                     }
                   }
                 }
