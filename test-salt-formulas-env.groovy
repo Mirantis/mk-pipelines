@@ -83,6 +83,7 @@ throttle(['test-formula']) {
               common.infoMsg("Running part of kitchen test")
               if (KITCHEN_ENV != null && !KITCHEN_ENV.isEmpty() && KITCHEN_ENV != "") {
                 def cleanEnv = KITCHEN_ENV.replaceAll("\\s?SUITE=[^\\s]*", "")
+                if (openstackTest) { cleanEnv = "KITCHEN_YAML=.kitchen.openstack.yml " + cleanEnv }
                 sh("find . -type f -exec sed -i 's/apt.mirantis.com/apt.mcp.mirantis.net/g' {} \\;")
                 sh("find . -type f -exec sed -i 's/apt-mk.mirantis.com/apt.mcp.mirantis.net/g' {} \\;")
                 def suite = ruby.getSuiteName(KITCHEN_ENV)
