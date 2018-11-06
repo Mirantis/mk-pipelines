@@ -93,6 +93,7 @@ timeout(time: 12, unit: 'HOURS') {
                     analyticsdbImage = salt.getPillar(pepperEnv, "I@opencontrail:collector:role:primary", "docker:client:compose:opencontrail_api:service:analyticsdb:image")
                     salt.enforceState(pepperEnv, 'I@opencontrail:database', 'docker.host')
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail.client'])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'dockerng.pull', [controllerImage])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'dockerng.pull', [analyticsImage])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'dockerng.pull', [analyticsdbImage])
@@ -340,6 +341,7 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail.client'])
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:secondary', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
                 for (service in config4Services) {
