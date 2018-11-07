@@ -112,7 +112,7 @@ throttle(['test-formula']) {
       } catch (Throwable e) {
         // If there was an error or exception thrown, the build failed
         currentBuild.result = "FAILURE"
-        sh(script: 'find .kitchen/logs/ iname "*.log" | xargs -I{} bash -c "echo {}; cat {}"')
+        sh(script: 'find .kitchen/logs/ -type f -iname "*.log" | xargs -I{} bash -c "echo {}; cat {}"')
         ruby.runKitchenCommand("destroy", cleanEnv)
         throw e
       } finally {
