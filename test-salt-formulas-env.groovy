@@ -24,6 +24,7 @@ if (env.OPENSTACK_API_CREDENTIALS) {
 
 def checkouted = false
 def openstackTest = false
+def cleanEnv = ''
 
 throttle(['test-formula']) {
   timeout(time: 1, unit: 'HOURS') {
@@ -88,10 +89,10 @@ throttle(['test-formula']) {
               }
               common.infoMsg("Running part of kitchen test")
               if (KITCHEN_ENV != null && !KITCHEN_ENV.isEmpty() && KITCHEN_ENV != "") {
-                def cleanEnv = KITCHEN_ENV.replaceAll("\\s?SUITE=[^\\s]*", "")
+                cleanEnv = KITCHEN_ENV.replaceAll("\\s?SUITE=[^\\s]*", "")
                 if (openstackTest) { cleanEnv = "KITCHEN_YAML=.kitchen.openstack.yml " + cleanEnv }
-                sh("find . -type f -exec sed -i 's/apt.mirantis.com/apt.mcp.mirantis.net/g' {} \\;")
-                sh("find . -type f -exec sed -i 's/apt-mk.mirantis.com/apt.mcp.mirantis.net/g' {} \\;")
+                sh("grep apt.mirantis.com -Ril | xargs -I{} bash -c \"echo {}; sed -i 's/apt.mirantis.com/apt.mcp.mirantis.net/g' {}\"")
+                sh("grep apt-mk.mirantis.com -Ril | xargs -I{} bash -c \"echo {}; sed -i 's/apt-mk.mirantis.com/apt.mcp.mirantis.net/g' {}\"")
                 def suite = ruby.getSuiteName(KITCHEN_ENV)
                 if (suite && suite != "") {
                   common.infoMsg("Running kitchen test with environment:" + KITCHEN_ENV.trim())
@@ -111,7 +112,8 @@ throttle(['test-formula']) {
       } catch (Throwable e) {
         // If there was an error or exception thrown, the build failed
         currentBuild.result = "FAILURE"
-        ruby.runKitchenCommand("destroy")
+        sh(script: 'find .kitchen/logs/ iname "*.log" | xargs -I{} bash -c "echo {}; cat {}"')
+        ruby.runKitchenCommand("destroy", cleanEnv)
         throw e
       } finally {
         if (currentBuild.result == "FAILURE" && fileExists(".kitchen/logs/kitchen.log")) {
