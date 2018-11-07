@@ -17,6 +17,11 @@ try {
   defaultGitUrl = null
 }
 
+def openstack_credentials_id = ''
+if (env.OPENSTACK_API_CREDENTIALS) {
+  openstack_credentials_id = OPENSTACK_API_CREDENTIALS
+}
+
 def checkouted = false
 def openstackTest = false
 
@@ -55,21 +60,22 @@ throttle(['test-formula']) {
                 def kitchenInit = kitchenConfigYML["install"]
                 def kitchenInstalled = false
                 if (kitchenInit && !kitchenInit.isEmpty()) {
-                  if (!openstackTest) {
-                    for (int i = 0; i < kitchenInit.size(); i++) {
-                      if (kitchenInit[i].trim().startsWith("test -e Gemfile")) { //found Gemfile config
-                        common.infoMsg("Custom Gemfile configuration found, using them")
-                        ruby.installKitchen(kitchenInit[i].trim())
-                        kitchenInstalled = true
+                  for (int i = 0; i < kitchenInit.size(); i++) {
+                    if (kitchenInit[i].trim().startsWith("if [ ! -e Gemfile ]")) { //found Gemfile config
+                      common.infoMsg("Custom Gemfile configuration found, using them")
+                      if (openstackTest) {
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: openstack_credentials_id,
+                        usernameVariable: 'OS_USERNAME', passwordVariable: 'OS_PASSWORD'], ]) {
+                          env.OS_USERNAME = OS_USERNAME
+                          env.OS_PASSWORD = OS_PASSWORD
+                          env.OS_AUTH_URL = OS_AUTH_URL
+                          env.OS_PROJECT_NAME = OS_PROJECT_NAME
+                          env.OS_DOMAIN_NAME = OS_DOMAIN_NAME
+                          env.OS_AZ = OS_AZ
+                        }
                       }
-                    }
-                  } else {
-                    for (int i = 0; i < kitchenInit.size(); i++) {
-                      if (kitchenInit[i].trim().startsWith("git clone")) { //found Gemfile config TODO: Change keywords ??
-                        common.infoMsg("Custom Gemfile configuration found, using them")
-                        sh(kitchenInit[i].trim())
-                        kitchenInstalled = true
-                      }
+                      ruby.installKitchen(kitchenInit[i].trim())
+                      kitchenInstalled = true
                     }
                   }
                 }
