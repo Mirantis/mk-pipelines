@@ -29,18 +29,17 @@ def controlPkgs = 'contrail-config,contrail-config-openstack,contrail-control,co
 def thirdPartyControlPkgsToRemove = 'zookeeper,libzookeeper-java,kafka,cassandra,redis-server,ifmap-server,supervisor'
 def analyticsPkgs = 'contrail-analytics,contrail-lib,contrail-nodemgr,contrail-utils,python-contrail,contrail-database'
 def thirdPartyAnalyticsPkgsToRemove = 'zookeeper,libzookeeper-java,kafka,cassandra,python-cassandra,cassandra-cpp-driver,redis-server,supervisor'
-//def cmpPkgs = ['contrail-lib', 'contrail-nodemgr', 'contrail-utils', 'contrail-vrouter-agent', 'contrail-vrouter-utils', 'python-contrail', 'python-contrail-vrouter-api', 'python-opencontrail-vrouter-netns', 'contrail-vrouter-dkms']
-def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
+def cmpPkgs = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
 def neutronServerPkgs = 'neutron-plugin-contrail,contrail-heat,python-contrail'
 def dashboardPanelPkg = 'openstack-dashboard-contrail-panels'
-def KERNEL_MODULE_RELOAD = 'service supervisor-vrouter stop; rmmod vrouter; sync && echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory; service contrail-vrouter-agent start; service contrail-vrouter-nodemgr start'
+def kernelModuleReloadCmd = 'service supervisor-vrouter stop; rmmod vrouter; sync && echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory; service contrail-vrouter-agent start; service contrail-vrouter-nodemgr start'
 def analyticsServices = ['supervisor-analytics', 'supervisor-database', 'zookeeper', 'redis-server']
 def configServices = ['contrail-webui-jobserver', 'contrail-webui-webserver', 'supervisor-config', 'supervisor-database', 'zookeeper']
 def controlServices = ['ifmap-server', 'supervisor-control', 'redis-server']
 def thirdPartyServicesToDisable = ['kafka', 'zookeeper', 'cassandra']
 def config4Services = ['zookeeper', 'contrail-webui-middleware', 'contrail-webui', 'contrail-api', 'contrail-schema', 'contrail-svc-monitor', 'contrail-device-manager', 'contrail-config-nodemgr', 'contrail-database']
 
-def void runCommonCommands(target, command, args, check, salt, pepperEnv, common) {
+def runCommonCommands(target, command, args, check, salt, pepperEnv) {
 
     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, null, args, null)
     salt.printSaltCommandResult(out)
@@ -52,9 +51,6 @@ def void runCommonCommands(target, command, args, check, salt, pepperEnv, common
     } else if ( check == "contrail-status" ) {
         salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v FOR | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/", null, false, true, null, true, 500)
     }
-    //out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, null, check, null)
-    //salt.printSaltCommandResult(out)
-    //input message: "Please check the output of \'${check}\' and continue if it is correct."
 }
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -136,7 +132,7 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                     check = 'doctrail all contrail-status'
                     salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'docker.client')
-                    runCommonCommands('I@opencontrail:collector:role:primary', command, args, check, salt, pepperEnv, common)
+                    runCommonCommands('I@opencontrail:collector:role:primary', command, args, check, salt, pepperEnv)
                 } catch (Exception er) {
                     common.errorMsg("Opencontrail Analytics failed to be upgraded.")
                     throw er
@@ -160,7 +156,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                     salt.enforceState(pepperEnv, 'I@opencontrail:control:role:secondary', 'docker.client')
 
-                    runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv, common)
+                    runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv)
 
                     sleep(120)
 
@@ -259,11 +255,11 @@ timeout(time: 12, unit: 'HOURS') {
                         salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'file.remove', ["/etc/apt/sources.list.d/mcp_opencontrail.list"], null, true)
                         salt.enforceState(pepperEnv, targetLiveSubset, 'linux.system.repo')
                     } catch (Exception er) {
-                        common.errorMsg("Opencontrail component on ${targetLiveSubset} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                        common.errorMsg("Opencontrail component on ${targetLiveSubset} probably failed to be replaced. Please check availability of contrail packages before continuing.")
                         throw er
                     }
 
-                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${cmpPkgs}  -y;"
                     check = 'contrail-status'
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, null)
@@ -275,7 +271,7 @@ timeout(time: 12, unit: 'HOURS') {
                         common.errorMsg("Opencontrail state was executed on ${targetLiveSubset} and failed please fix it manually.")
                     }
 
-                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
+                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', [kernelModuleReloadCmd], null, true)
 
                     //sleep(10)
                     salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
@@ -287,6 +283,7 @@ timeout(time: 12, unit: 'HOURS') {
                 stage('Confirm upgrade on all targeted nodes') {
                     input message: "Do you want to continue with the Opencontrail compute upgrade on all the targeted nodes? ${targetLiveAll} nodes?"
                 }
+
                 stage("Opencontrail compute upgrade on all targeted nodes") {
 
                     try {
@@ -295,11 +292,11 @@ timeout(time: 12, unit: 'HOURS') {
                         salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'file.remove', ["/etc/apt/sources.list.d/mcp_opencontrail.list"], null, true)
                         salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo')
                     } catch (Exception er) {
-                        common.errorMsg("Opencontrail component on ${targetLiveAll} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                        common.errorMsg("Opencontrail component on ${targetLiveAll} probably failed to be replaced. Please check availability of contrail packages before continuing.")
                         throw er
                     }
 
-                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${cmpPkgs}  -y;"
                     check = 'contrail-status'
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, null)
@@ -311,8 +308,7 @@ timeout(time: 12, unit: 'HOURS') {
                         common.errorMsg("Opencontrail state was executed on ${targetLiveAll} and failed please fix it manually.")
                     }
 
-                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                    //sleep(10)
+                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', [kernelModuleReloadCmd], null, true)
                     salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
@@ -334,7 +330,7 @@ timeout(time: 12, unit: 'HOURS') {
                 input message: "Do you want to continue with the Opencontrail nodes rollback?"
             }
 
-           stage('Opencontrail controllers rollback') {
+            stage('Opencontrail controllers rollback') {
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.refresh_pillar', [], null, true)
                 salt.enforceState(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'linux.system.repo')
@@ -350,7 +346,7 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:secondary', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
 
                 check = 'contrail-status'
-                runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv)
 
                 sleep(120)
 
@@ -404,11 +400,11 @@ timeout(time: 12, unit: 'HOURS') {
                         salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'saltutil.refresh_pillar', [], null, true)
                         salt.enforceState(pepperEnv, targetLiveSubset, 'linux.system.repo')
                     } catch (Exception er) {
-                        common.errorMsg("Opencontrail component on ${targetLiveSubset} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                        common.errorMsg("Opencontrail component on ${targetLiveSubset} probably failed to be replaced. Please check availability of contrail packages before continuing.")
                         throw er
                     }
 
-                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${cmpPkgs}  -y;"
                     check = 'contrail-status'
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, null)
@@ -420,8 +416,7 @@ timeout(time: 12, unit: 'HOURS') {
                         common.errorMsg("Opencontrail state was executed on ${targetLiveSubset} and failed please fix it manually.")
                     }
 
-                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                    //sleep(10)
+                    salt.runSaltProcessStep(pepperEnv, targetLiveSubset, 'cmd.shell', [kernelModuleReloadCmd], null, true)
                     salt.commandStatus(pepperEnv, targetLiveSubset, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, check, null)
@@ -439,11 +434,11 @@ timeout(time: 12, unit: 'HOURS') {
                         salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'saltutil.refresh_pillar', [], null, true)
                         salt.enforceState(pepperEnv, targetLiveAll, 'linux.system.repo')
                     } catch (Exception er) {
-                        common.errorMsg("Opencontrail component on ${targetLiveAll} probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
+                        common.errorMsg("Opencontrail component on ${targetLiveAll} probably failed to be replaced. Please check availability of contrail packages before continuing.")
                         throw er
                     }
 
-                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${cmpPkgs}  -y;"
                     check = 'contrail-status'
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, null)
@@ -455,8 +450,7 @@ timeout(time: 12, unit: 'HOURS') {
                         common.errorMsg("Opencontrail state was executed on ${targetLiveAll} and failed please fix it manually.")
                     }
 
-                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["${KERNEL_MODULE_RELOAD}"], null, true)
-                    //sleep(10)
+                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', [kernelModuleReloadCmd], null, true)
                     salt.commandStatus(pepperEnv, targetLiveAll, "${check} | grep -v == | grep -v active | grep -v -F /var/crashes/", null, false)
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, check, null)
