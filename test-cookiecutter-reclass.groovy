@@ -158,14 +158,14 @@ def globalVariatorsUpdate() {
     if (env.GERRIT_PROJECT) {
         messages.add("<font color='red'>GerritTrigger detected! We are in auto-mode:</font>")
         messages.add("Test env variables has been changed:")
-        messages.add("COOKIECUTTER_TEMPLATE_BRANCH => ${gerritDataCC['gerritBranch']}")
-        messages.add("RECLASS_MODEL_BRANCH => ${gerritDataRS['gerritBranch']}")
         // TODO are we going to have such branches?
         if (!['nightly', 'testing', 'stable', 'proposed', 'master'].contains(env.GERRIT_BRANCH)) {
             gerritDataCC['gerritBranch'] = env.GERRIT_BRANCH
             gerritDataRS['gerritBranch'] = env.GERRIT_BRANCH
             testDistribRevision = env.GERRIT_BRANCH
         }
+        messages.add("COOKIECUTTER_TEMPLATE_BRANCH => ${gerritDataCC['gerritBranch']}")
+        messages.add("RECLASS_SYSTEM_BRANCH => ${gerritDataRS['gerritBranch']}")
         // Identify, who triggered. To whom we should pass refspec
         if (env.GERRIT_PROJECT == 'salt-models/reclass-system') {
             gerritDataRS['gerritRefSpec'] = env.GERRIT_REFSPEC
