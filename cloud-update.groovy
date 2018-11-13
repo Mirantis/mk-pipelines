@@ -42,6 +42,7 @@
  *
 **/
 def common = new com.mirantis.mk.Common()
+def orchestrate = new com.mirantis.mk.Orchestrate()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 def virsh = new com.mirantis.mk.Virsh()
@@ -864,6 +865,10 @@ timeout(time: 12, unit: 'HOURS') {
             /*
                 * Update section
             */
+
+            // Go through applications that using orchestrated deployment.
+            orchestrate.OrchestrateApplications(pepperEnv, "I@salt:master", "orchestration.deploy.applications")
+
             if (updates.contains("cfg")) {
                 def target = 'I@salt:master'
                 def type = 'cfg'
