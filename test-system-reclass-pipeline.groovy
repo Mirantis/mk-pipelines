@@ -1,3 +1,5 @@
+import groovy.json.JsonOutput
+
 def gerrit = new com.mirantis.mk.Gerrit()
 def common = new com.mirantis.mk.Common()
 
@@ -7,12 +9,7 @@ def extraVarsYaml = env.EXTRA_VARIABLES_YAML ?: ''
 if (extraVarsYaml != '') {
     common.mergeEnv(env, extraVarsYaml)
 } else {
-    extraVarsYaml = '\n---'
-    for (envVar in env.getEnvironment()) {
-        if (envVar.key.startsWith("GERRIT_")) {
-            extraVarsYaml += "\n${envVar.key}: '${envVar.value}'"
-        }
-    }
+    extraVarsYaml = JsonOutput.toJson(env.getEnvironment().findAll{ it.key.startsWith('GERRIT_') })
 }
 
 def slaveNode = env.SLAVE_NODE ?: 'python&&docker'

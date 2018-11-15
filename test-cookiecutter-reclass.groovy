@@ -12,6 +12,8 @@ Modes:
    Always test GERRIT_REFSPEC VS GERRIT_BRANCH-master version of opposite project
  */
 
+import groovy.json.JsonOutput
+
 common = new com.mirantis.mk.Common()
 gerrit = new com.mirantis.mk.Gerrit()
 git = new com.mirantis.mk.Git()
@@ -20,6 +22,9 @@ python = new com.mirantis.mk.Python()
 extraVarsYAML = env.EXTRA_VARIABLES_YAML.trim() ?: ''
 if (extraVarsYAML) {
     common.mergeEnv(env, extraVarsYAML)
+    extraVars = readYaml text: extraVarsYAML
+} else {
+    extraVars = [:]
 }
 
 slaveNode = env.SLAVE_NODE ?: 'docker'
@@ -74,16 +79,15 @@ def testModel(modelFile, reclassArtifactName, artifactCopyPath, useExtraRepos = 
     // modelFile - `modelfiname` from model/modelfiname/modelfiname.yaml
     //* Grub all models and send it to check in paralell - by one in thread.
     def _uuid = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}_${modelFile.toLowerCase()}_" + UUID.randomUUID().toString().take(8)
-    def _values_string = """
----
-MODELS_TARGZ: "${env.BUILD_URL}/artifact/${reclassArtifactName}"
-DockerCName: "${_uuid}"
-testReclassEnv: "model/${modelFile}/"
-modelFile: "contexts/${modelFile}.yml"
-DISTRIB_REVISION: "${testDistribRevision}"
-useExtraRepos: ${useExtraRepos}
-${extraVarsYAML.replaceAll('---', '')}
-"""
+    def _values = [
+        MODELS_TARGZ: "${env.BUILD_URL}/artifact/${reclassArtifactName}",
+        DockerCName: _uuid,
+        testReclassEnv: "model/${modelFile}/",
+        modelFile: "contexts/${modelFile}.yml",
+        DISTRIB_REVISION: testDistribRevision,
+        useExtraRepos: useExtraRepos,
+    ]
+    def _values_string = JsonOutput.toJson(_values << extraVars)
     def chunkJob = build job: chunkJobName, parameters: [
         [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML',
          value : _values_string.stripIndent()],
