@@ -17,6 +17,7 @@ salt = new com.mirantis.mk.Salt()
 common = new com.mirantis.mk.Common()
 python = new com.mirantis.mk.Python()
 jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
+def pipelineTimeout = 12
 venvPepper = "venvPepper"
 workspace = ""
 
@@ -46,7 +47,7 @@ def updateSaltStack(target, pkgs) {
         }
     }
 
-    def saltVersion = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_version").get("return")[0].values()[0]
+    def saltVersion = salt.getPillar(venvPepper, 'I@salt:master', '_param:salt_version').get('return')[0].values()[0]
     def saltMinionVersions = salt.cmdRun(venvPepper, target, "apt-cache policy salt-common |  awk '/Installed/ && /$saltVersion/'").get("return")
     def saltMinionVersion = ""
 
@@ -65,21 +66,31 @@ def archiveReclassInventory(filename) {
     archiveArtifacts artifacts: "$filename"
 }
 
-def pipelineTimeout = 12
-if (common.validInputParam('PIPELINE_TIMEOUT') && PIPELINE_TIMEOUT.isInteger()) {
-    pipelineTimeout = "${PIPELINE_TIMEOUT}".toInteger()
+if (common.validInputParam('PIPELINE_TIMEOUT') && env.PIPELINE_TIMEOUT.isInteger()) {
+    pipelineTimeout = env.PIPELINE_TIMEOUT.toInteger()
 }
 
 timeout(time: pipelineTimeout, unit: 'HOURS') {
     node("python") {
         try {
             workspace = common.getWorkspace()
-            if (env.TARGET_MCP_VERSION == "") {
-                error("You must specify MCP version in TARGET_MCP_VERSION variable ")
+            targetMcpVersion = null
+            if (!common.validInputParam('TARGET_MCP_VERSION') && !common.validInputParam('MCP_VERSION')) {
+                error('You must specify MCP version in TARGET_MCP_VERSION|MCP_VERSION variable')
             }
-            def gitTargetMcpVersion = env.TARGET_MCP_VERSION
-            if (env.TARGET_MCP_VERSION == "testing") {
-                gitTargetMcpVersion = "master"
+            // bw comp. for 2018.X => 2018.11 release
+            if (common.validInputParam('MCP_VERSION')){
+                targetMcpVersion = env.MCP_VERSION
+                common.warningMsg("targetMcpVersion has been changed to:${targetMcpVersion}, which was taken from deprecated pipeline viriable:MCP_VERSION")
+            }
+            else {
+                targetMcpVersion = env.TARGET_MCP_VERSION
+            }
+            // end bw comp. for 2018.X => 2018.11 release
+            def gitTargetMcpVersion = targetMcpVersion
+            if (targetMcpVersion == 'testing') {
+                gitTargetMcpVersion = 'master'
+                common.warningMsg("gitTargetMcpVersion has been changed to:${gitTargetMcpVersion}")
             }
             python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
@@ -95,10 +106,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     common.infoMsg('Perform: UPDATE_CLUSTER_MODEL')
                     def dateTime = common.getDatetime()
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                        "grep -r --exclude-dir=aptly -l 'mcp_version: .*' * | xargs sed -i 's/mcp_version: .*/mcp_version: \"$env.TARGET_MCP_VERSION\"/g'")
+                        "grep -r --exclude-dir=aptly -l 'mcp_version: .*' * | xargs --no-run-if-empty sed -i 's/mcp_version: .*/mcp_version: \"$targetMcpVersion\"/g'")
                     // Do the same, for deprecated variable-duplicate
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                        "grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs sed -i 's/apt_mk_version: .*/apt_mk_version: \"$env.TARGET_MCP_VERSION\"/g'")
+                        "grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs --no-run-if-empty sed -i 's/apt_mk_version: .*/apt_mk_version: \"$targetMcpVersion\"/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $gitTargetMcpVersion")
                     // Add new defaults
                     common.infoMsg("Add new defaults")
@@ -108,7 +119,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         "Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git status && " +
-                        "git add -u && git commit --allow-empty -m 'Cluster model update to the release $env.TARGET_MCP_VERSION on $dateTime'")
+                        "git add -u && git commit --allow-empty -m 'Cluster model update to the release $targetMcpVersion on $dateTime'")
                 }
                 salt.enforceState(venvPepper, 'I@salt:master', 'reclass.storage', true)
             }
@@ -128,9 +139,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     }
 
                     if (runningOnDocker) {
-                        salt.cmdRun(venvPepper, 'I@aptly:publisher', "aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", true, null, true)
+                        salt.cmdRun(venvPepper, 'I@aptly:publisher', "aptly mirror list --raw | grep -E '*' | xargs --no-run-if-empty -n 1 aptly mirror drop -force", true, null, true)
                     } else {
-                        salt.cmdRun(venvPepper, 'I@aptly:publisher', "aptly mirror list --raw | grep -E '*' | xargs -n 1 aptly mirror drop -force", true, null, true, ['runas=aptly'])
+                        salt.cmdRun(venvPepper, 'I@aptly:publisher', "aptly mirror list --raw | grep -E '*' | xargs --no-run-if-empty -n 1 aptly mirror drop -force", true, null, true, ['runas=aptly'])
                     }
 
                     salt.enforceState(venvPepper, 'I@aptly:publisher', 'aptly', true)
@@ -154,7 +165,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             }
 
             stage("Update Drivetrain") {
-                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i -e 's/[^ ]*[^ ]/$env.TARGET_MCP_VERSION/4' /etc/apt/sources.list.d/mcp_salt.list")
+                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i -e 's/[^ ]*[^ ]/$targetMcpVersion/4' /etc/apt/sources.list.d/mcp_salt.list")
                 salt.cmdRun(venvPepper, 'I@salt:master', "apt-get -o Dir::Etc::sourcelist='/etc/apt/sources.list.d/mcp_salt.list' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0' update")
                 // Workaround for PROD-22108
                 salt.cmdRun(venvPepper, 'I@salt:master', "apt-get purge -y salt-formula-octavia && " +
@@ -167,7 +178,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
 
                 archiveReclassInventory(inventoryBeforeFilename)
 
-                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i -e 's/[^ ]*[^ ]/$env.TARGET_MCP_VERSION/4' /etc/apt/sources.list.d/mcp_extra.list")
+                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i -e 's/[^ ]*[^ ]/$targetMcpVersion/4' /etc/apt/sources.list.d/mcp_extra.list")
                 salt.cmdRun(venvPepper, 'I@salt:master', "apt-get -o Dir::Etc::sourcelist='/etc/apt/sources.list.d/mcp_extra.list' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0' update")
                 salt.cmdRun(venvPepper, 'I@salt:master', "apt-get install -y --allow-downgrades reclass")
 
