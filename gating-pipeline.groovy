@@ -4,6 +4,7 @@
  * JOBS_NAMESPACE - Gerrit gating jobs namespace (mk, contrail, ...)
  *
  **/
+import groovy.json.JsonOutput
 
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
@@ -18,12 +19,7 @@ def isJobExists(jobName) {
 }
 
 def callJobWithExtraVars(String jobName) {
-    def gerritVars = '\n---'
-    for (envVar in env.getEnvironment()) {
-        if (envVar.key.startsWith("GERRIT_")) {
-            gerritVars += "\n${envVar.key}: '${envVar.value}'"
-        }
-    }
+    def gerritVars = JsonOutput.toJson(env.getEnvironment().findAll{ it.key.startsWith('GERRIT_') })
     testJob = build job: jobName, parameters: [
         [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: gerritVars]
     ]
