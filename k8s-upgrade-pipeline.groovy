@@ -16,6 +16,12 @@
  *   CONFORMANCE_RUN_BEFORE     Run Kubernetes conformance tests before update
  *   TEST_K8S_API_SERVER        Kubernetes API server address for test execution
  *   ARTIFACTORY_URL            Artifactory URL where docker images located. Needed to correctly fetch conformance images.
+ *   UPGRADE_CALICO_V2_TO_V3    Perform Calico upgrade from v2 to v3.
+ *   KUBERNETES_CALICO_IMAGE                  Target calico/node image. May be null in case of reclass-system rollout.
+ *   KUBERNETES_CALICO_CALICOCTL_IMAGE        Target calico/ctl image. May be null in case of reclass-system rollout.
+ *   KUBERNETES_CALICO_CNI_IMAGE              Target calico/cni image. May be null in case of reclass-system rollout.
+ *   KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE Target calico/kube-controllers image. May be null in case of reclass-system rollout.
+ *   CALICO_UPGRADE_VERSION     Version of "calico-upgrade" utility to be used ("v1.0.5" for Calico v3.1.3 target).
  *
 **/
 def common = new com.mirantis.mk.Common()
@@ -24,6 +30,9 @@ def python = new com.mirantis.mk.Python()
 
 def updates = TARGET_UPDATES.tokenize(",").collect{it -> it.trim()}
 def pepperEnv = "pepperEnv"
+
+def POOL = "I@kubernetes:pool"
+def calicoImagesValid = false
 
 def overrideKubernetesImage(pepperEnv) {
     def salt = new com.mirantis.mk.Salt()
@@ -34,6 +43,41 @@ def overrideKubernetesImage(pepperEnv) {
     """
     stage("Override kubernetes images to target version") {
         salt.setSaltOverrides(pepperEnv,  k8sSaltOverrides)
+    }
+}
+
+def overrideCalicoImages(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+
+    def calicoSaltOverrides = """
+        kubernetes_calico_image: ${KUBERNETES_CALICO_IMAGE}
+        kubernetes_calico_calicoctl_image: ${KUBERNETES_CALICO_CALICOCTL_IMAGE}
+        kubernetes_calico_cni_image: ${KUBERNETES_CALICO_CNI_IMAGE}
+        kubernetes_calico_kube_controllers_image: ${KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE}
+    """
+    stage("Override calico images to target version") {
+        salt.setSaltOverrides(pepperEnv, calicoSaltOverrides)
+    }
+}
+
+def downloadCalicoUpgrader(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Downloading calico-upgrade utility") {
+        salt.cmdRun(pepperEnv, target, "rm -f ./calico-upgrade")
+        salt.cmdRun(pepperEnv, target, "wget https://github.com/projectcalico/calico-upgrade/releases/download/${CALICO_UPGRADE_VERSION}/calico-upgrade")
+        salt.cmdRun(pepperEnv, target, "chmod +x ./calico-upgrade")
+    }
+}
+
+def pullCalicoImages(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Pulling updated Calico docker images") {
+        salt.cmdRun(pepperEnv, target, "docker pull ${KUBERNETES_CALICO_IMAGE}")
+        salt.cmdRun(pepperEnv, target, "docker pull ${KUBERNETES_CALICO_CALICOCTL_IMAGE}")
+        salt.cmdRun(pepperEnv, target, "docker pull ${KUBERNETES_CALICO_CNI_IMAGE}")
+        salt.cmdRun(pepperEnv, target, "docker pull ${KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE}")
     }
 }
 
@@ -52,6 +96,54 @@ def performKubernetesControlUpdate(pepperEnv, target) {
     stage("Execute Kubernetes control plane update on ${target}") {
         salt.enforceStateWithExclude(pepperEnv, target, "kubernetes", "kubernetes.master.setup")
         // Restart kubelet
+        salt.runSaltProcessStep(pepperEnv, target, 'service.restart', ['kubelet'])
+    }
+}
+
+def startCalicoUpgrade(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Starting upgrade using calico-upgrade: migrate etcd schema and lock Calico") {
+        // get ETCD_ENDPOINTS in use by Calico
+        def ep_str = salt.cmdRun(pepperEnv, target, "cat /etc/calico/calicoctl.cfg | grep etcdEndpoints")['return'][0].values()[0]
+        def ETCD_ENDPOINTS = ep_str.tokenize(' ')[1]
+        print("ETCD_ENDPOINTS in use by Calico: '${ETCD_ENDPOINTS}'")
+
+        def cmd = "export APIV1_ETCD_ENDPOINTS=${ETCD_ENDPOINTS} && " +
+                  "export APIV1_ETCD_CA_CERT_FILE=/var/lib/etcd/ca.pem && " +
+                  "export APIV1_ETCD_CERT_FILE=/var/lib/etcd/etcd-client.crt && " +
+                  "export APIV1_ETCD_KEY_FILE=/var/lib/etcd/etcd-client.key && " +
+                  "export ETCD_ENDPOINTS=${ETCD_ENDPOINTS} && " +
+                  "export ETCD_CA_CERT_FILE=/var/lib/etcd/ca.pem && " +
+                  "export ETCD_CERT_FILE=/var/lib/etcd/etcd-client.crt && " +
+                  "export ETCD_KEY_FILE=/var/lib/etcd/etcd-client.key && " +
+                  "rm /root/upg_complete -f && " +
+                  "./calico-upgrade start --no-prompts --ignore-v3-data > upgrade-start.log && " +
+                  "until [ -f /root/upg_complete ]; do sleep 0.1; done && " +
+                  "./calico-upgrade complete --no-prompts > upgrade-complete.log && " +
+                  "rm /root/upg_complete -f"
+        // "saltArgs = ['async']" doesn't work, so we have to run "cmd.run --async"
+        salt.cmdRun(pepperEnv, "I@salt:master", "salt -C '${target}' cmd.run '${cmd}' --async")
+        salt.cmdRun(pepperEnv, target, "until [ -f /root/upgrade-start.log ]; do sleep 0.1; done")
+    }
+}
+
+def completeCalicoUpgrade(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Complete upgrade using calico-upgrade: unlock Calico") {
+        salt.cmdRun(pepperEnv, target, "echo 'true' > /root/upg_complete")
+        salt.cmdRun(pepperEnv, target, "while [ -f /root/upg_complete ]; do sleep 0.1; done")
+        salt.cmdRun(pepperEnv, target, "cat /root/upgrade-start.log")
+        salt.cmdRun(pepperEnv, target, "cat /root/upgrade-complete.log")
+    }
+}
+
+def performCalicoConfigurationUpdateAndServicesRestart(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Performing Calico configuration update and services restart") {
+        salt.enforceState(pepperEnv, target, "kubernetes.pool.calico")
         salt.runSaltProcessStep(pepperEnv, target, 'service.restart', ['kubelet'])
     }
 }
@@ -169,6 +261,15 @@ def executeConformance(pepperEnv, target, k8s_api, mcp_repo) {
     }
 }
 
+def checkCalicoUpgradeSuccessful(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Checking cluster state after Calico upgrade") {
+        // TODO add auto-check of results
+        salt.cmdRun(pepperEnv, target, "calicoctl version | grep -i version")
+        salt.cmdRun(pepperEnv, target, "calicoctl node status")
+    }
+}
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -190,8 +291,42 @@ timeout(time: 12, unit: 'HOURS') {
                 overrideKubernetesImage(pepperEnv)
             }
 
+            if ((common.validInputParam('KUBERNETES_CALICO_IMAGE'))
+                && (common.validInputParam('KUBERNETES_CALICO_CALICOCTL_IMAGE'))
+                && (common.validInputParam('KUBERNETES_CALICO_CNI_IMAGE'))
+                && (common.validInputParam('KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE'))
+                ) {
+                calicoImagesValid = true
+                overrideCalicoImages(pepperEnv)
+            }
+
             /*
-                * Execute update
+                * Execute Calico upgrade if needed (only for v2 to v3 upgrade).
+                * This part causes workloads operations downtime.
+                * It is only required for Calico v2.x to v3.x upgrade when etcd is in use for Calico
+                * as Calico etcd schema has different formats for Calico v2.x and Calico v3.x.
+            */
+            if (UPGRADE_CALICO_V2_TO_V3.toBoolean()) {
+                // one CTL node will be used for running upgrade of Calico etcd schema
+                def ctl_node = salt.getMinionsSorted(pepperEnv, CTL_TARGET)[0]
+
+                // prepare for upgrade. when done in advance, this will decrease downtime during upgrade
+                downloadCalicoUpgrader(pepperEnv, ctl_node)
+                if (calicoImagesValid) {
+                    pullCalicoImages(pepperEnv, POOL)
+                }
+
+                // this sequence implies workloads operations downtime
+                startCalicoUpgrade(pepperEnv, ctl_node)
+                performCalicoConfigurationUpdateAndServicesRestart(pepperEnv, POOL)
+                completeCalicoUpgrade(pepperEnv, ctl_node)
+                // after that no downtime is expected
+
+                checkCalicoUpgradeSuccessful(pepperEnv, POOL)
+            }
+
+            /*
+                * Execute k8s update
             */
             if (updates.contains("ctl")) {
                 def target = CTL_TARGET
@@ -218,7 +353,7 @@ timeout(time: 12, unit: 'HOURS') {
                     performKubernetesControlUpdate(pepperEnv, target)
                 }
                 if (!SIMPLE_UPGRADE.toBoolean()) {
-                    // Addons upgrade should be performed after all nodes will upgraded
+                    // Addons upgrade should be performed after all nodes will be upgraded
                     updateAddons(pepperEnv, target)
                     // Wait for 90 sec for addons reconciling
                     sleep(90)
