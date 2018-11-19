@@ -34,6 +34,7 @@ def CONTROL_PKGS = 'contrail-config contrail-config-openstack contrail-control c
 def ANALYTIC_PKGS = 'contrail-analytics contrail-lib contrail-nodemgr contrail-utils python-contrail'
 def CMP_PKGS = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms contrail-nova-driver'
 def KERNEL_MODULE_RELOAD = 'service supervisor-vrouter stop; rmmod vrouter; sync && echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory; service supervisor-vrouter start'
+def neutronServerPkgs = 'neutron-plugin-contrail,contrail-heat,python-contrail'
 
 def void runCommonCommands(target, command, args, check, salt, pepperEnv, common) {
 
@@ -71,8 +72,8 @@ timeout(time: 12, unit: 'HOURS') {
 
                 try {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'saltutil.refresh_pillar', [], null, true)
-                    salt.enforceState(pepperEnv, 'I@opencontrail:control', 'linux.system.repo')
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control or I@neutron:server', 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control or I@neutron:server', 'linux.system.repo')
                 } catch (Exception er) {
                     errorOccured = true
                     common.errorMsg("Opencontrail component on I@opencontrail:control probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
@@ -96,6 +97,8 @@ timeout(time: 12, unit: 'HOURS') {
                 } catch (Exception er) {
                     throw new Exception('Cassandra failed to backup. Please fix it before continuing.')
                 }
+
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'])
 
                 args = 'apt install contrail-database -y;'
                 check = 'nodetool status'
@@ -125,6 +128,9 @@ timeout(time: 12, unit: 'HOURS') {
 
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:control', 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
+
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.install', [neutronServerPkgs])
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'])
 
                 common.warningMsg('Please check \'show bgp summary\' on your bgp router if all bgp peers are in healthy state.')
             }
@@ -301,8 +307,8 @@ timeout(time: 12, unit: 'HOURS') {
 
                 try {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'cmd.shell', ["rm ${oc_component_repo}"], null, true)
-                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'saltutil.refresh_pillar', [], null, true)
-                    salt.enforceState(pepperEnv, 'I@opencontrail:control', 'linux.system.repo')
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control or I@neutron:server', 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(pepperEnv, 'I@opencontrail:control or I@neutron:server', 'linux.system.repo')
                 } catch (Exception er) {
                     errorOccured = true
                     common.errorMsg("Opencontrail component on I@opencontrail:control probably failed to be replaced. Please check it in ${oc_component_repo} before continuing.")
@@ -337,6 +343,11 @@ timeout(time: 12, unit: 'HOURS') {
 
                 out = salt.runSaltCommand(pepperEnv, 'local', ['expression': 'I@opencontrail:control', 'type': 'compound'], command, null, check, null)
                 salt.printSaltCommandResult(out)
+
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'])
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.remove', [neutronServerPkgs])
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.install', [neutronServerPkgs])
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'])
 
                 common.warningMsg('Please check \'show bgp summary\' on your bgp router if all bgp peers are in healthy state.')
             }
