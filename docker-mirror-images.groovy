@@ -39,6 +39,11 @@ def getImageName(String image) {
 
 timeout(time: 4, unit: 'HOURS') {
     node(slaveNode) {
+        def user = ''
+        wrap([$class: 'BuildUser']) {
+            user = env.BUILD_USER_ID
+        }
+        currentBuild.description = "${user}: [${env.SOURCE_IMAGE_TAG} => ${env.IMAGE_TAG}]\n${env.IMAGE_LIST}"
         try {
             stage("Mirror Docker Images") {
 
