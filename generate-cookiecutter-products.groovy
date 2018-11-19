@@ -27,7 +27,6 @@ timeout(time: 1, unit: 'HOURS') {
 
         try {
             def templateContext = readYaml text: env.COOKIECUTTER_TEMPLATE_CONTEXT
-            // TODO: switch to apt_mk_version im context['mcp_version']
             // TODO add check's for critical var's
             def context = templateContext['default_context']
             // Use mcpVersion git tag if not specified branch for cookiecutter-templates
@@ -102,7 +101,7 @@ timeout(time: 1, unit: 'HOURS') {
             stage("Test") {
                 if (env.TEST_MODEL.toBoolean()) {
                     // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
-                    if (!common.checkRemoteBinary([apt_mk_version: distribRevision]).linux_system_repo_url) {
+                    if (!common.checkRemoteBinary([mcp_version: distribRevision]).linux_system_repo_url) {
                         common.errorMsg("Binary release: ${distribRevision} not exist. Fallback to 'proposed'! ")
                         distribRevision = 'proposed'
                     }
