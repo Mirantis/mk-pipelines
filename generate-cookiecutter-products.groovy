@@ -17,44 +17,78 @@ saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
 slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
+distribRevision = 'proposed'
+gitGuessedVersion = false
+
+
+def globalVariatorsUpdate() {
+    def templateContext = readYaml text: env.COOKIECUTTER_TEMPLATE_CONTEXT
+    def context = templateContext['default_context']
+    // TODO add more check's for critical var's
+    // Since we can't pin to any '_branch' variable from context, to identify 'default git revision' -
+    // because each of them, might be 'refs/' variable, we need to add  some tricky trigger of using
+    // 'release/XXX' logic. This is totall guess - so,if even those one failed, to definitely must pass
+    // correct variable finally!
+    [context.get('cookiecutter_template_branch'), context.get('shared_reclass_branch'), context.get('mcp_common_scripts_branch')].any { branch ->
+        if (branch.toString().startsWith('release/')) {
+            gitGuessedVersion = branch
+            return true
+        }
+    }
+
+    // Use mcpVersion git tag if not specified branch for cookiecutter-templates
+    if (!context.get('cookiecutter_template_branch')) {
+        context['cookiecutter_template_branch'] = gitGuessedVersion ?: context['mcp_version']
+    }
+    // Don't have n/t/s for cookiecutter-templates repo, therefore use master
+    if (["nightly", "testing", "stable"].contains(context['cookiecutter_template_branch'])) {
+        context['cookiecutter_template_branch'] = 'master'
+    }
+    if (!context.get('shared_reclass_branch')) {
+        context['shared_reclass_branch'] = gitGuessedVersion ?: context['mcp_version']
+    }
+    // Don't have nightly/testing for reclass-system repo, therefore use master
+    if (["nightly", "testing", "stable"].contains(context['shared_reclass_branch'])) {
+        context['shared_reclass_branch'] = 'master'
+    }
+    if (!context.get('mcp_common_scripts_branch')) {
+        // Pin exactly to CC branch, since it might use 'release/XXX' format
+        context['mcp_common_scripts_branch'] = gitGuessedVersion ?: context['mcp_version']
+    }
+    // Don't have n/t/s for mcp-common-scripts repo, therefore use master
+    if (["nightly", "testing", "stable"].contains(context['mcp_common_scripts_branch'])) {
+        context['mcp_common_scripts_branch'] = 'master'
+    }
+    //
+    distribRevision = context['mcp_version']
+    if (['master'].contains(context['mcp_version'])) {
+        distribRevision = 'nightly'
+    }
+    if (distribRevision.contains('/')) {
+        distribRevision = distribRevision.split('/')[-1]
+    }
+    // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
+    if (!common.checkRemoteBinary([mcp_version: distribRevision]).linux_system_repo_url) {
+        common.warningMsg("Binary release: ${distribRevision} not exist. Fallback to 'proposed'! ")
+        distribRevision = 'proposed'
+    }
+    common.warningMsg("Fetching:\n" +
+        "DISTRIB_REVISION from ${distribRevision}")
+    common.infoMsg("Using context:\n" + context)
+    print prettyPrint(toJson(context))
+    return context
+
+}
 
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
+        def context = globalVariatorsUpdate()
         def templateEnv = "${env.WORKSPACE}/template"
         def modelEnv = "${env.WORKSPACE}/model"
         def testEnv = "${env.WORKSPACE}/test"
         def pipelineEnv = "${env.WORKSPACE}/pipelines"
 
         try {
-            def templateContext = readYaml text: env.COOKIECUTTER_TEMPLATE_CONTEXT
-            // TODO add check's for critical var's
-            def context = templateContext['default_context']
-            // Use mcpVersion git tag if not specified branch for cookiecutter-templates
-            if (!context.get('cookiecutter_template_branch', false)) {
-                context['cookiecutter_template_branch'] = context['mcp_version']
-                // Don't have nightly/testing/stable for cookiecutter-templates repo, therefore use master
-                if (["nightly", "testing", "stable"].contains(context['mcp_version'])) {
-                    common.warningMsg("Fetching cookiecutterTemplate from master!")
-                    context['cookiecutter_template_branch'] = 'master'
-                }
-            }
-            // Use context['mcp_version'] git tag if not specified branch for reclass-system
-            if (!context.get('shared_reclass_branch', false)) {
-                context['shared_reclass_branch'] = context['mcp_version']
-                // Don't have nightly/testing for reclass-system repo, therefore use master
-                if (["nightly", "testing", "stable"].contains(context['mcp_version'])) {
-                    common.warningMsg("Fetching reclass-system from master!")
-                    context['shared_reclass_branch'] = 'master'
-                }
-            }
-            //
-            distribRevision = context['mcp_version']
-            if (['master'].contains(context['mcp_version'])) {
-                distribRevision = 'nightly'
-            }
-            if (distribRevision.contains('/')) {
-                distribRevision = distribRevision.split('/')[-1]
-            }
             //
             def cutterEnv = "${env.WORKSPACE}/cutter"
             def systemEnv = "${modelEnv}/classes/system"
@@ -64,8 +98,7 @@ timeout(time: 1, unit: 'HOURS') {
                 user = env.BUILD_USER_ID
             }
             currentBuild.description = context['cluster_name']
-            common.infoMsg("Using context:\n" + context)
-            print prettyPrint(toJson(context))
+
             stage('Download Cookiecutter template') {
                 sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
                 checkout([
@@ -131,21 +164,12 @@ timeout(time: 1, unit: 'HOURS') {
 
                 // download create-config-drive
                 // FIXME: that should be refactored, to use git clone - to be able download it from custom repo.
-                def mcpCommonScriptsBranch = context['mcp_common_scripts_branch']
-                if (mcpCommonScriptsBranch == '') {
-                    mcpCommonScriptsBranch = context['mcp_version']
-                    // Don't have n/t/s for mcp-common-scripts repo, therefore use master
-                    if (["nightly", "testing", "stable"].contains(context['mcp_version'])) {
-                        common.warningMsg("Fetching mcp-common-scripts from master!")
-                        mcpCommonScriptsBranch = 'master'
-                    }
-                }
                 def commonScriptsRepoUrl = context['mcp_common_scripts_repo'] ?: 'ssh://gerrit.mcp.mirantis.com:29418/mcp/mcp-common-scripts'
                 checkout([
                     $class           : 'GitSCM',
                     branches         : [[name: 'FETCH_HEAD'],],
                     extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'mcp-common-scripts']],
-                    userRemoteConfigs: [[url: commonScriptsRepoUrl, refspec: mcpCommonScriptsBranch, credentialsId: gerritCredentials],],
+                    userRemoteConfigs: [[url: commonScriptsRepoUrl, refspec: context['mcp_common_scripts_branch'], credentialsId: gerritCredentials],],
                 ])
 
                 sh 'cp mcp-common-scripts/config-drive/create_config_drive.sh create-config-drive && chmod +x create-config-drive'
