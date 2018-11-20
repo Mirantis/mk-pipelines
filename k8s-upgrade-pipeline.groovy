@@ -34,6 +34,8 @@ def pepperEnv = "pepperEnv"
 def POOL = "I@kubernetes:pool"
 def calicoImagesValid = false
 
+ETCD_ENDPOINTS = ""
+
 def overrideKubernetesImage(pepperEnv) {
     def salt = new com.mirantis.mk.Salt()
 
@@ -104,11 +106,6 @@ def startCalicoUpgrade(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
 
     stage("Starting upgrade using calico-upgrade: migrate etcd schema and lock Calico") {
-        // get ETCD_ENDPOINTS in use by Calico
-        def ep_str = salt.cmdRun(pepperEnv, target, "cat /etc/calico/calicoctl.cfg | grep etcdEndpoints")['return'][0].values()[0]
-        def ETCD_ENDPOINTS = ep_str.tokenize(' ')[1]
-        print("ETCD_ENDPOINTS in use by Calico: '${ETCD_ENDPOINTS}'")
-
         def cmd = "export APIV1_ETCD_ENDPOINTS=${ETCD_ENDPOINTS} && " +
                   "export APIV1_ETCD_CA_CERT_FILE=/var/lib/etcd/ca.pem && " +
                   "export APIV1_ETCD_CERT_FILE=/var/lib/etcd/etcd-client.crt && " +
@@ -268,6 +265,61 @@ def checkCalicoUpgradeSuccessful(pepperEnv, target) {
         // TODO add auto-check of results
         salt.cmdRun(pepperEnv, target, "calicoctl version | grep -i version")
         salt.cmdRun(pepperEnv, target, "calicoctl node status")
+        salt.cmdRun(pepperEnv, target, "calicoctl node checksystem")
+    }
+}
+
+def checkCalicoUpgradePossibility(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Verification of Calico upgrade possibility") {
+        // check Calico version
+        def versionResult = salt.cmdRun(
+                pepperEnv, target, "calicoctl version | grep 'Cluster Version'"
+            )['return'][0].values()[0].split("\n")[0].trim()
+        versionStr = (versionResult - "Cluster Version:").trim()
+        version = versionStr.tokenize(".")
+        if ((version.size() < 3) || (version[0] != "v2") || (version[1] != "6") || (version[2].toInteger() < 5)) {
+            error(
+                "Current Calico ${versionStr} cannot be upgraded to v3.x. " +
+                "Calico v2.6.x starting from v2.6.5 can be upgraded. " +
+                "For earlier versions, please update to v2.6.5 first."
+            )
+        }
+        print("Calico version was determined: ${versionStr}")
+
+        // check Calico is switched on
+        def readinessResult = salt.cmdRun(
+                pepperEnv, target, ". /var/lib/etcd/configenv && etcdctl get /calico/v1/Ready"
+            )['return'][0].values()[0].split("\n")[0].trim()
+        print("Calico readiness check result: ${readinessResult}")
+        if (readinessResult != "true") {
+            // try set it to true
+            readinessResult = salt.cmdRun(
+                pepperEnv, target, ". /var/lib/etcd/configenv && etcdctl set /calico/v1/Ready true"
+            )['return'][0].values()[0].split("\n")[0].trim()
+            print("Calico readiness result 2nd attempt: ${readinessResult}")
+            if (readinessResult != "true") {
+                error("Calico is not ready. '/calico/v1/Ready': '${readinessResult}'")
+            }
+        }
+
+        // Calico data upgrade dry-run
+        def cmd = "export APIV1_ETCD_ENDPOINTS=${ETCD_ENDPOINTS} && " +
+                  "export APIV1_ETCD_CA_CERT_FILE=/var/lib/etcd/ca.pem && " +
+                  "export APIV1_ETCD_CERT_FILE=/var/lib/etcd/etcd-client.crt && " +
+                  "export APIV1_ETCD_KEY_FILE=/var/lib/etcd/etcd-client.key && " +
+                  "export ETCD_ENDPOINTS=${ETCD_ENDPOINTS} && " +
+                  "export ETCD_CA_CERT_FILE=/var/lib/etcd/ca.pem && " +
+                  "export ETCD_CERT_FILE=/var/lib/etcd/etcd-client.crt && " +
+                  "export ETCD_KEY_FILE=/var/lib/etcd/etcd-client.key && " +
+                  "./calico-upgrade dry-run --ignore-v3-data"
+        def dryRunResult = salt.cmdRun(pepperEnv, target, cmd)['return'][0].values()[0]
+        // check dry-run result
+        def validationSuccessStr = "Successfully validated v1 to v3 conversion"
+        if (!dryRunResult.contains(validationSuccessStr)) {
+            error("Calico data upgrade dry-run has failed")
+        }
     }
 }
 
@@ -310,8 +362,18 @@ timeout(time: 12, unit: 'HOURS') {
                 // one CTL node will be used for running upgrade of Calico etcd schema
                 def ctl_node = salt.getMinionsSorted(pepperEnv, CTL_TARGET)[0]
 
-                // prepare for upgrade. when done in advance, this will decrease downtime during upgrade
+                // get ETCD_ENDPOINTS in use by Calico
+                def ep_str = salt.cmdRun(pepperEnv, ctl_node, "cat /etc/calico/calicoctl.cfg | grep etcdEndpoints")['return'][0].values()[0]
+                ETCD_ENDPOINTS = ep_str.split("\n")[0].tokenize(' ')[1]
+                print("ETCD_ENDPOINTS in use by Calico: '${ETCD_ENDPOINTS}'")
+
+                // download calico-upgrade utility
                 downloadCalicoUpgrader(pepperEnv, ctl_node)
+
+                // check the possibility of upgrading of Calico
+                checkCalicoUpgradePossibility(pepperEnv, ctl_node)
+
+                // prepare for upgrade. when done in advance, this will decrease downtime during upgrade
                 if (calicoImagesValid) {
                     pullCalicoImages(pepperEnv, POOL)
                 }
