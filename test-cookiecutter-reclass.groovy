@@ -286,6 +286,13 @@ timeout(time: 1, unit: 'HOURS') {
                     parallel paralellEnvs
                     sh("rsync -a --exclude '*@tmp' ${templateEnvHead} ${templateEnvPatched}")
                 }
+                if (env.CUSTOM_COOKIECUTTER_CONTEXT) {
+                    // readYaml to check custom context structure
+                    def customContext = readYaml text: env.CUSTOM_COOKIECUTTER_CONTEXT
+                    writeYaml file: "${templateEnvHead}/contexts/custom_context.yml", data: customContext
+                    writeYaml file: "${templateEnvPatched}/contexts/custom_context.yml", data: customContext
+                    common.infoMsg("Using custom context provided from job parameter 'CUSTOM_COOKIECUTTER_CONTEXT'")
+                }
             }
             stage("Check workflow_definition") {
                 // Check only for patchset
