@@ -57,6 +57,10 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.upgrade', [], null, true)
             }
 
+            stage("Update Hosts file") {
+                salt.enforceState(pepperEnv, "I@linux:system", 'linux.network.host', true)
+            }
+
             stage("Setup networking") {
                 // Sync all of the modules from the salt master.
                 salt.syncAll(pepperEnv, targetLiveAll)
