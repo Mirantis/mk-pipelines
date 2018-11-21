@@ -132,6 +132,7 @@ timeout(time: 2, unit: 'HOURS') {
 
       }
     stage("kitchen") {
+      if (fileExists(".travis.yml")) {/** TODO: Remove this legacy block once formulas are switched to new configuration */
         if (checkouted) {
           if (fileExists(".kitchen.yml") || fileExists(".kitchen.openstack.yml")) {
             if (fileExists(".kitchen.openstack.yml")) {
@@ -167,6 +168,47 @@ timeout(time: 2, unit: 'HOURS') {
               setupRunner(defaultGitRef, defaultGitUrl)
             } else {
               common.warningMsg(".kitchen.yml file not found, no kitchen tests triggered.")
+            }
+          }
+        }/** TODO: End of block for removal */
+        } else {
+          if (checkouted) {
+            if (fileExists(".kitchen.yml") || fileExists(".kitchen.openstack.yml")) {
+              if (fileExists(".kitchen.openstack.yml")) {
+                common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
+                if (fileExists(".kitchen.yml")) {
+                  common.infoMsg("Ignoring the docker Kitchen test configuration file.")
+                }
+              } else {
+                common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
+              }
+              def kitchenEnvs = []
+              ruby.ensureRubyEnv()
+              if (!fileExists("Gemfile")) {
+                sh("curl -s -o ./Gemfile 'https://gerrit.mcp.mirantis.com/gitweb?p=salt-formulas/salt-formulas-scripts.git;a=blob_plain;f=Gemfile;hb=refs/heads/master'")
+                ruby.installKitchen()
+              } else {
+                common.infoMsg("Override Gemfile found in the kitchen directory, using it.")
+                ruby.installKitchen()
+              }
+              common.infoMsg = ruby.runKitchenCommand("list -b")
+              kitchenEnvs = ruby.runKitchenCommand("list -b").split()
+              common.infoMsg(kitchenEnvs)
+              common.infoMsg("Running kitchen testing in parallel mode")
+              if (CUSTOM_KITCHEN_ENVS != null && CUSTOM_KITCHEN_ENVS != '') {
+                kitchenEnvs = CUSTOM_KITCHEN_ENVS.tokenize('\n')
+                common.infoMsg("CUSTOM_KITCHEN_ENVS not empty. Running with custom enviroments: ${kitchenEnvs}")
+              }
+              if (kitchenEnvs != null && kitchenEnvs != '') {
+                def acc = 0
+                common.infoMsg("Found " + kitchenEnvs.size() + " environment(s)")
+                for (int i = 0; i < kitchenEnvs.size(); i++) {
+                  futureFormulas << kitchenEnvs[i]
+                }
+                setupRunner(defaultGitRef, defaultGitUrl)
+              } else {
+                common.warningMsg(".kitchen.yml nor .kitchen.openstack.yml file not found, no kitchen tests triggered.")
+              }
             }
           }
         }
