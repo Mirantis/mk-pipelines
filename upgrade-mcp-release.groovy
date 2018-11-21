@@ -208,7 +208,13 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 if (UPGRADE_SALTSTACK.toBoolean()) {
                     salt.enforceState(venvPepper, "I@linux:system", 'linux.system.repo', true)
 
-                    updateSaltStack("I@salt:master", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+                    // as salt package update leads to service restart and token changing - re-create pepperEnv and rerun package update
+                    try {
+                        updateSaltStack("I@salt:master", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+                    } catch (Exception e) {
+                        python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+                        updateSaltStack("I@salt:master", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+                    }
 
                     updateSaltStack("I@salt:minion and not I@salt:master", '["salt-minion"]')
                 }
