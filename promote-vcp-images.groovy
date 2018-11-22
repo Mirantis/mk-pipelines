@@ -14,7 +14,7 @@ def common = new com.mirantis.mk.Common()
 def jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 
 // Better to chose slave with ssd and fast network to webDav host
-slaveNode = env.SLAVE_NODE ?: 'jsl23.mcp.mirantis.net'
+slaveNode = env.SLAVE_NODE ?: 'promotion'
 def job_env = env.getEnvironment().findAll { k, v -> v }
 def verify = job_env.VERIFY_DOWNLOAD ?: true
 def overwrite = job_env.FORCE_OVERWRITE.toBoolean() ?: false
