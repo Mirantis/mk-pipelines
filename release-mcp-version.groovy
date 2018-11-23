@@ -100,7 +100,7 @@ def triggerSyncVCPJob(VcpImageList, targetTag) {
         common.infoMsg("Replacing SUBS_SOURCE_VCP_IMAGE_TAG => ${targetTag}")
         TargetVcpImageList += image.replace('SUBS_SOURCE_VCP_IMAGE_TAG', targetTag) + '\n'
     }
-    build job: "upload-to-s3", parameters: [
+    build job: "upload_images_to_s3", parameters: [
             [$class: 'TextParameterValue', name: 'FILENAMES',
              value: TargetVcpImageList + TargetVcpImageList.collect({it + '.md5'})]
     ]
