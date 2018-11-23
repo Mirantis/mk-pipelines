@@ -63,6 +63,17 @@ timeout(time: 4, unit: 'HOURS') {
                     targetRegistry = imageArray[1].split('/')[0]
                     imageName = getImageName(sourceImage)
                     targetImageFull = "${targetRegistryPath}/${imageName}:${env.IMAGE_TAG}"
+
+                    def mcp_artifactory = new com.mirantis.mcp.MCPArtifactory()
+                    if (targetImageFull.contains(externalMarker)) {
+                        external = true
+                        // check if images exists - raise error, as we don't want to rewrite existing one
+                        def imageRepo = targetRegistryPath - targetRegistry
+                        if (mcp_artifactory.imageExists(env.REGISTRY_URL, "${imageRepo}/${imageName}", imageTag)) {
+                            error("Image ${targetImageFull} already exists!")
+                        }
+                    }
+
                     srcImage = docker.image(sourceImage)
                     common.retry(3, 5) {
                         srcImage.pull()
@@ -77,9 +88,6 @@ timeout(time: 4, unit: 'HOURS') {
                         }
                     }
                     def buildTime = new Date().format("yyyyMMdd-HH:mm:ss.SSS", TimeZone.getTimeZone('UTC'))
-                    if (targetImageFull.contains(externalMarker)) {
-                        external = true
-                    }
 
                     if (setDefaultArtifactoryProperties) {
                         common.infoMsg("Processing artifactory props for : ${targetImageFull}")
@@ -103,8 +111,6 @@ timeout(time: 4, unit: 'HOURS') {
                         if (external) {
                             artifactoryProperties << ['com.mirantis.externalImage': external]
                         }
-                        // Call pipeline-library routine to set properties
-                        def mcp_artifactory = new com.mirantis.mcp.MCPArtifactory()
                         def existingProps = mcp_artifactory.getPropertiesForArtifact(imgUrl)
                         def historyProperties = []
                         // check does image have already some props
