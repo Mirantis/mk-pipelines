@@ -26,8 +26,8 @@
 
 common = new com.mirantis.mk.Common()
 
-syncVcpImagesToS3 = env.SYNC_VCP_IMAGE_TO_S3.toBoolean() ?: false
-emailNotify = env.EMAIL_NOTIFY.toBoolean() ?: false
+syncVcpImagesToS3 = env.SYNC_VCP_IMAGE_TO_S3 ?: false
+emailNotify = env.EMAIL_NOTIFY ?: false
 
 def triggerAptlyPromoteJob(aptlyUrl, components, diffOnly, dumpPublish, packages, recreate, source, storages, target) {
     build job: "aptly-promote-all-testing-stable", parameters: [
@@ -88,10 +88,21 @@ def triggerPromoteVCPJob(VcpImageList, tag, sourceTag) {
     ]
 }
 
-def triggerSyncVCPJob(VcpImageList) {
+def triggerSyncVCPJob(VcpImageList, targetTag) {
+    // Operation must be synced with triggerPromoteVCPJob procedure!
+    def images = VcpImageList.trim().tokenize()
+    TargetVcpImageList = ''
+    for (image in images) {
+        if (image.startsWith('#')) {
+            common.warningMsg("Skipping image ${image}")
+            continue
+        }
+        common.infoMsg("Replacing SUBS_SOURCE_VCP_IMAGE_TAG => ${targetTag}")
+        TargetVcpImageList += image.replace('SUBS_SOURCE_VCP_IMAGE_TAG', targetTag) + '\n'
+    }
     build job: "upload-to-s3", parameters: [
             [$class: 'TextParameterValue', name: 'FILENAMES',
-             value: VcpImageList + VcpImageList.collect({it + '.md5'})]
+             value: TargetVcpImageList + TargetVcpImageList.collect({it + '.md5'})]
     ]
 }
 
@@ -129,9 +140,9 @@ timeout(time: 12, unit: 'HOURS') {
                     triggerPromoteVCPJob(VCP_IMAGE_LIST, TARGET_REVISION, SOURCE_REVISION)
 
                 }
-                if (syncVcpImagesToS3) {
+                if (syncVcpImagesToS3.toBoolean()) {
                     common.infoMsg("Syncing VCP images from internal: http://images.mcp.mirantis.net/ to s3: images.mirantis.com")
-                    triggerSyncVCPJob('')
+                    triggerSyncVCPJob(VCP_IMAGE_LIST, TARGET_REVISION)
                 }
                 if (emailNotify) {
                     notify_text = "MCP Promotion  ${env.SOURCE_REVISION} => ${env.TARGET_REVISION} has been done"
