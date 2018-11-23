@@ -76,6 +76,7 @@ timeout(time: 4, unit: 'HOURS') {
                             sh("docker push ${targetImageFull}")
                         }
                     }
+                    def buildTime = new Date().format("yyyyMMdd-HH:mm:ss.SSS", TimeZone.getTimeZone('UTC'))
                     if (targetImageFull.contains(externalMarker)) {
                         external = true
                     }
@@ -94,22 +95,28 @@ timeout(time: 4, unit: 'HOURS') {
                         // exactly one, which we pushing now
                         guessImage = targetImageFull.replace(':', '/').replace(targetRegistry, '')
                         ArrayList img_data = new JsonSlurper().parseText(ret)['results']
-                        img_data*.uri.each { imgUrl ->
-                            if (imgUrl.contains(guessImage)) {
-                                artifactoryProperties = [
-                                    'com.mirantis.targetTag'    : env.IMAGE_TAG,
-                                    'com.mirantis.uniqueImageId': unique_image_id,
-                                ]
-                                if (external) {
-                                    artifactoryProperties << ['com.mirantis.externalImage': external]
-                                }
-                                common.infoMsg("artifactoryProperties=> ${artifactoryProperties}")
-                                // Call pipeline-library routine to set properties
-                                def mcp_artifactory = new com.mirantis.mcp.MCPArtifactory()
-                                common.retry(3, 5) {
-                                    mcp_artifactory.setProperties(imgUrl - '/manifest.json', artifactoryProperties)
-                                }
-                            }
+                        def imgUrl = img_data*.uri.find { it.contains(guessImage) } - '/manifest.json'
+                        artifactoryProperties = [
+                            'com.mirantis.targetTag'    : env.IMAGE_TAG,
+                            'com.mirantis.uniqueImageId': unique_image_id,
+                        ]
+                        if (external) {
+                            artifactoryProperties << ['com.mirantis.externalImage': external]
+                        }
+                        // Call pipeline-library routine to set properties
+                        def mcp_artifactory = new com.mirantis.mcp.MCPArtifactory()
+                        def existingProps = mcp_artifactory.getPropertiesForArtifact(imgUrl)
+                        def historyProperties = []
+                        // check does image have already some props
+                        if (existingProps) {
+                            historyProperties = existingProps.get('com.mirantis.versionHistory', [])
+                        }
+                        // %5C - backslash symbol is needed
+                        historyProperties.add("${buildTime}%5C=${sourceImage}")
+                        artifactoryProperties << [ 'com.mirantis.versionHistory': historyProperties.join(',') ]
+                        common.infoMsg("artifactoryProperties=> ${artifactoryProperties}")
+                        common.retry(3, 5) {
+                            mcp_artifactory.setProperties(imgUrl, artifactoryProperties)
                         }
                     }
                 }
