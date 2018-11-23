@@ -21,7 +21,7 @@
  *   RELEASE_VCP_IMAGES - boolean
  *   EMAIL_NOTIFY
  *   NOTIFY_RECIPIENTS
-  *
+ *
  */
 
 common = new com.mirantis.mk.Common()
@@ -70,7 +70,7 @@ def triggerEbfRepoJob(snapshotId, snapshotName) {
 def triggerGitTagJob(gitRepoList, gitCredentials, tag, sourceTag) {
     // There is no `nightly` and `testing` build-IDs` in release process
     // for git repos
-    if ( sourceTag in ['nightly', 'testing'] ) sourceTag = 'master'
+    if (sourceTag in ['nightly', 'testing']) sourceTag = 'master'
     build job: "tag-git-repos-all", parameters: [
         [$class: 'TextParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
         [$class: 'StringParameterValue', name: 'GIT_CREDENTIALS', value: gitCredentials],
@@ -98,11 +98,13 @@ def triggerSyncVCPJob(VcpImageList, targetTag) {
             continue
         }
         common.infoMsg("Replacing SUBS_SOURCE_VCP_IMAGE_TAG => ${targetTag}")
-        TargetVcpImageList += image.replace('SUBS_SOURCE_VCP_IMAGE_TAG', targetTag) + '\n'
+        TargetVcpImageList += image.replace('SUBS_SOURCE_VCP_IMAGE_TAG', targetTag) + '\n' +
+            image.replace('SUBS_SOURCE_VCP_IMAGE_TAG', targetTag).trim() + '.md5' + '\n'
+
     }
     build job: "upload_images_to_s3", parameters: [
-            [$class: 'TextParameterValue', name: 'FILENAMES',
-             value: TargetVcpImageList + TargetVcpImageList.collect({it + '.md5'})]
+        [$class: 'TextParameterValue', name: 'FILENAMES',
+         value : TargetVcpImageList]
     ]
 }
 
