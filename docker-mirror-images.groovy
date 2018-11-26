@@ -69,7 +69,7 @@ timeout(time: 4, unit: 'HOURS') {
                         external = true
                         // check if images exists - raise error, as we don't want to rewrite existing one
                         def imageRepo = targetRegistryPath - targetRegistry
-                        if (mcp_artifactory.imageExists(env.REGISTRY_URL, "${imageRepo}/${imageName}", imageTag)) {
+                        if (mcp_artifactory.imageExists(env.REGISTRY_URL, "${imageRepo}/${imageName}", env.IMAGE_TAG)) {
                             error("Image ${targetImageFull} already exists!")
                         }
                     }
