@@ -3,8 +3,8 @@
  *
  * Expected parameters:
  *   COOKIECUTTER_TEMPLATE_CONTEXT      Context parameters for the template generation.
- *   EMAIL_ADDRESS                      Email to send a created tar file
  *   CREDENTIALS_ID                     Credentials id for git
+ *   TEST_MODEL                         Run syntax tests for model
  **/
 import static groovy.json.JsonOutput.toJson
 import static groovy.json.JsonOutput.prettyPrint
@@ -15,8 +15,9 @@ git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
-slaveNode = env.SLAVE_NODE ?: 'python&&docker'
-gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
+slaveNode = env.getProperty('SLAVE_NODE') ?: 'python&&docker'
+gerritCredentials = env.getProperty('CREDENTIALS_ID') ?: 'gerrit'
+runTestModel = (env.getProperty('TEST_MODEL') ?: true).toBoolean()
 distribRevision = 'proposed'
 gitGuessedVersion = false
 
@@ -83,6 +84,7 @@ def globalVariatorsUpdate() {
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
         def context = globalVariatorsUpdate()
+        def RequesterEmail = context.get('email_address', '')
         def templateEnv = "${env.WORKSPACE}/template"
         def modelEnv = "${env.WORKSPACE}/model"
         def testEnv = "${env.WORKSPACE}/test"
@@ -97,7 +99,7 @@ timeout(time: 1, unit: 'HOURS') {
             wrap([$class: 'BuildUser']) {
                 user = env.BUILD_USER_ID
             }
-            currentBuild.description = context['cluster_name']
+            currentBuild.description = "${context['cluster_name']} ${RequesterEmail}"
 
             stage('Download Cookiecutter template') {
                 sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
@@ -132,7 +134,7 @@ timeout(time: 1, unit: 'HOURS') {
             }
 
             stage("Test") {
-                if (env.TEST_MODEL.toBoolean()) {
+                if (runTestModel) {
                     // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
                     if (!common.checkRemoteBinary([mcp_version: distribRevision]).linux_system_repo_url) {
                         common.errorMsg("Binary release: ${distribRevision} not exist. Fallback to 'proposed'! ")
@@ -161,9 +163,7 @@ timeout(time: 1, unit: 'HOURS') {
             }
             stage("Generate config drives") {
                 // apt package genisoimage is required for this stage
-
                 // download create-config-drive
-                // FIXME: that should be refactored, to use git clone - to be able download it from custom repo.
                 def commonScriptsRepoUrl = context['mcp_common_scripts_repo'] ?: 'ssh://gerrit.mcp.mirantis.com:29418/mcp/mcp-common-scripts'
                 checkout([
                     $class           : 'GitSCM',
@@ -246,8 +246,8 @@ timeout(time: 1, unit: 'HOURS') {
                 sh(returnStatus: true, script: "tar -czf output-${context['cluster_name']}/${context['cluster_name']}.tar.gz --exclude='*@tmp' -C ${modelEnv} .")
                 archiveArtifacts artifacts: "output-${context['cluster_name']}/${context['cluster_name']}.tar.gz"
 
-                if (EMAIL_ADDRESS != null && EMAIL_ADDRESS != "") {
-                    emailext(to: EMAIL_ADDRESS,
+                if(RequesterEmail != '' && !RequesterEmail.contains('example')){
+                    emailext(to: RequesterEmail,
                         attachmentsPattern: "output-${context['cluster_name']}/*",
                         body: "Mirantis Jenkins\n\nRequested reclass model ${context['cluster_name']} has been created and attached to this email.\nEnjoy!\n\nMirantis",
                         subject: "Your Salt model ${context['cluster_name']}")
@@ -258,7 +258,7 @@ timeout(time: 1, unit: 'HOURS') {
             }
 
             // Fail, but leave possibility to get failed artifacts
-            if (!testResult && env.TEST_MODEL.toBoolean()) {
+            if (!testResult && runTestModel) {
                 common.warningMsg('Test finished: FAILURE. Please check logs and\\or debug failed model manually!')
                 error('Test stage finished: FAILURE')
             }
