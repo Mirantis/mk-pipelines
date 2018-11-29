@@ -50,6 +50,21 @@ upgradeStageMap.put('Upgrade pre: migrate resources',
  * Hosts are being removed from scheduling to host new resources.
  * If instance migration was performed no instances should be present.'''
   ])
+upgradeStageMap.put('Upgrade OS',
+  [
+    'Description': 'Optional step. OS packages will be upgraded during this phase, depending on the job parameters dist-upgrade might be called. And reboot of node executed.',
+    'Status': 'NOT_LAUNCHED',
+    'Expected behaviors': '''
+ * OpenStack services might flap
+ * No workload downtime
+ * The nodes might be rebooted''',
+    'Launched actions': '''
+ * Install new version of system packages
+ * If doing dist-upgrade new kernel might be installed and node rebooted
+ * System packages are updated
+ * Node might be rebooted
+'''
+  ])
 upgradeStageMap.put('Upgrade OpenStack',
    [
     'Description': 'OpenStack python code will be upgraded during this stage. No workload downtime is expected.',
@@ -69,27 +84,6 @@ upgradeStageMap.put('Upgrade OpenStack',
  * Services are running
  * Basic checks around services API are passed
  * Verified that agents/services on data plane nodes are connected to new control plane
-'''
-  ])
-upgradeStageMap.put('Upgrade OS',
-  [
-    'Description': 'Optional step. OS packages will be upgraded during this phase, depending on the job parameters dist-upgrade might be called. And reboot of node executed.',
-    'Status': 'NOT_LAUNCHED',
-    'Expected behaviors': '''
- * OpenStack services might flap
- * No workload downtime
- * The nodes might be rebooted''',
-    'Launched actions': '''
- * Install new version of system packages
- * If doing dist-upgrade new kernel might be installed and node rebooted
- * Verify agents are alive/connected
- * Run basic API validation''',
-    'State result': '''
- * System packages are updated
- * Services are running
- * Basic checks around services API are passed
- * Verified that agents/services on data plane nodes are connected
- * Node might be rebooted
 '''
   ])
 upgradeStageMap.put('Upgrade post: enable resources',
@@ -155,15 +149,6 @@ timeout(time: 24, unit: 'HOURS') {
         }
       }
 
-      common.stageWrapper(upgradeStageMap, "Upgrade OpenStack", target, interactive) {
-        // Stop services on node. //Do actual step by step orch here.
-        openstack.runOpenStackUpgradePhase(env, target, 'service_stopped')
-        openstack.runOpenStackUpgradePhase(env, target, 'pkgs_latest')
-        openstack.runOpenStackUpgradePhase(env, target, 'render_config')
-        openstack.runOpenStackUpgradePhase(env, target, 'service_running')
-        openstack.applyOpenstackAppsStates(env, target)
-        openstack.runOpenStackUpgradePhase(env, target, 'verify')
-      }
       common.stageWrapper(upgradeStageMap, "Upgrade OS", target, interactive) {
         if (OS_DIST_UPGRADE.toBoolean() == true){
           upgrade_mode = 'dist-upgrade'
@@ -173,6 +158,14 @@ timeout(time: 24, unit: 'HOURS') {
         if (OS_DIST_UPGRADE.toBoolean() == true || OS_UPGRADE.toBoolean() == true) {
           debian.osUpgradeNode(env, target, upgrade_mode, false)
         }
+      }
+
+      common.stageWrapper(upgradeStageMap, "Upgrade OpenStack", target, interactive) {
+        // Stop services on node. //Do actual step by step orch here.
+        openstack.runOpenStackUpgradePhase(env, target, 'service_stopped')
+        openstack.runOpenStackUpgradePhase(env, target, 'pkgs_latest')
+        openstack.runOpenStackUpgradePhase(env, target, 'render_config')
+        openstack.runOpenStackUpgradePhase(env, target, 'service_running')
         openstack.applyOpenstackAppsStates(env, target)
         openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
