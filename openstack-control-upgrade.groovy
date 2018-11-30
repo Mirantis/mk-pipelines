@@ -184,9 +184,9 @@ timeout(time: 12, unit: 'HOURS') {
         }
         if (OS_DIST_UPGRADE.toBoolean() == true || OS_UPGRADE.toBoolean() == true) {
           debian.osUpgradeNode(env, target, upgrade_mode, false)
+          openstack.applyOpenstackAppsStates(env, target)
+          openstack.runOpenStackUpgradePhase(env, target, 'verify')
         }
-        openstack.applyOpenstackAppsStates(env, target)
-        openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
     }
   }
