@@ -77,7 +77,7 @@ def runTestSaltModelReclass(String cluster, String defaultGitUrl, String cluster
 }
 
 def checkReclassSystemDocumentationCommit(gerritLib, gerritCredentials) {
-    gerrit.gerritPatchsetCheckout([
+    gerritLib.gerritPatchsetCheckout([
         credentialsId: gerritCredentials
     ])
 
@@ -153,8 +153,8 @@ timeout(time: 12, unit: 'HOURS') {
             }
             ArrayList descriptionMsgs = [ "<font color='red'>${buildType} detected!</font> Running with next parameters:" ]
             for(String project in projectsMap.keySet()) {
-                descriptionMsgs.add("Ref for ${project} => ${project.ref}")
-                descriptionMsgs.add("Branch for ${project} => ${project.branch}")
+                descriptionMsgs.add("Ref for ${project} => ${projectsMap[project]['ref']}")
+                descriptionMsgs.add("Branch for ${project} => ${projectsMap[project]['branch']}")
             }
             descriptionMsgs.add("Distrib revision => ${distribRevision}")
             currentBuild.description = descriptionMsgs.join('\n')
@@ -169,8 +169,9 @@ timeout(time: 12, unit: 'HOURS') {
                 if (['master'].contains(gerritBranch) && !documentationOnly) {
                     for (int i = 0; i < testModels.size(); i++) {
                         def cluster = testModels[i]
-                        def clusterGitUrl = projectsMap[reclassSystemRepo].url.substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
-                        branches["reclass-system-${cluster}"] = runTestSaltModelReclass(cluster, projectsMap[reclassSystemRepo].url, clusterGitUrl, projectsMap[reclassSystemRepo].ref)
+                        //def clusterGitUrl = projectsMap[reclassSystemRepo]['url'].substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
+                        def clusterGitUrl = ''
+                        branches["reclass-system-${cluster}"] = runTestSaltModelReclass(cluster, projectsMap[reclassSystemRepo]['url'], clusterGitUrl, projectsMap[reclassSystemRepo]['ref'])
                     }
                 } else {
                     common.warningMsg("Tests for ${testModels} skipped!")
