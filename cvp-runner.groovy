@@ -10,27 +10,34 @@
  *   TESTS_REPO                      Repo to clone
  *   TESTS_SETTINGS                  Additional environment varibales to apply
  *   PROXY                           Proxy to use for cloning repo or for pip
- *   TEST_IMAGE                      Docker image link or name to use for running container with test framework.
+ *   IMAGE                           Docker image to use for running container with test framework.
  *   DEBUG_MODE                      If you need to debug (keep container after test), please enabled this
- *
+ *  To launch tests from cvp_spt docker images need to set IMAGE and left TESTS_REPO empty
  */
 
 common = new com.mirantis.mk.Common()
 validate = new com.mirantis.mcp.Validate()
 salt = new com.mirantis.mk.Salt()
-def artifacts_dir = 'validation_artifacts/'
-def remote_dir = '/root/qa_results/'
+salt_testing = new com.mirantis.mk.SaltModelTesting()
+def artifacts_dir = "validation_artifacts/"
+def remote_dir = '/root/qa_results'
 def container_workdir = '/var/lib'
+def name = 'cvp-spt'
+def xml_file = "${name}_report.xml"
 def TARGET_NODE = "I@gerrit:client"
 def reinstall_env = false
 def container_name = "${env.JOB_NAME}"
 def saltMaster
 def settings
 
-node() {
+slaveNode = (env.getProperty('SLAVE_NODE')) ?: 'docker'
+imageName = (env.getProperty('IMAGE')) ?: 'docker-prod-local.docker.mirantis.net/mirantis/cvp/cvp-spt:stable'
+
+node(slaveNode) {
     try{
         stage('Initialization') {
             sh "rm -rf ${artifacts_dir}"
+            // TODO collaps TESTS_SETTINGS flow into EXTRA variables map
             if ( TESTS_SETTINGS != "" ) {
                 for (var in TESTS_SETTINGS.tokenize(";")) {
                     key = var.tokenize("=")[0].trim()
@@ -50,11 +57,11 @@ node() {
                 validate.prepareVenv(TESTS_REPO, PROXY)
             } else {
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-                salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_dir}")
-                salt.cmdRun(saltMaster, TARGET_NODE, "mkdir -p ${remote_dir}")
+                salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_dir}/")
+                salt.cmdRun(saltMaster, TARGET_NODE, "mkdir -p ${remote_dir}/")
                 validate.runContainer(saltMaster, TARGET_NODE, IMAGE, container_name)
                 if ( TESTS_REPO != "") {
-                    salt.cmdRun(saltMaster, TARGET_NODE, "docker exec ${container_name} rm -rf ${container_workdir}/cvp*")
+                    salt.cmdRun(saltMaster, TARGET_NODE, "docker exec ${container_name} rm -rf ${container_workdir}/${container_name}")
                     salt.cmdRun(saltMaster, TARGET_NODE, "docker exec ${container_name} git clone ${TESTS_REPO} ${container_workdir}/${container_name}")
                     TESTS_SET = container_workdir + '/' + container_name + '/' + TESTS_SET
                     if ( reinstall_env ) {
@@ -66,8 +73,36 @@ node() {
         }
 
         stage('Run Tests') {
+            def creds = common.getCredentials(SALT_MASTER_CREDENTIALS)
+            def username = creds.username
+            def password = creds.password
+            def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} --tb=short -sv ${container_workdir}/${TESTS_SET}"
+
             sh "mkdir -p ${artifacts_dir}"
-            validate.runPyTests(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS, TESTS_SET, TESTS_SETTINGS.tokenize(";"), container_name, TARGET_NODE, remote_dir, artifacts_dir)
+
+            def configRun = [
+                'image': imageName,
+                'baseRepoPreConfig': false,
+                'dockerMaxCpus': 2,
+                'dockerExtraOpts' : [
+                    "-v /root/qa_results/:/root/qa_results/",
+                    "-v ${env.WORKSPACE}/validation_artifacts/:${container_workdir}/validation_artifacts/",
+                    "--entrypoint=''",  // to override ENTRYPOINT=/bin/bash in Dockerfile of image
+                ],
+
+                'envOpts'         : [
+                    "WORKSPACE=${container_workdir}/${name}",
+                    "SALT_USERNAME=${username}",
+                    "SALT_PASSWORD=${password}",
+                    "SALT_URL=${SALT_MASTER_URL}"
+                ] + TESTS_SETTINGS.replaceAll('\\"', '').tokenize(";"),
+                'runCommands'     : [
+                      '010_start_tests'    : {
+                          sh("cd ${container_workdir} && ${script}")
+                      }
+                  ]
+                ]
+            salt_testing.setupDockerAndTest(configRun)
         }
 
         stage ('Publish results') {
