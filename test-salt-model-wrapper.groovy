@@ -115,7 +115,7 @@ timeout(time: 12, unit: 'HOURS') {
 
         // Common and manual build parameters
         LinkedHashMap projectsMap = [:]
-        String distribRevision = job_env('DISTRIB_REVISION', 'nightly')
+        String distribRevision = job_env.get('DISTRIB_REVISION', 'nightly')
         ArrayList testModels = job_env.get('TEST_MODELS', 'mcp-virtual-lab,infra').split(',')
 
         stage('Check build mode') {
