@@ -31,6 +31,14 @@ cookiecutterTemplatesRepo='mk/cookiecutter-templates'
 reclassSystemRepo='salt-models/reclass-system'
 slaveNode = env.getProperty('SLAVE_NODE') ?: 'python&&docker'
 
+voteMatrix = [
+  'test-mk-cookiecutter-templates': true,
+  'test-drivetrain': true,
+  'oscore-test-cookiecutter-models': false,
+  'test-salt-model-infra': true,
+  'test-salt-model-mcp-virtual-lab': true,
+]
+
 LinkedHashMap getManualRefParams(LinkedHashMap map) {
     LinkedHashMap manualParams = [:]
     String defaultGitRef = 'HEAD'
@@ -51,28 +59,37 @@ LinkedHashMap getManualRefParams(LinkedHashMap map) {
     return manualParams
 }
 
-def runTests(String jobName, String extraVars, Boolean propagateStatus=true) {
+def setGerritReviewComment(String jobName, String jobBuildURL) {
+    setGerritReview customUrl: "- ${jobName} ${jobBuildURL}console"
+}
+
+def runTests(String jobName, String extraVars) {
+    def propagateStatus = voteMatrix.get(jobName, true)
     return {
-        try {
-            build job: "${jobName}", parameters: [
-                [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: extraVars ]
-            ]
-        } catch (Exception e) {
-            if (propagateStatus) {
-                throw e
-            }
+        def jobBuild = build job: "${jobName}", propagate: false, parameters: [
+            [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: extraVars ]
+        ]
+        setGerritReviewComment(jobName, jobBuild.absoluteUrl)
+        if (propagateStatus && jobBuild.result == 'FAILURE') {
+            throw new Exception("Build ${jobName} is failed!")
         }
     }
 }
 
 def runTestSaltModelReclass(String cluster, String defaultGitUrl, String clusterGitUrl, String refSpec) {
+    def saltModelJob = "test-salt-model-${cluster}"
+    def propagateStatus = voteMatrix.get(saltModelJob, true)
     return {
-        build job: "test-salt-model-${cluster}", parameters: [
+        def jobBuild = build job: saltModelJob, propagate: false, parameters: [
             [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
             [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
             [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
             [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: refSpec ],
         ]
+        setGerritReviewComment(saltModelJob, jobBuild.absoluteUrl)
+        if (propagateStatus && jobBuild.result == 'FAILURE') {
+            throw new Exception("Build ${saltModelJob} is failed!")
+        }
     }
 }
 
@@ -96,8 +113,11 @@ timeout(time: 12, unit: 'HOURS') {
 
         // Var TEST_PARAMETERS_YAML contains any additional parameters for tests,
         // like manually specified Gerrit Refs/URLs, additional parameters and so on
-        if (env.getProperty('TEST_PARAMETERS_YAML')) {
-            common.mergeEnv(env, env.getProperty('TEST_PARAMETERS_YAML'))
+        def buildTestParams = [:]
+        def buildTestParamsYaml = env.getProperty('TEST_PARAMETERS_YAML')
+        if (buildTestParamsYaml) {
+            common.mergeEnv(env, buildTestParamsYaml)
+            buildTestParams = readYaml text: buildTestParamsYaml
         }
 
         // init required job variables
@@ -144,6 +164,7 @@ timeout(time: 12, unit: 'HOURS') {
                     'branch': gerritBranch,
                 ]
                 buildType = 'Gerrit Trigger'
+                buildTestParams << job_env.findAll { k,v -> k ==~ /GERRIT_.+/ }
             } else {
                 projectsMap = getManualRefParams(job_env)
                 if (!projectsMap) {
@@ -157,7 +178,7 @@ timeout(time: 12, unit: 'HOURS') {
                 descriptionMsgs.add("Branch for ${project} => ${projectsMap[project]['branch']}")
             }
             descriptionMsgs.add("Distrib revision => ${distribRevision}")
-            currentBuild.description = descriptionMsgs.join('\n')
+            currentBuild.description = descriptionMsgs.join('<br/>')
         }
 
         stage("Run tests") {
@@ -169,8 +190,7 @@ timeout(time: 12, unit: 'HOURS') {
                 if (['master'].contains(gerritBranch) && !documentationOnly) {
                     for (int i = 0; i < testModels.size(); i++) {
                         def cluster = testModels[i]
-                        //def clusterGitUrl = projectsMap[reclassSystemRepo]['url'].substring(0, defaultGitUrl.lastIndexOf("/") + 1) + cluster
-                        def clusterGitUrl = ''
+                        def clusterGitUrl = projectsMap[reclassSystemRepo]['url'].substring(0, projectsMap[reclassSystemRepo]['url'].lastIndexOf("/") + 1) + cluster
                         branches["reclass-system-${cluster}"] = runTestSaltModelReclass(cluster, projectsMap[reclassSystemRepo]['url'], clusterGitUrl, projectsMap[reclassSystemRepo]['ref'])
                     }
                 } else {
@@ -178,20 +198,20 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
             if (projectsMap.containsKey(reclassSystemRepo) || projectsMap.containsKey(cookiecutterTemplatesRepo)) {
-                branches['cookiecutter-templates'] = runTests('test-mk-cookiecutter-templates', JsonOutput.toJson(job_env))
+                branches['cookiecutter-templates'] = runTests('test-mk-cookiecutter-templates', JsonOutput.toJson(buildTestParams))
             }
             if (projectsMap.containsKey(cookiecutterTemplatesRepo)) {
-                branches['test-drivetrain'] = runTests('test-drivetrain', JsonOutput.toJson(job_env))
-                branches['oscore-test-cookiecutter-models'] = runTests('oscore-test-cookiecutter-models', JsonOutput.toJson(job_env))
+                branches['test-drivetrain'] = runTests('test-drivetrain', JsonOutput.toJson(buildTestParams))
+                // TODO: enable oscore-test job once it's ready to consume EXTRA_VARIABLES_YAML
+                //branches['oscore-test-cookiecutter-models'] = runTests('oscore-test-cookiecutter-models', JsonOutput.toJson(buildTestParams))
             }
 
-            // temp block to disable test run until job is stable
-            print branches.keySet()
-            currentBuild.result = 'SUCCESS'
-            return
-            // ----
-
-            parallel branches
+            try {
+                parallel branches
+            } catch (Exception e) {
+                println e
+                println 'Job is in non-voting mode for now. Skipping fails.'
+            }
         }
     }
 }
