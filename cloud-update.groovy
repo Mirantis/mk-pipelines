@@ -10,14 +10,12 @@
  *   PER_NODE                   Target nodes will be managed one by one (bool)
  *   ROLLBACK_BY_REDEPLOY       Omit taking live snapshots. Rollback is planned to be done by redeployment (bool)
  *   STOP_SERVICES              Stop API services before update (bool)
- *   TARGET_KERNEL_UPDATES      Comma separated list of nodes to update kernel if newer version is available (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
- *   TARGET_REBOOT              Comma separated list of nodes to reboot after update or physical machine rollback (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
- *   TARGET_HIGHSTATE           Comma separated list of nodes to run Salt Highstate on after update or physical machine rollback (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
- *   TARGET_UPDATES             Comma separated list of nodes to update (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid,cmp,kvm,osd,gtw-physical)
- *   TARGET_ROLLBACKS           Comma separated list of nodes to rollback (Valid values are ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cmp,kvm,osd,gtw-physical)
- *   TARGET_SNAPSHOT_MERGES     Comma separated list of nodes to merge live snapshot for (Valid values are cfg,ctl,prx,msg,dbs,log,mon,mtr,ntw,nal,gtw-virtual,cmn,rgw,cid)
- *   CTL_TARGET                 Salt targeted CTL nodes (ex. ctl*)
- *   PRX_TARGET                 Salt targeted PRX nodes (ex. prx*)
+ *   TARGET_KERNEL_UPDATES      Comma separated list of nodes to update kernel if newer version is available (Valid values are cfg,msg,dbs,log,mon,mtr,ntw,nal,cmn,rgw,cid,kvm,osd)
+ *   TARGET_REBOOT              Comma separated list of nodes to reboot after update or physical machine rollback (Valid values are cfg,msg,dbs,log,mon,mtr,ntw,nal,cmn,rgw,cid,kvm,osd)
+ *   TARGET_HIGHSTATE           Comma separated list of nodes to run Salt Highstate on after update or physical machine rollback (Valid values are cfg,msg,dbs,log,mon,mtr,ntw,nal,cmn,rgw,cid,kvm,osd)
+ *   TARGET_UPDATES             Comma separated list of nodes to update (Valid values are cfg,msg,dbs,log,mon,mtr,ntw,nal,cmn,rgw,cid,kvm,osd)
+ *   TARGET_ROLLBACKS           Comma separated list of nodes to rollback (Valid values are msg,dbs,log,mon,mtr,ntw,nal,cmn,rgw,kvm,osd)
+ *   TARGET_SNAPSHOT_MERGES     Comma separated list of nodes to merge live snapshot for (Valid values are cfg,msg,dbs,log,mon,mtr,ntw,nal,cmn,rgw,cid)
  *   MSG_TARGET                 Salt targeted MSG nodes (ex. msg*)
  *   DBS_TARGET                 Salt targeted DBS nodes (ex. dbs*)
  *   LOG_TARGET                 Salt targeted LOG nodes (ex. log*)
@@ -28,10 +26,8 @@
  *   CMN_TARGET                 Salt targeted CMN nodes (ex. cmn*)
  *   RGW_TARGET                 Salt targeted RGW nodes (ex. rgw*)
  *   CID_TARGET                 Salt targeted CID nodes (ex. cid*)
- *   CMP_TARGET                 Salt targeted physical compute nodes (ex. cmp001*)
  *   KVM_TARGET                 Salt targeted physical KVM nodes (ex. kvm01*)
  *   CEPH_OSD_TARGET            Salt targeted physical Ceph OSD nodes (ex. osd001*)
- *   GTW_TARGET                 Salt targeted physical or virtual GTW nodes (ex. gtw01*)
  *   ROLLBACK_PKG_VERSIONS      Space separated list of pkgs=versions to rollback to on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
  *   PURGE_PKGS                 Space separated list of pkgs=versions to be purged on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
  *   REMOVE_PKGS                Space separated list of pkgs=versions to be removed on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
@@ -107,7 +103,7 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
 
     if (targetPackages != "") {
         // list installed versions of pkgs that will be upgraded
-        if (targetType == 'kvm' || targetType == 'cmp' || targetType == 'osd' || targetType == 'gtw-physical') {
+        if (targetType == 'kvm' || targetType == 'osd') {
             def installedPkgs = []
             def newPkgs = []
             def targetPkgList = targetPackages.tokenize(',')
@@ -893,48 +889,6 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            if (updates.contains("ctl")) {
-                def target = CTL_TARGET
-                def type = 'ctl'
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        liveSnapshot(pepperEnv, target, type)
-                    }
-                    if (PER_NODE.toBoolean()) {
-                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-                        for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t, type)
-                            highstate(pepperEnv, t, type)
-                        }
-                    } else {
-                        updatePkgs(pepperEnv, target, type)
-                        highstate(pepperEnv, target, type)
-                    }
-                    verifyAPIs(pepperEnv, target)
-                }
-            }
-
-            if (updates.contains("prx")) {
-                def target = PRX_TARGET
-                def type = 'prx'
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        liveSnapshot(pepperEnv, target, type)
-                    }
-                    if (PER_NODE.toBoolean()) {
-                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-                        for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t, type)
-                            highstate(pepperEnv, t, type)
-                        }
-                    } else {
-                        updatePkgs(pepperEnv, target, type)
-                        highstate(pepperEnv, target, type)
-                    }
-                    verifyService(pepperEnv, target, 'nginx')
-                }
-            }
-
             if (updates.contains("msg")) {
                 def target = MSG_TARGET
                 def type = 'msg'
@@ -1020,27 +974,6 @@ timeout(time: 12, unit: 'HOURS') {
                         highstate(pepperEnv, target, type)
                     }
                     verifyContrail(pepperEnv, target)
-                }
-            }
-
-            if (updates.contains("gtw-virtual")) {
-                def target = GTW_TARGET
-                def type = 'gtw-virtual'
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        liveSnapshot(pepperEnv, target, type)
-                    }
-                    if (PER_NODE.toBoolean()) {
-                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-                        for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t, type)
-                            highstate(pepperEnv, t, type)
-                        }
-                    } else {
-                        updatePkgs(pepperEnv, target, type)
-                        highstate(pepperEnv, target, type)
-                    }
-                    verifyService(pepperEnv, target, 'neutron-dhcp-agent')
                 }
             }
 
@@ -1161,27 +1094,6 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            //
-            //physical machines update CMP_TARGET
-            //
-            if (updates.contains("cmp")) {
-                def target = CMP_TARGET
-                def type = 'cmp'
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (PER_NODE.toBoolean()) {
-                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-                        for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t, type)
-                            highstate(pepperEnv, t, type)
-                        }
-                    } else {
-                        updatePkgs(pepperEnv, target, type)
-                        highstate(pepperEnv, target, type)
-                    }
-                    verifyService(pepperEnv, target, 'nova-compute')
-                }
-            }
-
             if (updates.contains("kvm")) {
                 def target = KVM_TARGET
                 def type = 'kvm'
@@ -1218,24 +1130,6 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            if (updates.contains("gtw-physical")) {
-                def target = GTW_TARGET
-                def type = 'gtw-physical'
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (PER_NODE.toBoolean()) {
-                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-                        for (t in targetHosts) {
-                            updatePkgs(pepperEnv, t, type)
-                            highstate(pepperEnv, t, type)
-                        }
-                    } else {
-                        updatePkgs(pepperEnv, target, type)
-                        highstate(pepperEnv, target, type)
-                    }
-                    verifyService(pepperEnv, target, 'neutron-dhcp-agent')
-                }
-            }
-
             /*
                 * Rollback section
             */
@@ -1248,30 +1142,6 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                 }
             } */
-
-            if (rollbacks.contains("ctl")) {
-                def target = CTL_TARGET
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        rollback(pepperEnv, target, 'ctl')
-                        verifyAPIs(pepperEnv, target)
-                    } else {
-                        removeNode(pepperEnv, target, 'ctl')
-                    }
-                }
-            }
-
-            if (rollbacks.contains("prx")) {
-                def target = PRX_TARGET
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        rollback(pepperEnv, target, 'prx')
-                        verifyService(pepperEnv, target, 'nginx')
-                    } else {
-                        removeNode(pepperEnv, target, 'prx')
-                    }
-                }
-            }
 
             if (rollbacks.contains("msg")) {
                 def target = MSG_TARGET
@@ -1319,18 +1189,6 @@ timeout(time: 12, unit: 'HOURS') {
                         verifyContrail(pepperEnv, target)
                     } else {
                         removeNode(pepperEnv, target, 'nal')
-                    }
-                }
-            }
-
-            if (rollbacks.contains("gtw-virtual")) {
-                def target = GTW_TARGET
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (!ROLLBACK_BY_REDEPLOY.toBoolean()) {
-                        rollback(pepperEnv, target, 'gtw')
-                        verifyService(pepperEnv, target, 'neutron-dhcp-agent')
-                    } else {
-                        removeNode(pepperEnv, target, 'gtw')
                     }
                 }
             }
@@ -1401,27 +1259,6 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             } */
 
-            //
-            //physical machines rollback CMP_TARGET
-            //
-            if (rollbacks.contains("cmp")) {
-                def target = CMP_TARGET
-                def type = 'cmp'
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (PER_NODE.toBoolean()) {
-                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-                        for (t in targetHosts) {
-                            rollbackPkgs(pepperEnv, t)
-                            highstate(pepperEnv, t, type)
-                        }
-                    } else {
-                        rollbackPkgs(pepperEnv, target, target)
-                        highstate(pepperEnv, target, type)
-                    }
-                    verifyService(pepperEnv, target, 'nova-compute')
-                }
-            }
-
             if (rollbacks.contains("kvm")) {
                 def target = KVM_TARGET
                 def type = 'kvm'
@@ -1458,44 +1295,12 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            if (rollbacks.contains("gtw-physical")) {
-                def target = GTW_TARGET
-                def type = 'gtw-physical'
-                if (salt.testTarget(pepperEnv, target)) {
-                    if (PER_NODE.toBoolean()) {
-                        def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-                        for (t in targetHosts) {
-                            rollbackPkgs(pepperEnv, t)
-                            highstate(pepperEnv, t, type)
-                        }
-                    } else {
-                        rollbackPkgs(pepperEnv, target, target)
-                        highstate(pepperEnv, target, type)
-                    }
-                    verifyService(pepperEnv, target, 'neutron-dhcp-agent')
-                }
-            }
-
             /*
                 * Merge snapshots section
             */
             if (merges.contains("cfg")) {
                 if (salt.testTarget(pepperEnv, 'I@salt:master')) {
                     mergeSnapshot(pepperEnv, 'I@salt:master')
-                }
-            }
-
-            if (merges.contains("ctl")) {
-                if (salt.testTarget(pepperEnv, CTL_TARGET)) {
-                    mergeSnapshot(pepperEnv, CTL_TARGET, 'ctl')
-                    verifyService(pepperEnv, CTL_TARGET, 'nova-api')
-                }
-            }
-
-            if (merges.contains("prx")) {
-                if (salt.testTarget(pepperEnv, PRX_TARGET)) {
-                    mergeSnapshot(pepperEnv, PRX_TARGET, 'prx')
-                    verifyService(pepperEnv, PRX_TARGET, 'nginx')
                 }
             }
 
@@ -1526,13 +1331,6 @@ timeout(time: 12, unit: 'HOURS') {
                 if (salt.testTarget(pepperEnv, NAL_TARGET)) {
                     mergeSnapshot(pepperEnv, NAL_TARGET, 'nal')
                     verifyContrail(pepperEnv, NAL_TARGET)
-                }
-            }
-
-            if (merges.contains("gtw-virtual")) {
-                if (salt.testTarget(pepperEnv, GTW_TARGET)) {
-                    mergeSnapshot(pepperEnv, GTW_TARGET, 'gtw')
-                    verifyService(pepperEnv, GTW_TARGET, 'neutron-dhcp-agent')
                 }
             }
 
