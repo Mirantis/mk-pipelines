@@ -26,6 +26,7 @@ TEST_MODELS: ''
  */
 
 import groovy.json.JsonOutput
+gerrit = new com.mirantis.mk.Gerrit()
 
 cookiecutterTemplatesRepo='mk/cookiecutter-templates'
 reclassSystemRepo='salt-models/reclass-system'
@@ -38,6 +39,8 @@ voteMatrix = [
   'test-salt-model-infra': true,
   'test-salt-model-mcp-virtual-lab': true,
 ]
+
+baseGerritConfig = [:]
 
 LinkedHashMap getManualRefParams(LinkedHashMap map) {
     LinkedHashMap manualParams = [:]
@@ -59,8 +62,13 @@ LinkedHashMap getManualRefParams(LinkedHashMap map) {
     return manualParams
 }
 
-def setGerritReviewComment(String jobName, String jobBuildURL) {
-    setGerritReview customUrl: "- ${jobName} ${jobBuildURL}console"
+def setGerritReviewComment(String jobName, String jobBuildURL, String jobStatus) {
+    if (baseGerritConfig) {
+        String skipped = voteMatrix.get(jobName, 'true') ? '' : '(skipped)'
+        LinkedHashMap config = baseGerritConfig.clone()
+        config['message'] = "- ${jobName} ${jobBuildURL}console : ${jobStatus} ${skipped}".trim()
+        gerrit.postGerritComment(config)
+    }
 }
 
 def runTests(String jobName, String extraVars) {
@@ -69,7 +77,7 @@ def runTests(String jobName, String extraVars) {
         def jobBuild = build job: "${jobName}", propagate: false, parameters: [
             [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: extraVars ]
         ]
-        setGerritReviewComment(jobName, jobBuild.absoluteUrl)
+        setGerritReviewComment(jobName, jobBuild.absoluteUrl, jobBuild.result)
         if (propagateStatus && jobBuild.result == 'FAILURE') {
             throw new Exception("Build ${jobName} is failed!")
         }
@@ -86,15 +94,15 @@ def runTestSaltModelReclass(String cluster, String defaultGitUrl, String cluster
             [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
             [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: refSpec ],
         ]
-        setGerritReviewComment(saltModelJob, jobBuild.absoluteUrl)
+        setGerritReviewComment(saltModelJob, jobBuild.absoluteUrl, jobBuild.result)
         if (propagateStatus && jobBuild.result == 'FAILURE') {
             throw new Exception("Build ${saltModelJob} is failed!")
         }
     }
 }
 
-def checkReclassSystemDocumentationCommit(gerritLib, gerritCredentials) {
-    gerritLib.gerritPatchsetCheckout([
+def checkReclassSystemDocumentationCommit(gerritCredentials) {
+    gerrit.gerritPatchsetCheckout([
         credentialsId: gerritCredentials
     ])
 
@@ -107,7 +115,6 @@ def checkReclassSystemDocumentationCommit(gerritLib, gerritCredentials) {
 timeout(time: 12, unit: 'HOURS') {
     node(slaveNode) {
         def common = new com.mirantis.mk.Common()
-        def gerrit = new com.mirantis.mk.Gerrit()
         def git = new com.mirantis.mk.Git()
         def python = new com.mirantis.mk.Python()
 
@@ -148,6 +155,7 @@ timeout(time: 12, unit: 'HOURS') {
                 gerritHost = job_env.get('GERRIT_HOST')
                 gerritPort = job_env.get('GERRIT_PORT')
                 gerritChangeNumber = job_env.get('GERRIT_CHANGE_NUMBER')
+                gerritPatchSetNumber = job_env.get('GERRIT_PATCHSET_NUMBER')
                 gerritBranch = job_env.get('GERRIT_BRANCH')
 
                 // check if change aren't already merged
@@ -165,6 +173,13 @@ timeout(time: 12, unit: 'HOURS') {
                 ]
                 buildType = 'Gerrit Trigger'
                 buildTestParams << job_env.findAll { k,v -> k ==~ /GERRIT_.+/ }
+                baseGerritConfig = [
+                    'gerritName': gerritName,
+                    'gerritHost': gerritHost,
+                    'gerritChangeNumber': gerritChangeNumber,
+                    'credentialsId': gerritCredentials,
+                    'gerritPatchSetNumber': gerritPatchSetNumber,
+                ]
             } else {
                 projectsMap = getManualRefParams(job_env)
                 if (!projectsMap) {
@@ -183,10 +198,9 @@ timeout(time: 12, unit: 'HOURS') {
 
         stage("Run tests") {
             def branches = [:]
-            branches.failFast = true
 
             if (projectsMap.containsKey(reclassSystemRepo)) {
-                def documentationOnly = checkReclassSystemDocumentationCommit(gerrit, gerritCredentials)
+                def documentationOnly = checkReclassSystemDocumentationCommit(gerritCredentials)
                 if (['master'].contains(gerritBranch) && !documentationOnly) {
                     for (int i = 0; i < testModels.size(); i++) {
                         def cluster = testModels[i]
