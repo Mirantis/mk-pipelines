@@ -41,10 +41,11 @@ voteMatrix = [
 ]
 
 baseGerritConfig = [:]
+jobResultComments = [:]
+commentLock = false
 
 LinkedHashMap getManualRefParams(LinkedHashMap map) {
     LinkedHashMap manualParams = [:]
-    String defaultGitRef = 'HEAD'
     if (map.containsKey('RECLASS_SYSTEM_GIT_REF') && map.containsKey('RECLASS_SYSTEM_URL')) {
         manualParams[reclassSystemRepo] = [
             'url': map.get('RECLASS_SYSTEM_URL'),
@@ -62,41 +63,54 @@ LinkedHashMap getManualRefParams(LinkedHashMap map) {
     return manualParams
 }
 
-def setGerritReviewComment(String jobName, String jobBuildURL, String jobStatus) {
+def setGerritReviewComment(Boolean initComment = false) {
     if (baseGerritConfig) {
-        String skipped = voteMatrix.get(jobName, 'true') ? '' : '(skipped)'
+        while(commentLock) {
+            sleep 5
+        }
+        commentLock = true
         LinkedHashMap config = baseGerritConfig.clone()
-        config['message'] = "- ${jobName} ${jobBuildURL}console : ${jobStatus} ${skipped}".trim()
+        String jobResultComment = ''
+        jobResultComments.each { job, info ->
+            String skipped = ''
+            if (!initComment) {
+                skipped = voteMatrix.get(job, 'true') ? '' : '(skipped)'
+            }
+            jobResultComment += "- ${job} ${info.url}console : ${info.status} ${skipped}".trim() + '\n'
+        }
+        config['message'] = sh(script: "echo '${jobResultComment}'", returnStdout: true).trim()
         gerrit.postGerritComment(config)
+        commentLock = false
     }
 }
 
 def runTests(String jobName, String extraVars) {
     def propagateStatus = voteMatrix.get(jobName, true)
     return {
-        def jobBuild = build job: "${jobName}", propagate: false, parameters: [
+        def jobBuild = build job: jobName, propagate: false, parameters: [
             [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: extraVars ]
         ]
-        setGerritReviewComment(jobName, jobBuild.absoluteUrl, jobBuild.result)
+        jobResultComments[jobName] = [ 'url': jobBuild.absoluteUrl, 'status': jobBuild.result ]
+        setGerritReviewComment()
         if (propagateStatus && jobBuild.result == 'FAILURE') {
             throw new Exception("Build ${jobName} is failed!")
         }
     }
 }
 
-def runTestSaltModelReclass(String cluster, String defaultGitUrl, String clusterGitUrl, String refSpec) {
-    def saltModelJob = "test-salt-model-${cluster}"
-    def propagateStatus = voteMatrix.get(saltModelJob, true)
+def runTestSaltModelReclass(String jobName, String defaultGitUrl, String clusterGitUrl, String refSpec) {
+    def propagateStatus = voteMatrix.get(jobName, true)
     return {
-        def jobBuild = build job: saltModelJob, propagate: false, parameters: [
+        def jobBuild = build job: jobName, propagate: false, parameters: [
             [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
             [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
             [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
             [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: refSpec ],
         ]
-        setGerritReviewComment(saltModelJob, jobBuild.absoluteUrl, jobBuild.result)
+        jobResultComments[jobName] = [ 'url': jobBuild.absoluteUrl, 'status': jobBuild.result ]
+        setGerritReviewComment()
         if (propagateStatus && jobBuild.result == 'FAILURE') {
-            throw new Exception("Build ${saltModelJob} is failed!")
+            throw new Exception("Build ${jobName} is failed!")
         }
     }
 }
@@ -198,6 +212,7 @@ timeout(time: 12, unit: 'HOURS') {
 
         stage("Run tests") {
             def branches = [:]
+            String branchJobName = ''
 
             if (projectsMap.containsKey(reclassSystemRepo)) {
                 def documentationOnly = checkReclassSystemDocumentationCommit(gerritCredentials)
@@ -205,21 +220,30 @@ timeout(time: 12, unit: 'HOURS') {
                     for (int i = 0; i < testModels.size(); i++) {
                         def cluster = testModels[i]
                         def clusterGitUrl = projectsMap[reclassSystemRepo]['url'].substring(0, projectsMap[reclassSystemRepo]['url'].lastIndexOf("/") + 1) + cluster
-                        branches["reclass-system-${cluster}"] = runTestSaltModelReclass(cluster, projectsMap[reclassSystemRepo]['url'], clusterGitUrl, projectsMap[reclassSystemRepo]['ref'])
+                        branchJobName = "test-salt-model-${cluster}"
+                        branches[branchJobName] = runTestSaltModelReclass(branchJobName, projectsMap[reclassSystemRepo]['url'], clusterGitUrl, projectsMap[reclassSystemRepo]['ref'])
                     }
                 } else {
                     common.warningMsg("Tests for ${testModels} skipped!")
                 }
             }
             if (projectsMap.containsKey(reclassSystemRepo) || projectsMap.containsKey(cookiecutterTemplatesRepo)) {
-                branches['cookiecutter-templates'] = runTests('test-mk-cookiecutter-templates', JsonOutput.toJson(buildTestParams))
+                branchJobName = 'test-mk-cookiecutter-templates'
+                branches[branchJobName] = runTests(branchJobName, JsonOutput.toJson(buildTestParams))
             }
             if (projectsMap.containsKey(cookiecutterTemplatesRepo)) {
-                branches['test-drivetrain'] = runTests('test-drivetrain', JsonOutput.toJson(buildTestParams))
+                branchJobName = 'test-drivetrain'
+                branches[branchJobName] = runTests(branchJobName, JsonOutput.toJson(buildTestParams))
                 // TODO: enable oscore-test job once it's ready to consume EXTRA_VARIABLES_YAML
                 //branches['oscore-test-cookiecutter-models'] = runTests('oscore-test-cookiecutter-models', JsonOutput.toJson(buildTestParams))
             }
 
+            branches.keySet().each { key ->
+                if (branches[key] instanceof Closure) {
+                    jobResultComments[key] = [ 'url': job_env.get('BUILD_URL'), 'status': 'WAITING' ]
+                }
+            }
+            setGerritReviewComment(true)
             try {
                 parallel branches
             } catch (Exception e) {
