@@ -24,6 +24,8 @@
  *   CALICO_UPGRADE_VERSION     Version of "calico-upgrade" utility to be used ("v1.0.5" for Calico v3.1.3 target).
  *
 **/
+import groovy.json.JsonSlurper
+
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
@@ -323,6 +325,85 @@ def checkCalicoUpgradePossibility(pepperEnv, target) {
     }
 }
 
+def checkCalicoPolicySetting(pepperEnv, target) {
+    def common = new com.mirantis.mk.Common()
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Checking of Calico network policy setting") {
+        // check Calico policy enabled
+        def cniPolicy = false
+        def addonsPolicy = false
+        def kubeCtrlRunning = false
+
+        // check CNI config
+        def cniCfgResult = salt.cmdRun(
+                pepperEnv, target, "cat /etc/cni/net.d/10-calico.conf"
+            )['return'][0].values()[0].toString()
+        def cniCfg = new JsonSlurper().parseText(cniCfgResult)
+        if (cniCfg.get("policy") != null) {
+            if (cniCfg["policy"].get("type") == "k8s") {
+                cniPolicy = true
+            } else {
+                common.warningMsg("Calico policy type is unknown or not set.")
+            }
+        }
+
+        // check k8s addons
+        def addonsResult = salt.cmdRun(
+                pepperEnv, target, "ls /etc/kubernetes/addons"
+            )['return'][0].values()[0].toString()
+        if (addonsResult.contains("calico_policy")) {
+            addonsPolicy = true
+        }
+
+        // check kube-controllers is running
+        def kubeCtrlResult = salt.cmdRun(
+                pepperEnv, target, "kubectl get pod -n kube-system --selector=k8s-app=calico-kube-controllers"
+            )['return'][0].values()[0].toString()
+        if (kubeCtrlResult.contains("Running")) {
+            kubeCtrlRunning = true
+        }
+
+        // It's safe to enable Calico policy any time, but it may be unsafe to disable it.
+        // So, no need to disable Calico policy for v3.x if it's not in use currently.
+        // But if Calico policy is in use already, it should be enabled after upgrade as well.
+
+        // check for consistency
+        if ((cniPolicy != addonsPolicy) || (addonsPolicy != kubeCtrlRunning)) {
+            caution = "ATTENTION. Calico policy setting cannot be determined reliably (enabled in CNI config: ${cniPolicy}, " +
+                "presence in k8s addons: ${addonsPolicy}, kube-controllers is running: ${kubeCtrlRunning})."
+            currentBuild.description += "<br><b>${caution}</b><br><br>"
+            common.warningMsg(caution)
+        } else {
+            common.infoMsg("Current Calico policy state is detected as: ${cniPolicy}")
+            if (cniPolicy) {
+                // Calico policy is in use. Check policy setting for v3.x.
+                common.infoMsg("Calico policy is in use. It should be enabled for v3.x as well.")
+                def saltPolicyResult = salt.getPillar(
+                        pepperEnv, target, "kubernetes:pool:network:calico:policy"
+                    )["return"][0].values()[0].toString()
+
+                common.infoMsg("kubernetes.pool.network.calico.policy: ${saltPolicyResult}")
+                if (saltPolicyResult.toLowerCase().contains("true")) {
+                    common.infoMsg("Calico policy setting for v3.x is detected as: true")
+                } else {
+                    caution = "ATTENTION. Currently, Calico is running with policy switched on. " +
+                        "Calico policy setting for v3.x is not set to true. " +
+                        "After upgrade is completed, Calico policy will be switched off. " +
+                        "You will need to switch it on manually if required."
+                    currentBuild.description += "<br><b>${caution}</b><br><br>"
+                    common.warningMsg(caution)
+                }
+            }
+        }
+
+        if (addonsPolicy) {
+            // Remove v2.6.x policy-related addons on masters to not interfere with v3.x kube-controllers
+            salt.cmdRun(pepperEnv, CTL_TARGET, "rm -rf /etc/kubernetes/addons/calico_policy")
+        }
+    }
+}
+
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
@@ -377,6 +458,9 @@ timeout(time: 12, unit: 'HOURS') {
                 if (calicoImagesValid) {
                     pullCalicoImages(pepperEnv, POOL)
                 }
+
+                // check and adjust Calico policy setting
+                checkCalicoPolicySetting(pepperEnv, ctl_node)
 
                 // this sequence implies workloads operations downtime
                 startCalicoUpgrade(pepperEnv, ctl_node)
