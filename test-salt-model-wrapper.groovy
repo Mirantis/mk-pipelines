@@ -234,8 +234,8 @@ timeout(time: 12, unit: 'HOURS') {
             if (projectsMap.containsKey(cookiecutterTemplatesRepo)) {
                 branchJobName = 'test-drivetrain'
                 branches[branchJobName] = runTests(branchJobName, JsonOutput.toJson(buildTestParams))
-                // TODO: enable oscore-test job once it's ready to consume EXTRA_VARIABLES_YAML
-                //branches['oscore-test-cookiecutter-models'] = runTests('oscore-test-cookiecutter-models', JsonOutput.toJson(buildTestParams))
+                branchJobName = 'oscore-test-cookiecutter-models'
+                branches[branchJobName] = runTests(branchJobName, JsonOutput.toJson(buildTestParams))
             }
 
             branches.keySet().each { key ->
