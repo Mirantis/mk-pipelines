@@ -15,6 +15,7 @@
  *                              For OVAL definitions, paths to OVAL definition files separated by semicolon, profile is ignored.
  *  XCCDF_VERSION               The XCCDF version (default 1.2)
  *  XCCDF_TAILORING_ID          The tailoring id (default None)
+ *  XCCDF_CPE                   CPE dictionary or language for applicability checks (default None)
  *
  *  TARGET_SERVERS              The target Salt nodes (default *)
  *
@@ -149,6 +150,7 @@ node('python') {
     def benchmarksAndProfilesArray = XCCDF_BENCHMARKS.tokenize(';')
     def xccdfVersion = XCCDF_VERSION ?: '1.2'
     def xccdfTailoringId = XCCDF_TAILORING_ID ?: 'None'
+    def xccdfCPE = XCCDF_CPE ?: ''
     def targetServers = TARGET_SERVERS ?: '*'
 
     // To have an ability to work in heavy concurrency conditions
@@ -203,7 +205,7 @@ node('python') {
             salt.runSaltProcessStep(pepperEnv, targetServers, 'oscap.eval', [
                 benchmarkType, benchmarkFile, "results_dir=${resultsDir}",
                 "profile=${profileName}", "xccdf_version=${xccdfVersion}",
-                "tailoring_id=${xccdfTailoringId}"
+                "tailoring_id=${xccdfTailoringId}", "cpe=${xccdfCPE}"
             ])
 
             salt.cmdRun(pepperEnv, targetServers, "rm -f /tmp/${scanUUID}.tar.xz; tar -cJf /tmp/${scanUUID}.tar.xz -C ${resultsBaseDir} .")
