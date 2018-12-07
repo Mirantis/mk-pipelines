@@ -244,12 +244,7 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
             setGerritReviewComment(true)
-            try {
-                parallel branches
-            } catch (Exception e) {
-                println e
-                println 'Job is in non-voting mode for now. Skipping fails.'
-            }
+            parallel branches
         }
     }
 }
