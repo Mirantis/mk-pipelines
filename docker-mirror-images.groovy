@@ -17,6 +17,7 @@
  *
  */
 import java.util.regex.Pattern
+import groovy.json.JsonSlurper
 
 common = new com.mirantis.mk.Common()
 external = false
@@ -91,14 +92,18 @@ timeout(time: 4, unit: 'HOURS') {
                     if (setDefaultArtifactoryProperties) {
                         common.infoMsg("Processing artifactory props for : ${targetImageFull}")
                         LinkedHashMap artifactoryProperties = [:]
-                        // Guess API image URL to use for setting properties
-                        String artRepo
-                        String tgtGuessImage
-                        (artRepo, tgtGuessImage) = targetImageFull.split('/', 2)
-                        artRepo = artRepo.tokenize('.')[0]
-                        tgtGuessImage = artRepo + '/' + tgtGuessImage.replace(':', '/')
-                        String tgtImgUrl = "https://${targetRegistry}/artifactory/api/storage/${tgtGuessImage}"
-                        // Collect properties
+                        // Get digest of pushed image
+                        String unique_image_id = sh(
+                            script: "docker inspect --format='{{index .RepoDigests 0}}' '${targetImageFull}'",
+                            returnStdout: true,
+                        ).trim()
+                        def image_sha256 = unique_image_id.tokenize(':')[1]
+                        def ret = new URL("https://${targetRegistry}/artifactory/api/search/checksum?sha256=${image_sha256}").getText()
+                        // Most probably, we would get many images, especially for external images. We need to guess
+                        // exactly one, which we pushing now
+                        def tgtGuessImage = targetImageFull.replace(':', '/').replace(targetRegistry, '')
+                        ArrayList img_data = new JsonSlurper().parseText(ret)['results']
+                        def tgtImgUrl = img_data*.uri.find { it.contains(tgtGuessImage) } - '/manifest.json'
                         artifactoryProperties = [
                             'com.mirantis.targetTag'    : env.IMAGE_TAG,
                             'com.mirantis.uniqueImageId': unique_image_id,
