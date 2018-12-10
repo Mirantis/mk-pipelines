@@ -111,7 +111,8 @@ timeout(time: 4, unit: 'HOURS') {
                         if (external) {
                             artifactoryProperties << ['com.mirantis.externalImage': external]
                         }
-                        def sourceGuessImage = sourceImage.replace(':', '/').replace(targetRegistry, '')
+                        def sourceRegistry = sourceImage.split('/')[0]
+                        def sourceGuessImage = sourceImage.replace(':', '/').replace(sourceRegistry, '')
                         def sourceImgUrl = img_data*.uri.find { it.contains(sourceGuessImage) } - '/manifest.json'
                         def existingProps = mcp_artifactory.getPropertiesForArtifact(sourceImgUrl)
                         def historyProperties = []
@@ -121,7 +122,7 @@ timeout(time: 4, unit: 'HOURS') {
                         }
                         // %5C - backslash symbol is needed
                         historyProperties.add("${buildTime}%5C=${sourceImage}")
-                        artifactoryProperties << [ 'com.mirantis.versionHistory': historyProperties ]
+                        artifactoryProperties << [ 'com.mirantis.versionHistory': historyProperties.join(',') ]
                         common.infoMsg("artifactoryProperties=> ${artifactoryProperties}")
                         common.retry(3, 5) {
                             mcp_artifactory.setProperties(tgtImgUrl, artifactoryProperties)
