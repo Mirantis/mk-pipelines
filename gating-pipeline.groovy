@@ -19,9 +19,10 @@ def isJobExists(jobName) {
 }
 
 def callJobWithExtraVars(String jobName) {
-    def gerritVars = JsonOutput.toJson(env.getEnvironment().findAll{ it.key.startsWith('GERRIT_') })
+    def gerritVars = env.getEnvironment().findAll{ it.key.startsWith('GERRIT_') }
+    gerritVars['GERRIT_CI_MERGE_TRIGGER'] = true
     testJob = build job: jobName, parameters: [
-        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: gerritVars]
+        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: JsonOutput.toJson(gerritVars) ]
     ]
     if (testJob.getResult() != 'SUCCESS') {
         error("Gate job ${testJob.getBuildUrl().toString()}  finished with ${testJob.getResult()} !")
@@ -56,10 +57,8 @@ timeout(time: 12, unit: 'HOURS') {
                             gerritProject = gerritProject + "-latest"
                         }
                         def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
-                        if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates') {
-                            callJobWithExtraVars('test-mk-cookiecutter-templates')
-                        } else if (env.GERRIT_PROJECT == 'salt-models/reclass-system') {
-                            callJobWithExtraVars('test-salt-model-reclass-system')
+                        if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates' || env.GERRIT_PROJECT == 'salt-models/reclass-system') {
+                            callJobWithExtraVars('test-salt-model-ci-wrapper')
                         } else {
                             if (isJobExists(testJob)) {
                                 common.infoMsg("Test job ${testJob} found, running")

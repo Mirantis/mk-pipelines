@@ -68,10 +68,10 @@ timeout(time: 12, unit: 'HOURS') {
         def git = new com.mirantis.mk.Git()
         def python = new com.mirantis.mk.Python()
 
-        // Var TEST_PARAMETERS_YAML contains any additional parameters for tests,
+        // Var EXTRA_VARIABLES_YAML contains any additional parameters for tests,
         // like manually specified Gerrit Refs/URLs, additional parameters and so on
         def buildTestParams = [:]
-        def buildTestParamsYaml = env.getProperty('TEST_PARAMETERS_YAML')
+        def buildTestParamsYaml = env.getProperty('EXTRA_VARIABLES_YAML')
         if (buildTestParamsYaml) {
             common.mergeEnv(env, buildTestParamsYaml)
             buildTestParams = readYaml text: buildTestParamsYaml
@@ -91,6 +91,7 @@ timeout(time: 12, unit: 'HOURS') {
         String gerritChangeNumber = job_env.get('GERRIT_CHANGE_NUMBER')
         String gerritPatchSetNumber = job_env.get('GERRIT_PATCHSET_NUMBER')
         String gerritBranch = job_env.get('GERRIT_BRANCH')
+        String gateMode = job_env.get('GERRIT_CI_MERGE_TRIGGER', false)
 
         // Common and manual build parameters
         LinkedHashMap projectsMap = [:]
@@ -175,11 +176,14 @@ timeout(time: 12, unit: 'HOURS') {
                 branchJobName = 'test-mk-cookiecutter-templates'
                 branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
             }
-            if (gerritProject == cookiecutterTemplatesRepo) {
-                branchJobName = 'test-drivetrain'
-                branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
-                branchJobName = 'oscore-test-cookiecutter-models'
-                branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
+
+            if (!gateMode) {
+                if (gerritProject == cookiecutterTemplatesRepo) {
+                    branchJobName = 'test-drivetrain'
+                    branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
+                    branchJobName = 'oscore-test-cookiecutter-models'
+                    branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
+                }
             }
 
             branches.keySet().each { key ->
