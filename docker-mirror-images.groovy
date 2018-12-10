@@ -101,9 +101,9 @@ timeout(time: 4, unit: 'HOURS') {
                         def ret = new URL("https://${targetRegistry}/artifactory/api/search/checksum?sha256=${image_sha256}").getText()
                         // Most probably, we would get many images, especially for external images. We need to guess
                         // exactly one, which we pushing now
-                        guessImage = targetImageFull.replace(':', '/').replace(targetRegistry, '')
+                        def tgtGuessImage = targetImageFull.replace(':', '/').replace(targetRegistry, '')
                         ArrayList img_data = new JsonSlurper().parseText(ret)['results']
-                        def imgUrl = img_data*.uri.find { it.contains(guessImage) } - '/manifest.json'
+                        def tgtImgUrl = img_data*.uri.find { it.contains(tgtGuessImage) } - '/manifest.json'
                         artifactoryProperties = [
                             'com.mirantis.targetTag'    : env.IMAGE_TAG,
                             'com.mirantis.uniqueImageId': unique_image_id,
@@ -111,18 +111,20 @@ timeout(time: 4, unit: 'HOURS') {
                         if (external) {
                             artifactoryProperties << ['com.mirantis.externalImage': external]
                         }
-                        def existingProps = mcp_artifactory.getPropertiesForArtifact(imgUrl)
+                        def sourceGuessImage = sourceImage.replace(':', '/').replace(targetRegistry, '')
+                        def sourceImgUrl = img_data*.uri.find { it.contains(sourceGuessImage) } - '/manifest.json'
+                        def existingProps = mcp_artifactory.getPropertiesForArtifact(sourceImgUrl)
                         def historyProperties = []
-                        // check does image have already some props
+                        // check does the source image have already history props
                         if (existingProps) {
                             historyProperties = existingProps.get('com.mirantis.versionHistory', [])
                         }
                         // %5C - backslash symbol is needed
                         historyProperties.add("${buildTime}%5C=${sourceImage}")
-                        artifactoryProperties << [ 'com.mirantis.versionHistory': historyProperties.join(',') ]
+                        artifactoryProperties << [ 'com.mirantis.versionHistory': historyProperties ]
                         common.infoMsg("artifactoryProperties=> ${artifactoryProperties}")
                         common.retry(3, 5) {
-                            mcp_artifactory.setProperties(imgUrl, artifactoryProperties)
+                            mcp_artifactory.setProperties(tgtImgUrl, artifactoryProperties)
                         }
                     }
                 }
