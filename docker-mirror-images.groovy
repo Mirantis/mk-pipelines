@@ -81,16 +81,10 @@ timeout(time: 4, unit: 'HOURS') {
                     // Use sh-docker call for tag, due magic code in plugin:
                     // https://github.com/jenkinsci/docker-workflow-plugin/blob/docker-workflow-1.17/src/main/resources/org/jenkinsci/plugins/docker/workflow/Docker.groovy#L168-L170
                     sh("docker tag ${srcImage.id} ${targetImageFull}")
-                    String unique_image_id
                     common.infoMsg("Attempt to push docker image into remote registry: ${env.REGISTRY_URL}")
                     common.retry(3, 5) {
                         docker.withRegistry(env.REGISTRY_URL, env.TARGET_REGISTRY_CREDENTIALS_ID) {
-                            unique_image_id = sh(
-                                script: "docker push ${targetImageFull}",
-                                returnStdout: true,
-                            ).readLines().last().tokenize(' ')[2]
-                            // This ^^^ will get digest from the last line of shell output
-                            // <tag>: digest: <unique_image_id> size: <size>
+                            sh("docker push ${targetImageFull}")
                         }
                     }
                     def buildTime = new Date().format("yyyyMMdd-HH:mm:ss.SSS", TimeZone.getTimeZone('UTC'))
@@ -99,6 +93,10 @@ timeout(time: 4, unit: 'HOURS') {
                         common.infoMsg("Processing artifactory props for : ${targetImageFull}")
                         LinkedHashMap artifactoryProperties = [:]
                         // Get digest of pushed image
+                        String unique_image_id = sh(
+                            script: "docker inspect --format='{{index .RepoDigests 0}}' '${targetImageFull}'",
+                            returnStdout: true,
+                        ).trim()
                         def image_sha256 = unique_image_id.tokenize(':')[1]
                         def ret = new URL("https://${targetRegistry}/artifactory/api/search/checksum?sha256=${image_sha256}").getText()
                         // Most probably, we would get many images, especially for external images. We need to guess
