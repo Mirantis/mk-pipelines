@@ -37,6 +37,30 @@ def getImageName(String image) {
     }
 }
 
+def getImageInfo(String imageName) {
+    String unique_image_id = sh(
+        script: "docker inspect --format='{{index .RepoDigests 0}}' '${imageName}'",
+        returnStdout: true,
+    ).trim()
+    String imageSha256 = unique_image_id.tokenize(':')[1]
+    common.infoMsg("Docker ${imageName} image sha256 is ${imageSha256}")
+    return [ 'id': unique_image_id, 'sha256': imageSha256 ]
+}
+
+def imageURL(String registry, String imageName, String sha256) {
+    def ret = new URL("https://${registry}/artifactory/api/search/checksum?sha256=${sha256}").getText()
+    // Most probably, we would get many images, especially for external images. We need to guess
+    // exactly one, which we pushing now
+    def tgtGuessImage = imageName.replace(':', '/').replace(registry, '')
+    ArrayList img_data = new JsonSlurper().parseText(ret)['results']
+    def tgtImgUrl = img_data*.uri.find { it.contains(tgtGuessImage) }
+    if (tgtImgUrl) {
+        return tgtImgUrl
+    } else {
+        error("Can't find image ${imageName} in registry ${registry} with sha256: ${sha256}!")
+    }
+}
+
 timeout(time: 4, unit: 'HOURS') {
     node(slaveNode) {
         def user = ''
@@ -78,6 +102,7 @@ timeout(time: 4, unit: 'HOURS') {
                     common.retry(3, 5) {
                         srcImage.pull()
                     }
+                    source_image_sha256 = getImageInfo(sourceImage)['sha256']
                     // Use sh-docker call for tag, due magic code in plugin:
                     // https://github.com/jenkinsci/docker-workflow-plugin/blob/docker-workflow-1.17/src/main/resources/org/jenkinsci/plugins/docker/workflow/Docker.groovy#L168-L170
                     sh("docker tag ${srcImage.id} ${targetImageFull}")
@@ -92,18 +117,10 @@ timeout(time: 4, unit: 'HOURS') {
                     if (setDefaultArtifactoryProperties) {
                         common.infoMsg("Processing artifactory props for : ${targetImageFull}")
                         LinkedHashMap artifactoryProperties = [:]
-                        // Get digest of pushed image
-                        String unique_image_id = sh(
-                            script: "docker inspect --format='{{index .RepoDigests 0}}' '${targetImageFull}'",
-                            returnStdout: true,
-                        ).trim()
-                        def image_sha256 = unique_image_id.tokenize(':')[1]
-                        def ret = new URL("https://${targetRegistry}/artifactory/api/search/checksum?sha256=${image_sha256}").getText()
-                        // Most probably, we would get many images, especially for external images. We need to guess
-                        // exactly one, which we pushing now
-                        def tgtGuessImage = targetImageFull.replace(':', '/').replace(targetRegistry, '')
-                        ArrayList img_data = new JsonSlurper().parseText(ret)['results']
-                        def tgtImgUrl = img_data*.uri.find { it.contains(tgtGuessImage) } - '/manifest.json'
+                        def tgtImageInfo = getImageInfo(targetImageFull)
+                        def tgt_image_sha256 = tgtImageInfo['sha256']
+                        def unique_image_id = tgtImageInfo['id']
+                        def tgtImgUrl = imageURL(targetRegistry, targetImageFull, tgt_image_sha256) - '/manifest.json'
                         artifactoryProperties = [
                             'com.mirantis.targetTag'    : env.IMAGE_TAG,
                             'com.mirantis.uniqueImageId': unique_image_id,
@@ -112,8 +129,7 @@ timeout(time: 4, unit: 'HOURS') {
                             artifactoryProperties << ['com.mirantis.externalImage': external]
                         }
                         def sourceRegistry = sourceImage.split('/')[0]
-                        def sourceGuessImage = sourceImage.replace(':', '/').replace(sourceRegistry, '')
-                        def sourceImgUrl = img_data*.uri.find { it.contains(sourceGuessImage) } - '/manifest.json'
+                        def sourceImgUrl = imageURL(sourceRegistry, sourceImage, source_image_sha256) - '/manifest.json'
                         def existingProps = mcp_artifactory.getPropertiesForArtifact(sourceImgUrl)
                         def historyProperties = []
                         // check does the source image have already history props
