@@ -1,28 +1,7 @@
 /*
- Global wrapper for testing next projects:
+ Global CI wrapper for testing next projects:
    - salt-models/reclass-system
    - mk/cookiecutter-templates
-
- Can be triggered manually or by gerrit trigger:
- 1) gerrit trigger
-    Automatically switches if GERRIT_PROJECT variable detected
-    Always test GERRIT_REFSPEC VS GERRIT_BRANCH-master version of opposite project
-
- 2) manual run via job-build , possible to pass refspecs
-    - for CC
-    - Reclass
-
-    Example of TEST_PARAMETERS_YAML manual config:
----
-RECLASS_SYSTEM_URL: ssh://mcp-jenkins@gerrit.mcp.mirantis.net:29418/salt-models/reclass-system
-RECLASS_SYSTEM_GIT_REF: 2018.11.0
-RECLASS_SYSTEM_BRANCH: refs/heads/2018.11.0
-COOKIECUTTER_TEMPLATE_URL: ssh://mcp-jenkins@gerrit.mcp.mirantis.net:29418/mk/cookiecutter-templates
-COOKIECUTTER_TEMPLATE_REF: refs/heads/2018.11.0
-COOKIECUTTER_TEMPLATE_BRANCH: 2018.11.0
-DISTRIB_REVISION: 2018.11.0
-TEST_MODELS: ''
-
  */
 
 import groovy.json.JsonOutput
@@ -44,26 +23,8 @@ baseGerritConfig = [:]
 jobResultComments = [:]
 commentLock = false
 
-LinkedHashMap getManualRefParams(LinkedHashMap map) {
-    LinkedHashMap manualParams = [:]
-    if (map.containsKey('RECLASS_SYSTEM_GIT_REF') && map.containsKey('RECLASS_SYSTEM_URL')) {
-        manualParams[reclassSystemRepo] = [
-            'url': map.get('RECLASS_SYSTEM_URL'),
-            'ref': map.get('RECLASS_SYSTEM_GIT_REF'),
-            'branch': map.get('RECLASS_SYSTEM_BRANCH', 'master'),
-        ]
-    }
-    if (map.containsKey('COOKIECUTTER_TEMPLATE_REF') && map.containsKey('COOKIECUTTER_TEMPLATE_URL')) {
-        manualParams[cookiecutterTemplatesRepo] = [
-            'url': map.get('COOKIECUTTER_TEMPLATE_URL'),
-            'ref': map.get('COOKIECUTTER_TEMPLATE_REF'),
-            'branch': map.get('COOKIECUTTER_TEMPLATE_BRANCH', 'master'),
-        ]
-    }
-    return manualParams
-}
-
-def setGerritReviewComment(Boolean initComment = false) {
+// post Gerrit review comment to patch
+def setGerritReviewComment() {
     if (baseGerritConfig) {
         while(commentLock) {
             sleep 5
@@ -72,10 +33,7 @@ def setGerritReviewComment(Boolean initComment = false) {
         LinkedHashMap config = baseGerritConfig.clone()
         String jobResultComment = ''
         jobResultComments.each { job, info ->
-            String skipped = ''
-            if (!initComment) {
-                skipped = voteMatrix.get(job, 'true') ? '' : '(skipped)'
-            }
+            String skipped = voteMatrix.get(job, 'true') ? '' : '(non-voting)'
             jobResultComment += "- ${job} ${info.url}console : ${info.status} ${skipped}".trim() + '\n'
         }
         config['message'] = sh(script: "echo '${jobResultComment}'", returnStdout: true).trim()
@@ -84,46 +42,24 @@ def setGerritReviewComment(Boolean initComment = false) {
     }
 }
 
-def runTests(String jobName, String extraVars) {
+// get job parameters for YAML-based job parametrization
+def yamlJobParameters(LinkedHashMap jobParams) {
+    return [
+        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: JsonOutput.toJson(jobParams) ]
+    ]
+}
+
+// run needed job with params
+def runTests(String jobName, ArrayList jobParams) {
     def propagateStatus = voteMatrix.get(jobName, true)
     return {
-        def jobBuild = build job: jobName, propagate: false, parameters: [
-            [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: extraVars ]
-        ]
+        def jobBuild = build job: jobName, propagate: false, parameters: jobParams
         jobResultComments[jobName] = [ 'url': jobBuild.absoluteUrl, 'status': jobBuild.result ]
         setGerritReviewComment()
         if (propagateStatus && jobBuild.result == 'FAILURE') {
             throw new Exception("Build ${jobName} is failed!")
         }
     }
-}
-
-def runTestSaltModelReclass(String jobName, String defaultGitUrl, String clusterGitUrl, String refSpec) {
-    def propagateStatus = voteMatrix.get(jobName, true)
-    return {
-        def jobBuild = build job: jobName, propagate: false, parameters: [
-            [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
-            [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
-            [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultGitUrl],
-            [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: refSpec ],
-        ]
-        jobResultComments[jobName] = [ 'url': jobBuild.absoluteUrl, 'status': jobBuild.result ]
-        setGerritReviewComment()
-        if (propagateStatus && jobBuild.result == 'FAILURE') {
-            throw new Exception("Build ${jobName} is failed!")
-        }
-    }
-}
-
-def checkReclassSystemDocumentationCommit(gerritCredentials) {
-    gerrit.gerritPatchsetCheckout([
-        credentialsId: gerritCredentials
-    ])
-
-    sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
-
-    return sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v .releasenotes", returnStatus: true) == 1
-
 }
 
 timeout(time: 12, unit: 'HOURS') {
@@ -146,96 +82,104 @@ timeout(time: 12, unit: 'HOURS') {
 
         // Gerrit parameters
         String gerritCredentials = job_env.get('CREDENTIALS_ID', 'gerrit')
-        String gerritRef = job_env.get('GERRIT_REFSPEC', '')
-        String gerritProject = ''
-        String gerritName = ''
-        String gerritScheme = ''
-        String gerritHost = ''
-        String gerritPort = ''
-        String gerritChangeNumber = ''
+        String gerritRef = job_env.get('GERRIT_REFSPEC')
+        String gerritProject = job_env.get('GERRIT_PROJECT')
+        String gerritName = job_env.get('GERRIT_NAME')
+        String gerritScheme = job_env.get('GERRIT_SCHEME')
+        String gerritHost = job_env.get('GERRIT_HOST')
+        String gerritPort = job_env.get('GERRIT_PORT')
+        String gerritChangeNumber = job_env.get('GERRIT_CHANGE_NUMBER')
+        String gerritPatchSetNumber = job_env.get('GERRIT_PATCHSET_NUMBER')
+        String gerritBranch = job_env.get('GERRIT_BRANCH')
 
         // Common and manual build parameters
         LinkedHashMap projectsMap = [:]
-        String distribRevision = job_env.get('DISTRIB_REVISION', 'nightly')
+        String distribRevision = 'nightly'
+        //checking if the branch is from release
+        if (gerritBranch.startsWith('release')) {
+            def distribRevisionRelease = gerritBranch.tokenize('/')[-1]
+            if (!common.checkRemoteBinary([apt_mk_version: distribRevisionRelease]).linux_system_repo_url) {
+              common.infoMsg("Binary release ${distribRevisionRelease} does not exist on http://mirror.mirantis.com. Falling back to 'proposed'.")
+              distribRevision = 'proposed'
+            }
+            distribRevision = distribRevisionRelease
+        }
         ArrayList testModels = job_env.get('TEST_MODELS', 'mcp-virtual-lab,infra').split(',')
 
-        stage('Check build mode') {
-            def buildType = ''
-            if (gerritRef) {
-                // job is triggered by Gerrit, get all required Gerrit vars
-                gerritProject = job_env.get('GERRIT_PROJECT')
-                gerritName = job_env.get('GERRIT_NAME')
-                gerritScheme = job_env.get('GERRIT_SCHEME')
-                gerritHost = job_env.get('GERRIT_HOST')
-                gerritPort = job_env.get('GERRIT_PORT')
-                gerritChangeNumber = job_env.get('GERRIT_CHANGE_NUMBER')
-                gerritPatchSetNumber = job_env.get('GERRIT_PATCHSET_NUMBER')
-                gerritBranch = job_env.get('GERRIT_BRANCH')
-
-                // check if change aren't already merged
-                def gerritChange = gerrit.getGerritChange(gerritName, gerritHost, gerritChangeNumber, gerritCredentials)
-                if (gerritChange.status == "MERGED") {
-                    common.successMsg('Patch set is alredy merged, no need to test it')
-                    currentBuild.result = 'SUCCESS'
-                    return
-                }
-
-                projectsMap[gerritProject] = [
-                    'url': "${gerritScheme}://${gerritName}@${gerritHost}:${gerritPort}/${gerritProject}",
-                    'ref': gerritRef,
-                    'branch': gerritBranch,
-                ]
-                buildType = 'Gerrit Trigger'
-                buildTestParams << job_env.findAll { k,v -> k ==~ /GERRIT_.+/ }
-                baseGerritConfig = [
-                    'gerritName': gerritName,
-                    'gerritHost': gerritHost,
-                    'gerritChangeNumber': gerritChangeNumber,
-                    'credentialsId': gerritCredentials,
-                    'gerritPatchSetNumber': gerritPatchSetNumber,
-                ]
-            } else {
-                projectsMap = getManualRefParams(job_env)
-                if (!projectsMap) {
-                    error('Manual build detected and no valid Git refs provided!')
-                }
-                buildType = 'Manual build'
+        stage('Gerrit prepare') {
+            // check if change aren't already merged
+            def gerritChange = gerrit.getGerritChange(gerritName, gerritHost, gerritChangeNumber, gerritCredentials)
+            if (gerritChange.status == "MERGED") {
+                common.successMsg('Patch set is alredy merged, no need to test it')
+                currentBuild.result = 'SUCCESS'
+                return
             }
-            ArrayList descriptionMsgs = [ "<font color='red'>${buildType} detected!</font> Running with next parameters:" ]
+            def defaultURL =  "${gerritScheme}://${gerritName}@${gerritHost}:${gerritPort}"
+            projectsMap[gerritProject] = [
+                'url': "${defaultURL}/${gerritProject}",
+                'ref': gerritRef,
+                'branch': gerritBranch,
+            ]
+            buildType = 'Gerrit Trigger'
+            buildTestParams << job_env.findAll { k,v -> k ==~ /GERRIT_.+/ }
+            baseGerritConfig = [
+                'gerritName': gerritName,
+                'gerritHost': gerritHost,
+                'gerritChangeNumber': gerritChangeNumber,
+                'credentialsId': gerritCredentials,
+                'gerritPatchSetNumber': gerritPatchSetNumber,
+            ]
+            ArrayList descriptionMsgs = [ "Running with next parameters:" ]
             for(String project in projectsMap.keySet()) {
                 descriptionMsgs.add("Ref for ${project} => ${projectsMap[project]['ref']}")
                 descriptionMsgs.add("Branch for ${project} => ${projectsMap[project]['branch']}")
             }
             descriptionMsgs.add("Distrib revision => ${distribRevision}")
             currentBuild.description = descriptionMsgs.join('<br/>')
+
+            gerrit.gerritPatchsetCheckout([
+                credentialsId: gerritCredentials
+            ])
+        }
+
+        stage('Syntax YAML checks') {
+            sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
         }
 
         stage("Run tests") {
+            def documentationOnly = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v .releasenotes", returnStatus: true) == 1
+            if (documentationOnly) {
+                common.infoMsg("Tests skipped, documenation only changed!")
+                currentBuild.result = 'SUCCESS'
+                return
+            }
+
             def branches = [:]
             String branchJobName = ''
 
-            if (projectsMap.containsKey(reclassSystemRepo)) {
-                def documentationOnly = checkReclassSystemDocumentationCommit(gerritCredentials)
-                if (['master'].contains(gerritBranch) && !documentationOnly) {
-                    for (int i = 0; i < testModels.size(); i++) {
-                        def cluster = testModels[i]
-                        def clusterGitUrl = projectsMap[reclassSystemRepo]['url'].substring(0, projectsMap[reclassSystemRepo]['url'].lastIndexOf("/") + 1) + cluster
-                        branchJobName = "test-salt-model-${cluster}"
-                        branches[branchJobName] = runTestSaltModelReclass(branchJobName, projectsMap[reclassSystemRepo]['url'], clusterGitUrl, projectsMap[reclassSystemRepo]['ref'])
-                    }
-                } else {
-                    common.warningMsg("Tests for ${testModels} skipped!")
+            if (gerritProject == reclassSystemRepo && gerritBranch == 'master') {
+                for (int i = 0; i < testModels.size(); i++) {
+                    def cluster = testModels[i]
+                    def clusterGitUrl = projectsMap[reclassSystemRepo]['url'].substring(0, projectsMap[reclassSystemRepo]['url'].lastIndexOf("/") + 1) + cluster
+                    branchJobName = "test-salt-model-${cluster}"
+                    def jobParams = [
+                        [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
+                        [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
+                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: projectsMap[reclassSystemRepo]['url']],
+                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: projectsMap[reclassSystemRepo]['ref'] ],
+                    ]
+                    branches[branchJobName] = runTests(branchJobName, jobParams)
                 }
             }
-            if (projectsMap.containsKey(reclassSystemRepo) || projectsMap.containsKey(cookiecutterTemplatesRepo)) {
+            if (gerritProject == reclassSystemRepo || gerritProject == cookiecutterTemplatesRepo) {
                 branchJobName = 'test-mk-cookiecutter-templates'
-                branches[branchJobName] = runTests(branchJobName, JsonOutput.toJson(buildTestParams))
+                branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
             }
-            if (projectsMap.containsKey(cookiecutterTemplatesRepo)) {
+            if (gerritProject == cookiecutterTemplatesRepo) {
                 branchJobName = 'test-drivetrain'
-                branches[branchJobName] = runTests(branchJobName, JsonOutput.toJson(buildTestParams))
+                branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
                 branchJobName = 'oscore-test-cookiecutter-models'
-                branches[branchJobName] = runTests(branchJobName, JsonOutput.toJson(buildTestParams))
+                branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
             }
 
             branches.keySet().each { key ->
@@ -243,7 +187,7 @@ timeout(time: 12, unit: 'HOURS') {
                     jobResultComments[key] = [ 'url': job_env.get('BUILD_URL'), 'status': 'WAITING' ]
                 }
             }
-            setGerritReviewComment(true)
+            setGerritReviewComment()
             parallel branches
         }
     }
