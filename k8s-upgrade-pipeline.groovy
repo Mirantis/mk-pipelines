@@ -269,7 +269,7 @@ def containerDinstalled(pepperEnv, target) {
 
 def containerDenabled(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
-    return salt.getPillar(venvPepper, target, "kubernetes:common:containerd:enabled"
+    return salt.getPillar(pepperEnv, target, "kubernetes:common:containerd:enabled"
                           )["return"][0].values()[0].toBoolean()
 }
 
