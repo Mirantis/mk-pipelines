@@ -2,6 +2,9 @@
  Global CI wrapper for testing next projects:
    - salt-models/reclass-system
    - mk/cookiecutter-templates
+
+ Wrapper allows to test cross-project patches, based on
+ 'Depends-On: http://<gerrit_address>/<change_number>' key phrase
  */
 
 import groovy.json.JsonOutput
@@ -20,6 +23,7 @@ voteMatrix = [
 ]
 
 baseGerritConfig = [:]
+buildTestParams = [:]
 jobResultComments = [:]
 commentLock = false
 
@@ -62,15 +66,26 @@ def runTests(String jobName, ArrayList jobParams) {
     }
 }
 
+// set params based on depending patches
+def setupDependingVars(LinkedHashMap dependingProjects) {
+    if (dependingProjects) {
+        if (dependingProjects.containsKey(reclassSystemRepo)) {
+            buildTestParams['RECLASS_SYSTEM_GIT_REF'] = dependingProjects[reclassSystemRepo].ref
+            buildTestParams['RECLASS_SYSTEM_BRANCH'] = dependingProjects[reclassSystemRepo].branch
+        }
+        if (dependingProjects.containsKey(cookiecutterTemplatesRepo)) {
+            buildTestParams['COOKIECUTTER_TEMPLATE_REF'] = dependingProjects[cookiecutterTemplatesRepo].ref
+            buildTestParams['COOKIECUTTER_TEMPLATE_BRANCH'] = dependingProjects[cookiecutterTemplatesRepo].branch
+        }
+    }
+}
+
 timeout(time: 12, unit: 'HOURS') {
     node(slaveNode) {
         def common = new com.mirantis.mk.Common()
-        def git = new com.mirantis.mk.Git()
-        def python = new com.mirantis.mk.Python()
 
         // Var EXTRA_VARIABLES_YAML contains any additional parameters for tests,
         // like manually specified Gerrit Refs/URLs, additional parameters and so on
-        def buildTestParams = [:]
         def buildTestParamsYaml = env.getProperty('EXTRA_VARIABLES_YAML')
         if (buildTestParamsYaml) {
             common.mergeEnv(env, buildTestParamsYaml)
@@ -115,13 +130,6 @@ timeout(time: 12, unit: 'HOURS') {
                 currentBuild.result = 'SUCCESS'
                 return
             }
-            def defaultURL =  "${gerritScheme}://${gerritName}@${gerritHost}:${gerritPort}"
-            projectsMap[gerritProject] = [
-                'url': "${defaultURL}/${gerritProject}",
-                'ref': gerritRef,
-                'branch': gerritBranch,
-            ]
-            buildType = 'Gerrit Trigger'
             buildTestParams << job_env.findAll { k,v -> k ==~ /GERRIT_.+/ }
             baseGerritConfig = [
                 'gerritName': gerritName,
@@ -130,14 +138,21 @@ timeout(time: 12, unit: 'HOURS') {
                 'credentialsId': gerritCredentials,
                 'gerritPatchSetNumber': gerritPatchSetNumber,
             ]
-            ArrayList descriptionMsgs = [ "Running with next parameters:" ]
-            for(String project in projectsMap.keySet()) {
-                descriptionMsgs.add("Ref for ${project} => ${projectsMap[project]['ref']}")
-                descriptionMsgs.add("Branch for ${project} => ${projectsMap[project]['branch']}")
-            }
+            LinkedHashMap gerritDependingProjects = gerrit.getDependentPatches(baseGerritConfig)
+            setupDependingVars(gerritDependingProjects)
+            ArrayList descriptionMsgs = [
+                "Running with next parameters:",
+                "Ref for ${gerritProject} => ${gerritRef}",
+                "Branch for ${gerritProject} => ${gerritBranch}"
+            ]
             descriptionMsgs.add("Distrib revision => ${distribRevision}")
+            for(String project in gerritDependingProjects.keySet()) {
+                descriptionMsgs.add("---")
+                descriptionMsgs.add("Depending patch to ${project} found:")
+                descriptionMsgs.add("Ref for ${project} => ${gerritDependingProjects[project]['ref']}")
+                descriptionMsgs.add("Branch for ${project} => ${gerritDependingProjects[project]['branch']}")
+            }
             currentBuild.description = descriptionMsgs.join('<br/>')
-
             gerrit.gerritPatchsetCheckout([
                 credentialsId: gerritCredentials
             ])
@@ -156,15 +171,16 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (gerritProject == reclassSystemRepo && gerritBranch == 'master') {
                 sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
+                def defaultSystemURL = "${gerritScheme}://${gerritName}@${gerritHost}:${gerritPort}/${gerritProject}"
                 for (int i = 0; i < testModels.size(); i++) {
                     def cluster = testModels[i]
-                    def clusterGitUrl = projectsMap[reclassSystemRepo]['url'].substring(0, projectsMap[reclassSystemRepo]['url'].lastIndexOf("/") + 1) + cluster
+                    def clusterGitUrl = defaultSystemURL.substring(0, defaultSystemURL.lastIndexOf("/") + 1) + cluster
                     branchJobName = "test-salt-model-${cluster}"
                     def jobParams = [
                         [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
                         [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
-                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: projectsMap[reclassSystemRepo]['url']],
-                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: projectsMap[reclassSystemRepo]['ref'] ],
+                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultSystemURL ],
+                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: gerritRef ],
                     ]
                     branches[branchJobName] = runTests(branchJobName, jobParams)
                 }
