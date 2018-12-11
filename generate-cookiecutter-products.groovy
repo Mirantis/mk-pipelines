@@ -73,6 +73,11 @@ def globalVariatorsUpdate() {
         common.warningMsg("Binary release: ${distribRevision} not exist. Fallback to 'proposed'! ")
         distribRevision = 'proposed'
     }
+    // (azvyagintsev) WA for PROD-25732
+    if (context.cookiecutter_template_url.contains('gerrit.mcp.mirantis.com/mk/cookiecutter-templates')) {
+        common.warningMsg('Apply WA for PROD-25732')
+        context.cookiecutter_template_url = 'ssh://gerrit.mcp.mirantis.com:29418/mk/cookiecutter-templates.git'
+    }
     common.warningMsg("Fetching:\n" +
         "DISTRIB_REVISION from ${distribRevision}")
     common.infoMsg("Using context:\n" + context)
@@ -246,7 +251,7 @@ timeout(time: 1, unit: 'HOURS') {
                 sh(returnStatus: true, script: "tar -czf output-${context['cluster_name']}/${context['cluster_name']}.tar.gz --exclude='*@tmp' -C ${modelEnv} .")
                 archiveArtifacts artifacts: "output-${context['cluster_name']}/${context['cluster_name']}.tar.gz"
 
-                if(RequesterEmail != '' && !RequesterEmail.contains('example')){
+                if (RequesterEmail != '' && !RequesterEmail.contains('example')) {
                     emailext(to: RequesterEmail,
                         attachmentsPattern: "output-${context['cluster_name']}/*",
                         body: "Mirantis Jenkins\n\nRequested reclass model ${context['cluster_name']} has been created and attached to this email.\nEnjoy!\n\nMirantis",
