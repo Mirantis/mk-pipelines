@@ -143,10 +143,6 @@ timeout(time: 12, unit: 'HOURS') {
             ])
         }
 
-        stage('Syntax YAML checks') {
-            sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
-        }
-
         stage("Run tests") {
             def documentationOnly = sh(script: "git diff-tree --no-commit-id --name-only -r HEAD | grep -v .releasenotes", returnStatus: true) == 1
             if (documentationOnly) {
@@ -159,6 +155,7 @@ timeout(time: 12, unit: 'HOURS') {
             String branchJobName = ''
 
             if (gerritProject == reclassSystemRepo && gerritBranch == 'master') {
+                sh("git diff-tree --no-commit-id --diff-filter=d --name-only -r HEAD  | grep .yml | xargs -I {}  python -c \"import yaml; yaml.load(open('{}', 'r'))\" \\;")
                 for (int i = 0; i < testModels.size(); i++) {
                     def cluster = testModels[i]
                     def clusterGitUrl = projectsMap[reclassSystemRepo]['url'].substring(0, projectsMap[reclassSystemRepo]['url'].lastIndexOf("/") + 1) + cluster
