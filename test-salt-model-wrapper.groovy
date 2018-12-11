@@ -91,7 +91,7 @@ timeout(time: 12, unit: 'HOURS') {
         String gerritChangeNumber = job_env.get('GERRIT_CHANGE_NUMBER')
         String gerritPatchSetNumber = job_env.get('GERRIT_PATCHSET_NUMBER')
         String gerritBranch = job_env.get('GERRIT_BRANCH')
-        String gateMode = job_env.get('GERRIT_CI_MERGE_TRIGGER', false)
+        Boolean gateMode = job_env.get('GERRIT_CI_MERGE_TRIGGER', false).toBoolean()
 
         // Common and manual build parameters
         LinkedHashMap projectsMap = [:]
