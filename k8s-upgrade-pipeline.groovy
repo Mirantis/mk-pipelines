@@ -29,6 +29,7 @@ import groovy.json.JsonSlurper
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
+def test = new com.mirantis.mk.Test()
 
 def updates = TARGET_UPDATES.tokenize(",").collect{it -> it.trim()}
 def pepperEnv = "pepperEnv"
@@ -260,6 +261,24 @@ def executeConformance(pepperEnv, target, k8s_api, mcp_repo) {
     }
 }
 
+def containerDinstalled(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    return salt.cmdRun(pepperEnv, target, "containerd --version 2>1 1>/dev/null && echo 'true' || echo 'false'"
+                       )['return'][0].values()[0].replaceAll('Salt command execution success','').trim().toBoolean()
+}
+
+def containerDenabled(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    return salt.getPillar(venvPepper, target, "kubernetes:common:containerd:enabled"
+                          )["return"][0].values()[0].toBoolean()
+}
+
+def conformancePodDefExists(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    return salt.cmdRun(pepperEnv, target, "test -e /srv/kubernetes/conformance.yml && echo 'true' || echo 'false'"
+                       )['return'][0].values()[0].replaceAll('Salt command execution success','').trim().toBoolean()
+}
+
 def checkCalicoUpgradeSuccessful(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
 
@@ -417,7 +436,18 @@ timeout(time: 12, unit: 'HOURS') {
                 def mcp_repo = ARTIFACTORY_URL
                 def k8s_api = TEST_K8S_API_SERVER
                 firstTarget = salt.getFirstMinion(pepperEnv, target)
-                executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
+                def containerd_enabled = containerDenabled(pepperEnv, firstTarget)
+                def containerd_installed = containerDinstalled(pepperEnv, firstTarget)
+                def conformance_pod_ready = conformancePodDefExists(pepperEnv, firstTarget)
+                if (containerd_enabled && containerd_installed && conformance_pod_ready) {
+                    def config = ['master': pepperEnv,
+                                  'target': firstTarget,
+                                  'junitResults': false,
+                                  'autodetect': true]
+                    test.executeConformance(config)
+                } else {
+                    executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
+                }
             }
 
             if ((common.validInputParam('KUBERNETES_HYPERKUBE_IMAGE')) && (common.validInputParam('KUBERNETES_PAUSE_IMAGE'))) {
@@ -536,7 +566,18 @@ timeout(time: 12, unit: 'HOURS') {
                 def mcp_repo = ARTIFACTORY_URL
                 def k8s_api = TEST_K8S_API_SERVER
                 firstTarget = salt.getFirstMinion(pepperEnv, target)
-                executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
+                def containerd_enabled = containerDenabled(pepperEnv, firstTarget)
+                def containerd_installed = containerDinstalled(pepperEnv, firstTarget)
+                def conformance_pod_ready = conformancePodDefExists(pepperEnv, firstTarget)
+                if (containerd_enabled && containerd_installed && conformance_pod_ready) {
+                    def config = ['master': pepperEnv,
+                                  'target': firstTarget,
+                                  'junitResults': false,
+                                  'autodetect': true]
+                    test.executeConformance(config)
+                } else {
+                    executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
+                }
             }
         } catch (Throwable e) {
             // If there was an error or exception thrown, the build failed

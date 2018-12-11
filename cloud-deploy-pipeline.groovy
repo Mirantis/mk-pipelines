@@ -551,24 +551,39 @@ timeout(time: 12, unit: 'HOURS') {
             if (common.checkContains('STACK_TEST', 'k8s')) {
                 stage('Run k8s conformance e2e tests') {
                     def image = TEST_K8S_CONFORMANCE_IMAGE
-                    def output_file = image.replaceAll('/', '-') + '.output'
-                    def target = "ctl01* ${extra_tgt}"
-                    def conformance_output_file = 'conformance_test.tar'
+                    def autodetect = AUTODETECT
+                    def ctl_target = 'I@kubernetes:master'
+                    firstTarget = salt.getFirstMinion(venvPepper, ctl_target)
+                    def containerd_enabled = salt.getPillar(
+                        venvPepper, firstTarget, "kubernetes:common:containerd:enabled"
+                    )["return"][0].values()[0].toBoolean()
+                    if (containerd_enabled) {
+                        def config = ['master': venvPepper,
+                                      'target': firstTarget,
+                                      'junitResults': true,
+                                      'autodetect': autodetect,
+                                      'image': image]
+                        test.executeConformance(config)
+                    } else {
+                        def output_file = image.replaceAll('/', '-') + '.output'
+                        def target = "ctl01* ${extra_tgt}"
+                        def conformance_output_file = 'conformance_test.tar'
 
-                    // run image
-                    test.runConformanceTests(venvPepper, target, TEST_K8S_API_SERVER, image)
+                        // run image
+                        test.runConformanceTests(venvPepper, target, TEST_K8S_API_SERVER, image)
 
-                    // collect output
-                    sh "mkdir -p ${artifacts_dir}"
-                    file_content = salt.getFileContent(venvPepper, target, '/tmp/' + output_file)
-                    writeFile file: "${artifacts_dir}${output_file}", text: file_content
-                    sh "cat ${artifacts_dir}${output_file}"
+                        // collect output
+                        sh "mkdir -p ${artifacts_dir}"
+                        file_content = salt.getFileContent(venvPepper, target, '/tmp/' + output_file)
+                        writeFile file: "${artifacts_dir}${output_file}", text: file_content
+                        sh "cat ${artifacts_dir}${output_file}"
 
-                    // collect artifacts
-                    archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
+                        // collect artifacts
+                        archiveArtifacts artifacts: "${artifacts_dir}${output_file}"
 
-                    // Copy test results
-                    test.CopyConformanceResults(venvPepper, target, artifacts_dir, conformance_output_file)
+                        // Copy test results
+                        test.CopyConformanceResults(venvPepper, target, artifacts_dir, conformance_output_file)
+                    }
                 }
             }
 
