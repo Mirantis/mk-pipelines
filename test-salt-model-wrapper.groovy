@@ -167,6 +167,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             def branches = [:]
+            branches.failFast = true
             String branchJobName = ''
 
             if (gerritProject == reclassSystemRepo && gerritBranch == 'master') {
