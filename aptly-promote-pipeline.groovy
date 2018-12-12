@@ -29,9 +29,12 @@ timeout(time: 12, unit: 'HOURS') {
     node("docker&&hardware") {
         try {
 
-            if (!jenkinsUtils.currentUserInGroup(["release-engineering", "aptly-promote-users"])) {
+            if (("testing" in TARGET || "proposed" in TARGET) && !jenkinsUtils.currentUserInGroup(["release-engineering", "aptly-promote-users"])) {
                 insufficientPermissions = true
-                throw new Exception("Only release-engineering or aptly-promote-users can perform promote to " + TARGET)
+                throw new Exception("Only release-engineering or aptly-promote-users can perform promote to testing.")
+            } else if (!jenkinsUtils.currentUserInGroup(["release-engineering"])) {
+                insufficientPermissions = true
+                throw new Exception("Only release-engineering team can perform promote.")
             }
             stage("promote") {
                 // promote is restricted to users in aptly-promote-users LDAP group
