@@ -12,7 +12,7 @@ gerrit = new com.mirantis.mk.Gerrit()
 
 cookiecutterTemplatesRepo='mk/cookiecutter-templates'
 reclassSystemRepo='salt-models/reclass-system'
-slaveNode = env.getProperty('SLAVE_NODE') ?: 'python&&docker'
+slaveNode = env.getProperty('SLAVE_NODE') ?: 'virtual'
 
 voteMatrix = [
   'test-mk-cookiecutter-templates': true,
