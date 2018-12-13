@@ -139,11 +139,15 @@ def completeCalicoUpgrade(pepperEnv, target) {
     }
 }
 
-def performCalicoConfigurationUpdateAndServicesRestart(pepperEnv, target) {
+def performCalicoConfigurationUpdateAndServicesRestart(pepperEnv, target, ctl_node) {
     def salt = new com.mirantis.mk.Salt()
 
     stage("Performing Calico configuration update and services restart") {
-        salt.enforceState(pepperEnv, target, "kubernetes.pool.calico")
+        if (containerDenabled(pepperEnv, ctl_node)) {
+            salt.enforceState(pepperEnv, target, "kubernetes.pool")
+        } else {
+            salt.enforceState(pepperEnv, target, "kubernetes.pool.calico")
+        }
         salt.runSaltProcessStep(pepperEnv, target, 'service.restart', ['kubelet'])
     }
 }
@@ -494,7 +498,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                 // this sequence implies workloads operations downtime
                 startCalicoUpgrade(pepperEnv, ctl_node)
-                performCalicoConfigurationUpdateAndServicesRestart(pepperEnv, POOL)
+                performCalicoConfigurationUpdateAndServicesRestart(pepperEnv, POOL, ctl_node)
                 completeCalicoUpgrade(pepperEnv, ctl_node)
                 // after that no downtime is expected
 
