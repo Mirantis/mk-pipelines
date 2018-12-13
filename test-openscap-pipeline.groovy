@@ -40,11 +40,12 @@
   * @param nodeName             The node name
   * @param reportType           Type of the report to create/use, either 'openscap' or 'cve'
   * @param reportId             Report Id to re-use, if empty report will be created
-  * @param results              The scanning results as a json file content (string)
+  * @param results              The scanning results as a XML file content (string)
   * @return reportId            The Id of the report created if incoming reportId was empty, otherwise incoming reportId
   */
 def uploadResultToDashboard(apiUrl, cloudName, nodeName, reportType, reportId, results) {
     def common = new com.mirantis.mk.Common()
+    def mcp_common = new com.mirantis.mcp.Common()
     def http = new com.mirantis.mk.Http()
 
     // Yes, we do not care of performance and will create at least 4 requests per each result
@@ -113,12 +114,8 @@ def uploadResultToDashboard(apiUrl, cloudName, nodeName, reportType, reportId, r
     }
 
     // Upload results
-    // NOTE(pas-ha) results should already be a dict with 'results' key
-    requestData = common.parseJSON(results)
-    requestData['node_name'] = nodeName
-    common.infoMsg("First result in results to PUT is ${requestData['results'][0]}")
-    // NOTE(pas-ha) not logging whole results to be sent, is too large and just spams the logs
-    common.infoMsg("Making PUT to ${worpApi.url}/reports/${reportType}/${reportId}/ with node name ${requestData['node_name']} and results")
+    requestData = [node_name: nodeName, xmlgzb64: mcp_common.zipBase64(results)]
+    common.infoMsg("Making PUT to ${worpApi.url}/reports/${reportType}/${reportId}/ with node name ${requestData['node_name']} and encoded raw results")
     http.restCall(worpApi, "/reports/${reportType}/${reportId}/", "PUT", requestData)
     return reportId
 }
@@ -247,7 +244,7 @@ node('python') {
                             cloudName = salt.getGrain(pepperEnv, minion, 'domain')['return'][0].values()[0].values()[0]
                         }
                         try {
-                            def nodeResults = readFile "${benchmarkResultsDir}/results.json"
+                            def nodeResults = readFile "${benchmarkResultsDir}/results.xml"
                             reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, reportType, reportId, nodeResults)
                             common.infoMsg("Report ID is ${reportId}.")
                         } catch (Exception e) {
