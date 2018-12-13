@@ -283,14 +283,141 @@ def conformancePodDefExists(pepperEnv, target) {
                        )['return'][0].values()[0].replaceAll('Salt command execution success','').trim().toBoolean()
 }
 
-def checkCalicoUpgradeSuccessful(pepperEnv, target) {
+def calicoEnabled(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    return salt.getPillar(pepperEnv, target, "kubernetes:pool:network:calico:enabled"
+                          )["return"][0].values()[0].toBoolean()
+}
+
+def checkCalicoClusterState(pepperEnv, target) {
+    def common = new com.mirantis.mk.Common()
     def salt = new com.mirantis.mk.Salt()
 
-    stage("Checking cluster state after Calico upgrade") {
-        // TODO add auto-check of results
-        salt.cmdRun(pepperEnv, target, "calicoctl version | grep -i version")
-        salt.cmdRun(pepperEnv, target, "calicoctl node status")
-        salt.cmdRun(pepperEnv, target, "calicoctl node checksystem")
+    stage("Checking Calico cluster state after upgrade") {
+        // check Calico cluster and cli clients versions
+        def checkVer = [
+            "Client Version:": [verStr: "", dif: false, wrong: false],
+            "Cluster Version:": [verStr: "", dif: false, wrong: false]
+        ]
+        def checkVerPassed = true
+        def versionResults = salt.cmdRun(pepperEnv, target, "calicoctl version | grep -i version")['return'][0]
+        versionResults.each { k, v ->
+            // println("Node:\n${k}\nResult:\n${v}")
+            for (verLine in v.split("\n")) {
+                for (verType in checkVer.keySet()) {
+                    if (verLine.contains(verType)) {
+                        def verRec = checkVer[verType]
+                        ver = (verLine - verType).trim()
+                        if (!verRec.verStr) {
+                            verRec.verStr = ver
+                        }
+                        if (verRec.verStr != ver) {
+                            verRec.dif = true
+                            checkVerPassed = false
+                        }
+                        version = ver.tokenize(".")
+                        if ((version.size() < 3) || (version[0] != "v3")) {
+                            verRec.wrong = true
+                            checkVerPassed = false
+                        }
+                        checkVer[verType] = verRec
+                    }
+                }
+            }
+        }
+        if (checkVerPassed) {
+            common.infoMsg("Calico version verification passed")
+        }
+        else {
+            def warningMsg = "Calico version verification failed.\n"
+            checkVer.each { k, rec ->
+                if (rec.dif) {
+                    warningMsg += "${k} versions are different across nodes.\n"
+                }
+                if (rec.wrong) {
+                    warningMsg += "${k} (some) versions are wrong - should be v3.x.\n"
+                }
+            }
+            common.warningMsg(warningMsg)
+            currentBuild.description += "<br><b>${warningMsg}</b><br><br>"
+        }
+
+        // check Calico nodes' statuses
+        def nodeStatusResults = salt.cmdRun(pepperEnv, target, "calicoctl node status")['return'][0]
+        def nodesRunning = true
+        def peersNotFound = []
+        def peersNotOnline = []
+        nodeStatusResults.each { k, v ->
+            // println("Node:\n${k}\nResult:\n${v}")
+            if (!v.contains("Calico process is running")) {
+                nodesRunning = false
+                def warningMsg = "Node ${k}: Calico node is not running."
+                common.warningMsg(warningMsg)
+                currentBuild.description += "<br><b>${warningMsg}</b><br><br>"
+            }
+            def nodePeersFound = false
+            def nodePeersOnline = true
+            for (nodeLine in v.split("\n")) {
+                if (nodeLine.contains("|") && (!nodeLine.contains("STATE"))) {
+                    def col = nodeLine.tokenize("|").collect{it.trim()}
+                    if (col.size() == 5) {
+                        nodePeersFound = true
+                        if ((col[2] != "up") || (col[4] != "Established")) {
+                            def warningMsg = "Node ${k}: BGP peer '${col[0]}' is out of reach. Peer state: '${col[2]}', connection info: '${col[4]}'."
+                            common.warningMsg(warningMsg)
+                            currentBuild.description += "<br><b>${warningMsg}</b><br><br>"
+                            nodePeersOnline = false
+                        }
+                    }
+                }
+            }
+            if (!nodePeersFound) {
+                peersNotFound += k
+            }
+            if (!nodePeersOnline) {
+                peersNotOnline += k
+            }
+        }
+        if (nodesRunning) {
+            common.infoMsg("All the Calico nodes are running")
+        }
+        if (peersNotFound) {
+            def warningMsg = "BGP peers not found for the node(s): " + peersNotFound.join(', ') + "."
+            common.warningMsg(warningMsg)
+            currentBuild.description += "<br><b>${warningMsg}</b><br><br>"
+        } else {
+            common.infoMsg("BGP peers were found for all the nodes")
+        }
+        if (!peersNotOnline) {
+            common.infoMsg("All reported BGP peers are reachable")
+        }
+
+        // check that 'calico-kube-controllers' is running
+        // one CTL node will be used to get pod's state using kubectl
+        def ctl_node = salt.getMinionsSorted(pepperEnv, CTL_TARGET)[0]
+        def kubeCtrlResult = salt.cmdRun(
+                pepperEnv, ctl_node, "kubectl get pod -n kube-system --selector=k8s-app=calico-kube-controllers"
+            )['return'][0].values()[0].toString()
+        if (kubeCtrlResult.contains("calico-kube-controllers")) {
+            for (line in kubeCtrlResult.split("\n")) {
+                if (line.contains("calico-kube-controllers")) {
+                    col = line.tokenize(" ")
+                    if ((col[1] != "1/1") || (col[2] != "Running")) {
+                        def warningMsg = "Calico kube-controllers pod is not running properly."
+                        common.warningMsg(warningMsg)
+                        currentBuild.description += "<br><b>${warningMsg}</b><br><br>"
+                    }
+                    else {
+                        common.infoMsg("Calico kube-controllers pod is running.")
+                    }
+                    break
+                }
+            }
+        } else {
+            def warningMsg = "Calico kube-controllers pod was not scheduled."
+            common.warningMsg(warningMsg)
+            currentBuild.description += "<br><b>${warningMsg}</b><br><br>"
+        }
     }
 }
 
@@ -500,9 +627,7 @@ timeout(time: 12, unit: 'HOURS') {
                 startCalicoUpgrade(pepperEnv, ctl_node)
                 performCalicoConfigurationUpdateAndServicesRestart(pepperEnv, POOL, ctl_node)
                 completeCalicoUpgrade(pepperEnv, ctl_node)
-                // after that no downtime is expected
-
-                checkCalicoUpgradeSuccessful(pepperEnv, POOL)
+                // no downtime is expected after this point
             }
 
             /*
@@ -563,6 +688,11 @@ timeout(time: 12, unit: 'HOURS') {
                 } else {
                     performKubernetesComputeUpdate(pepperEnv, target)
                 }
+            }
+
+            def ctl_node = salt.getMinionsSorted(pepperEnv, CTL_TARGET)[0]
+            if (calicoEnabled(pepperEnv, ctl_node)) {
+                checkCalicoClusterState(pepperEnv, POOL)
             }
 
             if (CONFORMANCE_RUN_AFTER.toBoolean()) {
