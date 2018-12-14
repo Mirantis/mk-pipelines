@@ -21,15 +21,15 @@ errorOccured = false
 
 def upgrade(master, target, service, pckg, state) {
     stage("Upgrade ${service}") {
-        salt.runSaltProcessStep(master, "${target}", 'saltutil.refresh_pillar', [], null, true, 5)
+        salt.runSaltProcessStep(master, "${target}", 'saltutil.refresh_pillar', [], null, true)
         salt.enforceState(master, "${target}", 'linux.system.repo', true)
-        common.infoMsg("Upgrade ${service} package")
+        common.infoMsg("Upgrade ${service} package(s)")
         try {
-            salt.runSaltProcessStep(master, "${target}", command, ["apt-get install --only-upgrade ${pckg}"], null, true)
+            salt.runSaltProcessStep(master, "${target}", command, ["apt-get install -y -o Dpkg::Options::=\"--force-confold\" ${pckg}"], null, true)
         } catch (Exception er) {
             errorOccured = true
-            common.errorMsg("[ERROR] ${pckg} package was not upgraded.")
-            return
+            common.errorMsg("[ERROR] ${pckg} package(s) was not upgraded.")
+            throw er
         }
         common.infoMsg("Run ${state} state on ${target} nodes")
         try {
@@ -37,72 +37,120 @@ def upgrade(master, target, service, pckg, state) {
         } catch (Exception er) {
             errorOccured = true
             common.errorMsg("[ERROR] ${state} state was executed and failed. Please fix it manually.")
+            throw er
         }
-        common.infoMsg("Check ${service} service status on the target nodes")
-        salt.runSaltProcessStep(master, "${target}", "service.status", ["${service}"], null, true)
-        return
+        common.infoMsg("Check ${service} service(s) status on the target nodes")
+        for (s in service.split(" ")){
+            salt.runSaltProcessStep(master, "${target}", "service.status", "${s}", null, true)
+        }
+    }
+}
+
+def verify_es_is_green(master) {
+    common.infoMsg('Verify that the Elasticsearch cluster status is green')
+    try {
+        def retries_wait = 20
+        def retries = 15
+        def elasticsearch_vip
+        def pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host')
+        if(!pillar['return'].isEmpty()) {
+            elasticsearch_vip = pillar['return'][0].values()[0]
+        } else {
+            errorOccured = true
+            common.errorMsg('[ERROR] Elasticsearch VIP address could not be retrieved')
+        }
+        pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:port')
+        def elasticsearch_port
+        if(!pillar['return'].isEmpty()) {
+            elasticsearch_port = pillar['return'][0].values()[0]
+        } else {
+            errorOccured = true
+            common.errorMsg('[ERROR] Elasticsearch VIP port could not be retrieved')
+        }
+        common.retry(retries,retries_wait) {
+            common.infoMsg('Waiting for Elasticsearch to become green..')
+            salt.cmdRun(master, "I@elasticsearch:client", "curl -sf ${elasticsearch_vip}:${elasticsearch_port}/_cat/health | awk '{print \$4}' | grep green")
+        }
+    } catch (Exception er) {
+        errorOccured = true
+        common.errorMsg("[ERROR] Elasticsearch cluster status is not \'green\'. Please fix it manually.")
+        throw er
     }
 }
 
 def upgrade_es_kibana(master) {
+    def elasticsearch_version
+    def es_pillar = salt.getPillar(master, "I@elasticsearch:client", '_param:elasticsearch_version')
+    if(!es_pillar['return'].isEmpty()) {
+        elasticsearch_version = es_pillar['return'][0].values()[0]
+    }
     stage('Upgrade elasticsearch') {
-        try {
-            common.infoMsg('Upgrade the Elasticsearch package')
-            salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl stop elasticsearch"], null, true)
-            salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["apt-get --only-upgrade install elasticsearch"], null, true)
-            salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl daemon-reload"], null, true)
-            salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl start elasticsearch"], null, true)
-            salt.runSaltProcessStep(master, '*', 'saltutil.sync_all', [], null, true)
-        } catch (Exception er) {
-            errorOccured = true
-            common.errorMsg("[ERROR] Elasticsearch upgrade failed. Please fix it manually.")
-            return
-        }
-        common.infoMsg('Verify that the Elasticsearch cluster status is green')
-        try {
-            def retries_wait = 20
-            def retries = 15
-            def elasticsearch_vip
-            def pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host')
-            if(!pillar['return'].isEmpty()) {
-                elasticsearch_vip = pillar['return'][0].values()[0]
-            } else {
+        if (elasticsearch_version == '5') {
+            try {
+                common.infoMsg('Upgrade the Elasticsearch package')
+                salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl stop elasticsearch"], null, true)
+                salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["apt-get --only-upgrade install elasticsearch"], null, true)
+                salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl daemon-reload"], null, true)
+                salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl start elasticsearch"], null, true)
+                salt.runSaltProcessStep(master, '*', 'saltutil.sync_all', [], null, true)
+                verify_es_is_green(master)
+            } catch (Exception er) {
                 errorOccured = true
-                common.errorMsg('[ERROR] Elasticsearch VIP address could not be retrieved')
+                common.errorMsg("[ERROR] Elasticsearch upgrade failed. Please fix it manually.")
+                throw er
             }
-            pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:port')
-            def elasticsearch_port
-            if(!pillar['return'].isEmpty()) {
-                elasticsearch_port = pillar['return'][0].values()[0]
-            } else {
+        } else {
+            try {
+                salt.runSaltProcessStep(master, "*", 'saltutil.refresh_pillar', [], null, true)
+                salt.enforceState(master, "I@elasticsearch:server", 'linux.system.repo', true)
+                salt.runSaltProcessStep(master, 'I@elasticsearch:client', command, ["apt-get install -y -o Dpkg::Options::=\"--force-confold\" python-elasticsearch"], null, true)
+                salt.enforceState(master, "I@elasticsearch:server", 'salt.minion', true)
+                salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl stop elasticsearch"], null, true)
+                salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["export ES_PATH_CONF=/etc/elasticsearch; apt-get install -y -o Dpkg::Options::=\"--force-confold\" elasticsearch"], null, true)
+                salt.enforceState(master, "I@elasticsearch:server", 'elasticsearch.server', true)
+                verify_es_is_green(master)
+                salt.enforceState(master, "I@elasticsearch:client", 'elasticsearch.client.update_index_templates', true)
+                salt.enforceState(master, "I@elasticsearch:client", 'elasticsearch.client', true)
+            } catch (Exception er) {
                 errorOccured = true
-                common.errorMsg('[ERROR] Elasticsearch VIP port could not be retrieved')
+                common.errorMsg("[ERROR] Elasticsearch upgrade failed. Please fix it manually.")
+                throw er
             }
-            common.retry(retries,retries_wait) {
-                common.infoMsg('Waiting for Elasticsearch to become green..')
-                salt.cmdRun(master, "I@elasticsearch:client", "curl -sf ${elasticsearch_vip}:${elasticsearch_port}/_cat/health | awk '{print \$4}' | grep green")
-            }
-        } catch (Exception er) {
-            errorOccured = true
-            common.errorMsg("[ERROR] Elasticsearch cluster status is not \'green\'. Please fix it manually.")
-            return
         }
     }
     stage('Upgrade kibana') {
-        try {
-            common.infoMsg('Upgrade the Kibana package')
-            salt.runSaltProcessStep(master, 'I@kibana:server', command, ["systemctl stop kibana"], null, true)
-            salt.runSaltProcessStep(master, 'I@kibana:server', command, ["apt-get --only-upgrade install kibana"], null, true)
-            salt.runSaltProcessStep(master, 'I@kibana:server', command, ["systemctl start kibana"], null, true)
-        } catch (Exception er) {
-            errorOccured = true
-            common.errorMsg("[ERROR] Kibana upgrade failed. Please fix it manually.")
-            return
+        def kibana_version
+        def kibana_pillar = salt.getPillar(master, "I@kibana:client", '_param:kibana_version')
+        if(!kibana_pillar['return'].isEmpty()) {
+            kibana_version = kibana_pillar['return'][0].values()[0]
+        }
+        if (kibana_version == '5') {
+            try {
+                common.infoMsg('Upgrade the Kibana package')
+                salt.runSaltProcessStep(master, 'I@kibana:server', command, ["systemctl stop kibana"], null, true)
+                salt.runSaltProcessStep(master, 'I@kibana:server', command, ["apt-get --only-upgrade install kibana"], null, true)
+                salt.runSaltProcessStep(master, 'I@kibana:server', command, ["systemctl start kibana"], null, true)
+            } catch (Exception er) {
+                errorOccured = true
+                common.errorMsg("[ERROR] Kibana upgrade failed. Please fix it manually.")
+                throw er
+            }
+        } else {
+            try {
+                salt.runSaltProcessStep(master, 'I@kibana:server', command, ["systemctl stop kibana"], null, true)
+                salt.enforceStateWithExclude(pepperEnv, "I@kibana:server", "kibana.server", "[{'id': 'kibana_service'}]")
+                salt.runSaltProcessStep(master, 'I@kibana:server', command, ["apt-get install -y -o Dpkg::Options::=\"--force-confold\" kibana"], null, true)
+                salt.enforceState(master, "I@kibana:server", 'kibana.server', true)
+                salt.enforceState(master, "I@kibana:client", 'kibana.client', true)
+            } catch (Exception er) {
+                errorOccured = true
+                common.errorMsg("[ERROR] Kibana upgrade failed. Please fix it manually.")
+                throw er
+            }
         }
 
         common.infoMsg("Check kibana status on the target nodes")
         salt.runSaltProcessStep(master, "I@kibana:server", "service.status", ["kibana"], null, true)
-        return
     }
 }
 timeout(time: 12, unit: 'HOURS') {
@@ -112,11 +160,18 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
+        salt.enforceState(pepperEnv, '*', 'salt.minion.grains')
+        salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.refresh_modules')
+        salt.runSaltProcessStep(pepperEnv, '*', 'mine.update')
+        sleep(30)
+
+
         if (STAGE_UPGRADE_SYSTEM_PART.toBoolean() == true && !errorOccured) {
             upgrade(pepperEnv, "I@telegraf:agent or I@telegraf:remote_agent", "telegraf", "telegraf", "telegraf")
             upgrade(pepperEnv, "I@fluentd:agent", "td-agent", "td-agent td-agent-additional-plugins", "fluentd")
             if (salt.testTarget(pepperEnv, "I@prometheus:relay")) {
-                upgrade(pepperEnv, "I@prometheus:relay", "prometheus-relay", "prometheus-relay", "prometheus")
+                upgrade(pepperEnv, "I@prometheus:relay", "prometheus prometheus-relay", "prometheus-bin prometheus-relay", "prometheus")
+                salt.runSaltProcessStep(pepperEnv, "I@prometheus:relay", "service.restart", "prometheus", null, true)
             }
             if (salt.testTarget(pepperEnv, "I@prometheus:exporters:libvirt")) {
                 upgrade(pepperEnv, "I@prometheus:exporters:libvirt", "libvirt-exporter", "libvirt-exporter", "prometheus")
@@ -149,7 +204,7 @@ timeout(time: 12, unit: 'HOURS') {
                 } catch (Exception er) {
                     errorOccured = true
                     common.errorMsg("[ERROR] Upgrade of docker components failed. Please fix it manually.")
-                    return
+                    throw er
                 }
             }
         }
