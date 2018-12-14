@@ -10,7 +10,7 @@ def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ssh = new com.mirantis.mk.Ssh()
 
-slaveNode = env.SLAVE_NODE ?: 'docker'
+slaveNode = env.SLAVE_NODE ?: 'virtual'
 giveVerify = false
 
 @NonCPS
