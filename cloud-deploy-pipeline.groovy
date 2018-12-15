@@ -447,6 +447,9 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
+            // install docker swarm
+            orchestrate.installDockerSwarm(venvPepper, extra_tgt)
+
             // install openstack
             if (common.checkContains('STACK_INSTALL', 'openstack')) {
                 // install control, tests, ...
@@ -513,7 +516,6 @@ timeout(time: 12, unit: 'HOURS') {
             if (common.checkContains('STACK_INSTALL', 'cicd')) {
                 stage('Install Cicd') {
                     orchestrate.installInfra(venvPepper, extra_tgt)
-                    orchestrate.installDockerSwarm(venvPepper, extra_tgt)
                     orchestrate.installCicd(venvPepper, extra_tgt)
                 }
             }
@@ -527,7 +529,6 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (common.checkContains('STACK_INSTALL', 'stacklight')) {
                 stage('Install StackLight') {
-                    orchestrate.installDockerSwarm(venvPepper, extra_tgt)
                     orchestrate.installStacklight(venvPepper, extra_tgt)
                 }
             }
@@ -536,7 +537,6 @@ timeout(time: 12, unit: 'HOURS') {
               stage('Install OSS') {
                 if (!common.checkContains('STACK_INSTALL', 'stacklight')) {
                   // In case if StackLightv2 enabled containers already started
-                  orchestrate.installDockerSwarm(venvPepper, extra_tgt)
                   salt.enforceState(venvPepper, "I@docker:swarm:role:master and I@devops_portal:config ${extra_tgt}", 'docker.client', true)
                 }
                 orchestrate.installOss(venvPepper, extra_tgt)
