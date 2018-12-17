@@ -132,10 +132,35 @@ timeout(time: 1, unit: 'HOURS') {
             }
 
             stage('Generate model') {
-                python.setupCookiecutterVirtualenv(cutterEnv)
-                // FIXME refactor generateModel
-                python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
-                git.commitGitChanges(modelEnv, "Create model ${context['cluster_name']}", "${user}@localhost", "${user}")
+                // GNUPGHOME environment variable is required for all gpg commands
+                // and for python.generateModel execution
+                withEnv(["GNUPGHOME=${env.WORKSPACE}/gpghome"]) {
+                    if (context['secrets_encryption_enabled'] == 'True') {
+                        sh "mkdir gpghome; chmod 700 gpghome"
+                        def secretKeyID = RequesterEmail
+                        if (!context.get('secrets_encryption_private_key')) {
+                            def batchData = """
+                                Key-Type: 1
+                                Key-Length: 4096
+                                Expire-Date: 0
+                                Name-Real: ${context['salt_master_hostname']}.${context['cluster_domain']}
+                                Name-Email: ${secretKeyID}
+                            """.stripIndent()
+                            writeFile file:'gpg-batch.txt', text:batchData
+                            sh "gpg --gen-key --batch < gpg-batch.txt"
+                            sh "gpg --export-secret-key -a ${secretKeyID} > gpgkey.asc"
+                        } else {
+                            writeFile file:'gpgkey.asc', text:context['secrets_encryption_private_key']
+                            sh "gpg --import gpgkey.asc"
+                            secretKeyID = sh(returnStdout: true, script: 'gpg --list-secret-keys --with-colons | awk -F: -e "/^sec/{print \\$5; exit}"').trim()
+                        }
+                        context['secrets_encryption_key_id'] = secretKeyID
+                    }
+                    python.setupCookiecutterVirtualenv(cutterEnv)
+                    // FIXME refactor generateModel
+                    python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
+                    git.commitGitChanges(modelEnv, "Create model ${context['cluster_name']}", "${user}@localhost", "${user}")
+                }
             }
 
             stage("Test") {
@@ -183,6 +208,9 @@ timeout(time: 1, unit: 'HOURS') {
                 sh "git clone --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
                 sh "git clone --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
                 args = "--user-data user_data --hostname ${context['salt_master_hostname']} --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ ${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"
+                if (context['secrets_encryption_enabled'] == 'True') {
+                    args = "--gpg-key gpgkey.asc " + args
+                }
 
                 // load data from model
                 def smc = [:]
