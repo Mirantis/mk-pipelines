@@ -137,7 +137,7 @@ timeout(time: 1, unit: 'HOURS') {
                 withEnv(["GNUPGHOME=${env.WORKSPACE}/gpghome"]) {
                     if (context['secrets_encryption_enabled'] == 'True') {
                         sh "mkdir gpghome; chmod 700 gpghome"
-                        def secretKeyID = RequesterEmail
+                        def secretKeyID = RequesterEmail ?: "salt@${context['cluster_domain']}".toString()
                         if (!context.get('secrets_encryption_private_key')) {
                             def batchData = """
                                 Key-Type: 1
