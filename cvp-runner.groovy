@@ -12,21 +12,21 @@
  *   PROXY                           Proxy to use for cloning repo or for pip
  *   IMAGE                           Docker image to use for running container with test framework.
  *   DEBUG_MODE                      If you need to debug (keep container after test), please enabled this
- *  To launch tests from cvp_spt docker images need to set IMAGE and left TESTS_REPO empty
+ *  To launch tests from docker images need to set IMAGE and left TESTS_REPO empty
  */
 
 common = new com.mirantis.mk.Common()
 validate = new com.mirantis.mcp.Validate()
 salt = new com.mirantis.mk.Salt()
 salt_testing = new com.mirantis.mk.SaltModelTesting()
-def artifacts_dir = "validation_artifacts/"
+def artifacts_dir = "validation_artifacts"
 def remote_dir = '/root/qa_results'
 def container_workdir = '/var/lib'
-def name = 'cvp-spt'
-def xml_file = "${name}_report.xml"
+def container_name = "${env.JOB_NAME}"
+def xml_file = "${container_name}_report.xml"
 def TARGET_NODE = "I@gerrit:client"
 def reinstall_env = false
-def container_name = "${env.JOB_NAME}"
+
 def saltMaster
 def settings
 
@@ -76,7 +76,7 @@ node(slaveNode) {
             def creds = common.getCredentials(SALT_MASTER_CREDENTIALS)
             def username = creds.username
             def password = creds.password
-            def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} --tb=short -sv ${container_workdir}/${TESTS_SET}"
+            def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} --tb=short -sv ${container_workdir}/${TESTS_SET} -vv"
 
             sh "mkdir -p ${artifacts_dir}"
 
@@ -86,12 +86,12 @@ node(slaveNode) {
                 'dockerMaxCpus': 2,
                 'dockerExtraOpts' : [
                     "-v /root/qa_results/:/root/qa_results/",
-                    "-v ${env.WORKSPACE}/validation_artifacts/:${container_workdir}/validation_artifacts/",
+                    "-v ${env.WORKSPACE}/${artifacts_dir}/:${container_workdir}/${artifacts_dir}/",
+                    // TODO remove if all docker images with tests (like cvp-spt) will be transferred into new architucture (like cvp-sanity)
                     "--entrypoint=''",  // to override ENTRYPOINT=/bin/bash in Dockerfile of image
                 ],
 
                 'envOpts'         : [
-                    "WORKSPACE=${container_workdir}/${name}",
                     "SALT_USERNAME=${username}",
                     "SALT_PASSWORD=${password}",
                     "SALT_URL=${SALT_MASTER_URL}"
