@@ -106,8 +106,8 @@ timeout(time: 4, unit: 'HOURS') {
               img.inside("-v ${env.WORKSPACE}/:/formula/ -u root:root --cpus=4 --ulimit nofile=4096:8192") {
                 sh('''#!/bin/bash -xe
                       cd /etc/apt/
-                      echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial main restricted universe" > sources.list
-                      echo "deb [arch=amd64] http://cz.archive.ubuntu.com/ubuntu xenial-updates main restricted universe" >> sources.list
+                      echo "deb [arch=amd64] http://mirror.mirantis.com/nightly/ubuntu xenial main restricted universe" > sources.list
+                      echo "deb [arch=amd64] http://mirror.mirantis.com/nightly/ubuntu xenial-updates main restricted universe" >> sources.list
                       echo 'Acquire::Languages "none";' > apt.conf.d/docker-no-languages
                       echo 'Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";' > apt.conf.d/docker-gzip-indexes
                       echo 'APT::Get::Install-Recommends "false"; APT::Get::Install-Suggests "false";' > apt.conf.d/docker-recommends
