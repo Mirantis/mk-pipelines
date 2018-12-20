@@ -39,6 +39,7 @@ timeout(time: 12, unit: 'HOURS') {
             ssh.ensureKnownHosts(GERRIT_HOST)
             def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
             def doSubmit = false
+            def skipProjectsVerify = ['mk/docker-jnlp-slave']
             stage("test") {
                 if (gerritChange.status != "MERGED" && !SKIP_TEST.equals("true")) {
                     // test max CodeReview
@@ -46,30 +47,35 @@ timeout(time: 12, unit: 'HOURS') {
                         doSubmit = true
                         def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
                         def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
-                        def jobsNamespace = JOBS_NAMESPACE
-                        def plural_namespaces = ['salt-formulas', 'salt-models']
-                        // remove plural s on the end of job namespace
-                        if (JOBS_NAMESPACE in plural_namespaces) {
-                            jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
-                        }
-                        // salt-formulas tests have -latest on end of the name
-                        if (JOBS_NAMESPACE.equals("salt-formulas")) {
-                            gerritProject = gerritProject + "-latest"
-                        }
-                        def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
-                        if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates' || env.GERRIT_PROJECT == 'salt-models/reclass-system') {
-                            callJobWithExtraVars('test-salt-model-ci-wrapper')
+                        if (gerritProject in skipProjectsVerify) {
+                            common.successMsg("Project ${gerritProject} doesn't require verify, skipping...")
+                            giveVerify = true
                         } else {
-                            if (isJobExists(testJob)) {
-                                common.infoMsg("Test job ${testJob} found, running")
-                                def patchsetVerified = gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")
-                                build job: testJob, parameters: [
-                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
-                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
-                                ]
-                                giveVerify = true
+                            def jobsNamespace = JOBS_NAMESPACE
+                            def plural_namespaces = ['salt-formulas', 'salt-models']
+                            // remove plural s on the end of job namespace
+                            if (JOBS_NAMESPACE in plural_namespaces) {
+                                jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
+                            }
+                            // salt-formulas tests have -latest on end of the name
+                            if (JOBS_NAMESPACE.equals("salt-formulas")) {
+                                gerritProject = gerritProject + "-latest"
+                            }
+                            def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
+                            if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates' || env.GERRIT_PROJECT == 'salt-models/reclass-system') {
+                                callJobWithExtraVars('test-salt-model-ci-wrapper')
                             } else {
-                                common.infoMsg("Test job ${testJob} not found")
+                                if (isJobExists(testJob)) {
+                                    common.infoMsg("Test job ${testJob} found, running")
+                                    def patchsetVerified = gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")
+                                    build job: testJob, parameters: [
+                                        [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
+                                        [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
+                                    ]
+                                    giveVerify = true
+                                } else {
+                                    common.infoMsg("Test job ${testJob} not found")
+                                }
                             }
                         }
                     } else {
