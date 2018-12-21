@@ -156,6 +156,9 @@ timeout(time: 1, unit: 'HOURS') {
                         }
                         context['secrets_encryption_key_id'] = secretKeyID
                     }
+                    if (context.get('cfg_failsafe_ssh_public_key')) {
+                        writeFile file:'failsafe-ssh-key.pub', text:context['cfg_failsafe_ssh_public_key']
+                    }
                     python.setupCookiecutterVirtualenv(cutterEnv)
                     // FIXME refactor generateModel
                     python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
@@ -210,6 +213,9 @@ timeout(time: 1, unit: 'HOURS') {
                 args = "--user-data user_data --hostname ${context['salt_master_hostname']} --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ ${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"
                 if (context['secrets_encryption_enabled'] == 'True') {
                     args = "--gpg-key gpgkey.asc " + args
+                }
+                if (context.get('cfg_failsafe_ssh_public_key')) {
+                    args = "--ssh-key failsafe-ssh-key.pub " + args
                 }
 
                 // load data from model
