@@ -39,12 +39,12 @@ def getImageName(String image) {
 
 def getImageInfo(String imageName) {
     String unique_image_id = sh(
-            script: "docker inspect --format='{{index .RepoDigests 0}}' '${imageName}'",
-            returnStdout: true,
+        script: "docker inspect --format='{{index .RepoDigests 0}}' '${imageName}'",
+        returnStdout: true,
     ).trim()
     String imageSha256 = unique_image_id.tokenize(':')[1]
     common.infoMsg("Docker ${imageName} image sha256 is ${imageSha256}")
-    return ['id': unique_image_id, 'sha256': imageSha256]
+    return [ 'id': unique_image_id, 'sha256': imageSha256 ]
 }
 
 def imageURL(String registry, String imageName, String sha256) {
@@ -61,20 +61,6 @@ def imageURL(String registry, String imageName, String sha256) {
     }
 }
 
-def userInGroups(groups) {
-    def userIdCause = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)
-    if (userIdCause) {
-        String currentUserName = userIdCause.getUserName()
-        @SuppressWarnings('UnnecessaryCollectCall')
-        ArrayList authorities = Jenkins.instance.securityRealm.loadUserByUsername(currentUserName).getAuthorities().each {
-            it.toString()
-        }
-        return (authorities.intersect(groups).size()) > 0
-    }
-    common.warningMsg('can\'t read userIdCause for current build')
-    return false
-}
-
 timeout(time: 4, unit: 'HOURS') {
     node(slaveNode) {
         def user = ''
@@ -83,19 +69,6 @@ timeout(time: 4, unit: 'HOURS') {
         }
         currentBuild.description = "${user}: [${env.SOURCE_IMAGE_TAG} => ${env.IMAGE_TAG}]\n${env.IMAGE_LIST}"
         try {
-            // Check if user can run this job
-            allowedGroups = ['release-engineering']
-            releaseTags = ['proposed', 'release', 'testing', '2018', '2019', '2020']
-            tags = [env.SOURCE_IMAGE_TAG, env.IMAGE_TAG]
-            tagInRelease = tags.any { tag -> releaseTags.any { tag.contains(it) } }
-            if (tagInRelease) {
-                if (!userInGroups(allowedGroups)) {
-                    error: "You - ${currentUserName} - don't have permissions to run this job with tags ${tags}!"
-                } else {
-                    echo "User `${currentUserName}` belongs to group `${env.JENKINS_ADMIN_GROUP}`. Proceeding..."
-                }
-            }
-
             stage("Mirror Docker Images") {
 
                 def images = IMAGE_LIST.tokenize('\n')
@@ -149,8 +122,8 @@ timeout(time: 4, unit: 'HOURS') {
                         def unique_image_id = tgtImageInfo['id']
                         def tgtImgUrl = imageURL(targetRegistry, targetImageFull, tgt_image_sha256) - '/manifest.json'
                         artifactoryProperties = [
-                                'com.mirantis.targetTag': env.IMAGE_TAG,
-                                'com.mirantis.uniqueImageId': unique_image_id,
+                            'com.mirantis.targetTag'    : env.IMAGE_TAG,
+                            'com.mirantis.uniqueImageId': unique_image_id,
                         ]
                         if (external) {
                             artifactoryProperties << ['com.mirantis.externalImage': external]
@@ -165,7 +138,7 @@ timeout(time: 4, unit: 'HOURS') {
                         }
                         // %5C - backslash symbol is needed
                         historyProperties.add("${buildTime}%5C=${sourceImage}")
-                        artifactoryProperties << ['com.mirantis.versionHistory': historyProperties.join(',')]
+                        artifactoryProperties << [ 'com.mirantis.versionHistory': historyProperties.join(',') ]
                         common.infoMsg("artifactoryProperties=> ${artifactoryProperties}")
                         common.retry(3, 5) {
                             mcp_artifactory.setProperties(tgtImgUrl, artifactoryProperties)
