@@ -128,13 +128,17 @@ timeout(time: 4, unit: 'HOURS') {
                         if (external) {
                             artifactoryProperties << ['com.mirantis.externalImage': external]
                         }
-                        def sourceRegistry = sourceImage.split('/')[0]
-                        def sourceImgUrl = imageURL(sourceRegistry, sourceImage, source_image_sha256) - '/manifest.json'
-                        def existingProps = mcp_artifactory.getPropertiesForArtifact(sourceImgUrl)
                         def historyProperties = []
-                        // check does the source image have already history props
-                        if (existingProps) {
-                            historyProperties = existingProps.get('com.mirantis.versionHistory', [])
+                        try {
+                            def sourceRegistry = sourceImage.split('/')[0]
+                            def sourceImgUrl = imageURL(sourceRegistry, sourceImage, source_image_sha256) - '/manifest.json'
+                            def existingProps = mcp_artifactory.getPropertiesForArtifact(sourceImgUrl)
+                            // check does the source image have already history props
+                            if (existingProps) {
+                                historyProperties = existingProps.get('com.mirantis.versionHistory', [])
+                            }
+                        } catch (Exception e) {
+                            common.warningMsg("Can't find history for ${sourceImage}.")
                         }
                         // %5C - backslash symbol is needed
                         historyProperties.add("${buildTime}%5C=${sourceImage}")
