@@ -66,10 +66,7 @@ def imageURL(String registry, String imageName, String sha256) {
 
 timeout(time: 4, unit: 'HOURS') {
     node(slaveNode) {
-        def user = ''
-        wrap([$class: 'BuildUser']) {
-            user = env.BUILD_USER_ID
-        }
+        def user = jenkinsUtils.currentUsername()
         currentBuild.description = "${user}: [${env.SOURCE_IMAGE_TAG} => ${env.IMAGE_TAG}]\n${env.IMAGE_LIST}"
         try {
             allowedGroups = ['release-engineering']
@@ -78,9 +75,9 @@ timeout(time: 4, unit: 'HOURS') {
             tagInRelease = tags.any { tag -> releaseTags.any { tag.contains(it) } }
             if (tagInRelease) {
                 if (!jenkinsUtils.currentUserInGroups(allowedGroups)) {
-                    error: "You - ${currentUserName} - don't have permissions to run this job with tags ${tags}!"
+                    error: "You - ${user} - don't have permissions to run this job with tags ${tags}!"
                 } else {
-                    echo "User `${currentUserName}` belongs to group `${env.JENKINS_ADMIN_GROUP}`. Proceeding..."
+                    echo "User `${user}` belongs to one of groups `${allowedGroups}`. Proceeding..."
                 }
             }
             stage("Mirror Docker Images") {
