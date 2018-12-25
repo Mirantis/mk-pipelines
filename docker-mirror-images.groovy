@@ -20,11 +20,14 @@ import java.util.regex.Pattern
 import groovy.json.JsonSlurper
 
 common = new com.mirantis.mk.Common()
+jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 external = false
 externalMarker = '/mirantis/external/'
 
 slaveNode = env.SLAVE_NODE ?: 'docker'
 setDefaultArtifactoryProperties = env.SET_DEFAULT_ARTIFACTORY_PROPERTIES ?: true
+
+
 
 def getImageName(String image) {
     def regex = Pattern.compile('(?:.+/)?([^:]+)(?::.+)?')
@@ -69,6 +72,17 @@ timeout(time: 4, unit: 'HOURS') {
         }
         currentBuild.description = "${user}: [${env.SOURCE_IMAGE_TAG} => ${env.IMAGE_TAG}]\n${env.IMAGE_LIST}"
         try {
+            allowedGroups = ['release-engineering']
+            releaseTags = ['proposed', 'release', 'testing', '2018', '2019', '2020']
+            tags = [env.SOURCE_IMAGE_TAG, env.IMAGE_TAG]
+            tagInRelease = tags.any { tag -> releaseTags.any { tag.contains(it) } }
+            if (tagInRelease) {
+                if (!jenkinsUtils.currentUserInGroups(allowedGroups)) {
+                    error: "You - ${currentUserName} - don't have permissions to run this job with tags ${tags}!"
+                } else {
+                    echo "User `${currentUserName}` belongs to group `${env.JENKINS_ADMIN_GROUP}`. Proceeding..."
+                }
+            }
             stage("Mirror Docker Images") {
 
                 def images = IMAGE_LIST.tokenize('\n')
