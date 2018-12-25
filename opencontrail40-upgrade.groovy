@@ -13,9 +13,9 @@
  *
 **/
 
-def common = new com.mirantis.mk.Common()
-def salt = new com.mirantis.mk.Salt()
-def python = new com.mirantis.mk.Python()
+common = new com.mirantis.mk.Common()
+salt = new com.mirantis.mk.Salt()
+python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
 def targetLiveSubset
@@ -39,7 +39,7 @@ def controlServices = ['ifmap-server', 'supervisor-control', 'redis-server']
 def thirdPartyServicesToDisable = ['kafka', 'zookeeper', 'cassandra']
 def config4Services = ['zookeeper', 'contrail-webui-middleware', 'contrail-webui', 'contrail-api', 'contrail-schema', 'contrail-svc-monitor', 'contrail-device-manager', 'contrail-config-nodemgr', 'contrail-database']
 
-def runCommonCommands(target, command, args, check, salt, pepperEnv) {
+def runCommonCommands(pepperEnv, target, command, args, check) {
 
     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, null, args, null)
     salt.printSaltCommandResult(out)
@@ -52,6 +52,15 @@ def runCommonCommands(target, command, args, check, salt, pepperEnv) {
         salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v FOR | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/", null, false, true, null, true, 500)
     }
 }
+
+def getValueForPillarKey(pepperEnv, target, pillarKey) {
+    def out = salt.getReturnValues(salt.getPillar(pepperEnv, target, pillarKey))
+    if (out == '') {
+        throw new Exception("Cannot get value for ${pillarKey} key on ${target} target")
+    }
+    return out
+}
+
 timeout(time: 12, unit: 'HOURS') {
     node() {
 
@@ -84,9 +93,10 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 try {
-                    controllerImage = salt.getPillar(pepperEnv, "I@opencontrail:control:role:primary", "docker:client:compose:opencontrail_api:service:controller:image")
-                    analyticsImage = salt.getPillar(pepperEnv, "I@opencontrail:collector:role:primary", "docker:client:compose:opencontrail_api:service:analytics:image")
-                    analyticsdbImage = salt.getPillar(pepperEnv, "I@opencontrail:collector:role:primary", "docker:client:compose:opencontrail_api:service:analyticsdb:image")
+                    controllerImage = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "docker:client:compose:opencontrail:service:controller:image")
+                    analyticsImage = getValueForPillarKey(pepperEnv, "I@opencontrail:collector:role:primary", "docker:client:compose:opencontrail:service:analytics:image")
+                    analyticsdbImage = getValueForPillarKey(pepperEnv, "I@opencontrail:collector:role:primary", "docker:client:compose:opencontrail:service:analyticsdb:image")
+
                     salt.enforceState(pepperEnv, 'I@opencontrail:database', 'docker.host')
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail.client'])
@@ -132,7 +142,7 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                     check = 'doctrail all contrail-status'
                     salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'docker.client')
-                    runCommonCommands('I@opencontrail:collector:role:primary', command, args, check, salt, pepperEnv)
+                    runCommonCommands(pepperEnv, 'I@opencontrail:collector:role:primary', command, args, check)
                 } catch (Exception er) {
                     common.errorMsg("Opencontrail Analytics failed to be upgraded.")
                     throw er
@@ -156,7 +166,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                     salt.enforceState(pepperEnv, 'I@opencontrail:control:role:secondary', 'docker.client')
 
-                    runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv)
+                    runCommonCommands(pepperEnv, 'I@opencontrail:control:role:secondary', command, args, check)
 
                     sleep(120)
 
@@ -346,7 +356,7 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:secondary', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
 
                 check = 'contrail-status'
-                runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv)
+                runCommonCommands(pepperEnv, 'I@opencontrail:control:role:secondary', command, args, check)
 
                 sleep(120)
 
