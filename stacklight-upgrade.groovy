@@ -22,7 +22,7 @@ errorOccured = false
 def upgrade(master, target, service, pckg, state) {
     stage("Upgrade ${service}") {
         salt.runSaltProcessStep(master, "${target}", 'saltutil.refresh_pillar', [], null, true)
-        salt.enforceState(master, "${target}", 'linux.system.repo', true)
+        salt.enforceState([saltId: master, target: "${target}", state: 'linux.system.repo', output: true, failOnError: true])
         common.infoMsg("Upgrade ${service} package(s)")
         try {
             salt.runSaltProcessStep(master, "${target}", command, ["apt-get install -y -o Dpkg::Options::=\"--force-confold\" ${pckg}"], null, true)
@@ -33,7 +33,7 @@ def upgrade(master, target, service, pckg, state) {
         }
         common.infoMsg("Run ${state} state on ${target} nodes")
         try {
-            salt.enforceState(master, "${target}", ["${state}"], true)
+            salt.enforceState([saltId: master, target: "${target}", state: ["${state}"], output: true, failOnError: true])
         } catch (Exception er) {
             errorOccured = true
             common.errorMsg("[ERROR] ${state} state was executed and failed. Please fix it manually.")
@@ -102,15 +102,15 @@ def upgrade_es_kibana(master) {
         } else {
             try {
                 salt.runSaltProcessStep(master, "*", 'saltutil.refresh_pillar', [], null, true)
-                salt.enforceState(master, "I@elasticsearch:server", 'linux.system.repo', true)
+                salt.enforceState([saltId: master, target: "I@elasticsearch:server", state: 'linux.system.repo', output: true, failOnError: true])
                 salt.runSaltProcessStep(master, 'I@elasticsearch:client', command, ["apt-get install -y -o Dpkg::Options::=\"--force-confold\" python-elasticsearch"], null, true)
-                salt.enforceState(master, "I@elasticsearch:server", 'salt.minion', true)
+                salt.enforceState([saltId: master, target: "I@elasticsearch:server", state: 'salt.minion', output: true, failOnError: true])
                 salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["systemctl stop elasticsearch"], null, true)
                 salt.runSaltProcessStep(master, 'I@elasticsearch:server', command, ["export ES_PATH_CONF=/etc/elasticsearch; apt-get install -y -o Dpkg::Options::=\"--force-confold\" elasticsearch"], null, true)
-                salt.enforceState(master, "I@elasticsearch:server", 'elasticsearch.server', true)
+                salt.enforceState([saltId: master, target: "I@elasticsearch:server", state: 'elasticsearch.server', output: true, failOnError: true])
                 verify_es_is_green(master)
-                salt.enforceState(master, "I@elasticsearch:client", 'elasticsearch.client.update_index_templates', true)
-                salt.enforceState(master, "I@elasticsearch:client", 'elasticsearch.client', true)
+                salt.enforceState([saltId: master, target: "I@elasticsearch:client", state: 'elasticsearch.client.update_index_templates', output: true, failOnError: true])
+                salt.enforceState([saltId: master, target: "I@elasticsearch:client", state: 'elasticsearch.client', output: true, failOnError: true])
             } catch (Exception er) {
                 errorOccured = true
                 common.errorMsg("[ERROR] Elasticsearch upgrade failed. Please fix it manually.")
@@ -138,10 +138,10 @@ def upgrade_es_kibana(master) {
         } else {
             try {
                 salt.runSaltProcessStep(master, 'I@kibana:server', command, ["systemctl stop kibana"], null, true)
-                salt.enforceStateWithExclude(pepperEnv, "I@kibana:server", "kibana.server", "[{'id': 'kibana_service'}]")
+                salt.enforceStateWithExclude([saltId: master, target: "I@kibana:server", state: "kibana.server", excludedStates: "[{'id': 'kibana_service'}]"])
                 salt.runSaltProcessStep(master, 'I@kibana:server', command, ["apt-get install -y -o Dpkg::Options::=\"--force-confold\" kibana"], null, true)
-                salt.enforceState(master, "I@kibana:server", 'kibana.server', true)
-                salt.enforceState(master, "I@kibana:client", 'kibana.client', true)
+                salt.enforceState([saltId: master, target: "I@kibana:server", state: 'kibana.server', output: true, failOnError: true])
+                salt.enforceState([saltId: master, target: "I@kibana:client", state: 'kibana.client', output: true, failOnError: true])
             } catch (Exception er) {
                 errorOccured = true
                 common.errorMsg("[ERROR] Kibana upgrade failed. Please fix it manually.")
@@ -160,11 +160,18 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
 
-        salt.enforceState(pepperEnv, '*', 'salt.minion.grains')
-        salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.refresh_modules')
-        salt.runSaltProcessStep(pepperEnv, '*', 'mine.update')
-        sleep(30)
+        stage('Update grains and mine') {
+            salt.enforceState([saltId: pepperEnv, target: '*', state: 'salt.minion.grains'])
+            salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.refresh_modules')
+            salt.runSaltProcessStep(pepperEnv, '*', 'mine.update')
+            sleep(30)
+        }
 
+        if (salt.testTarget(pepperEnv, "I@ceph:mon")) {
+            stage('Enable Ceph prometheus plugin') {
+                salt.enforceState([saltId: pepperEnv, target: 'I@ceph:mon', state: "ceph.mgr", output: true, failOnError: true])
+            }
+        }
 
         if (STAGE_UPGRADE_SYSTEM_PART.toBoolean() == true && !errorOccured) {
             upgrade(pepperEnv, "I@telegraf:agent or I@telegraf:remote_agent", "telegraf", "telegraf", "telegraf")
@@ -186,21 +193,19 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         if (STAGE_UPGRADE_DOCKER_COMPONENTS.toBoolean() == true && !errorOccured) {
-
             stage('Upgrade docker components') {
-
                 try {
                     common.infoMsg('Disable and remove the previous versions of monitoring services')
                     salt.runSaltProcessStep(pepperEnv, 'I@docker:swarm:role:master and I@prometheus:server', command, ["docker stack rm monitoring"], null, true)
                     common.infoMsg('Rebuild the Prometheus configuration')
-                    salt.enforceState(pepperEnv, 'I@docker:swarm and I@prometheus:server', 'prometheus')
+                    salt.enforceState([saltId: pepperEnv, target: 'I@docker:swarm and I@prometheus:server', state: 'prometheus'])
                     common.infoMsg('Disable and remove the previous version of Grafana')
                     salt.runSaltProcessStep(pepperEnv, 'I@docker:swarm:role:master and I@prometheus:server', command, ["docker stack rm dashboard"], null, true)
                     common.infoMsg('Start the monitoring services')
-                    salt.enforceState(pepperEnv, 'I@docker:swarm:role:master and I@prometheus:server', 'docker')
+                    salt.enforceState([saltId: pepperEnv, target: 'I@docker:swarm:role:master and I@prometheus:server', state: 'docker'])
                     salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.sync_all', [], null, true)
                     common.infoMsg('Refresh the Grafana dashboards')
-                    salt.enforceState(pepperEnv, 'I@grafana:client', 'grafana.client')
+                    salt.enforceState([saltId: pepperEnv, target: 'I@grafana:client', state: 'grafana.client'])
                 } catch (Exception er) {
                     errorOccured = true
                     common.errorMsg("[ERROR] Upgrade of docker components failed. Please fix it manually.")
