@@ -88,6 +88,31 @@ def triggerPromoteVCPJob(VcpImageList, tag, sourceTag) {
     ]
 }
 
+def triggerPkgPromoteJob(PkgRepoList, PromoteFrom, PromoteTo) {
+    def repos = PkgRepoList.trim().tokenize()
+    def RepoName, RepoDist, PackagesToPromote
+    for (repo in repos) {
+        if(repo.startsWith('#')){
+            common.warningMsg("Skipping repo ${repo}")
+            continue
+        }
+        if(repo.trim().indexOf(' ') == -1){
+             throw new IllegalArgumentException("Wrong format of repository and commit input")
+        }
+        repoArray = repo.trim().tokenize(' ')
+        RepoName = repoArray[0]
+        RepoDist = repoArray[1]
+        PackagesToPromote = repoArray[2]
+        build job: "pkg-promote", parameters: [
+            [$class: 'ChoiceParameterValue', name: 'repoName', value: RepoName],
+            [$class: 'ChoiceParameterValue', name: 'repoDist', value: RepoDist],
+            [$class: 'ChoiceParameterValue', name: 'promoteFrom', value: PromoteFrom],
+            [$class: 'ChoiceParameterValue', name: 'promoteTo', value: PromoteTo],
+            [$class: 'TextParameterValue', name: 'packagesToPromote', value: PackagesToPromote],
+        ]
+    }
+}
+
 def triggerSyncVCPJob(VcpImageList, targetTag) {
     // Operation must be synced with triggerPromoteVCPJob procedure!
     def images = VcpImageList.trim().tokenize()
@@ -115,6 +140,11 @@ timeout(time: 12, unit: 'HOURS') {
                 if (RELEASE_APTLY.toBoolean()) {
                     common.infoMsg("Promoting Aptly")
                     triggerAptlyPromoteJob(APTLY_URL, 'all', false, true, 'all', false, "(.*)/${SOURCE_REVISION}", APTLY_STORAGES, "{0}/${TARGET_REVISION}")
+                }
+
+                if (PKG_PROMOTE.toBoolean() && SOURCE_REVISION == 'testing') {
+                    common.infoMsg("Promoting Extra and Ceph packages")
+                    triggerPkgPromoteJob(PKG_REPO_LIST, SOURCE_REVISION, TARGET_REVISION)
                 }
 
                 if (RELEASE_DEB_MIRRORS.toBoolean()) {
