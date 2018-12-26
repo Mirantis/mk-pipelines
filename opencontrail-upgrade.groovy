@@ -227,7 +227,7 @@ timeout(time: 12, unit: 'HOURS') {
                         return
                     }
 
-                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" ${CMP_PKGS}  -y;"
                     check = 'contrail-status'
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, null)
@@ -265,7 +265,7 @@ timeout(time: 12, unit: 'HOURS') {
                         return
                     }
 
-                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install -o Dpkg::Options::=\"--force-confold\"  ${CMP_PKGS}  -y;"
                     check = 'contrail-status'
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, null)
@@ -443,7 +443,7 @@ timeout(time: 12, unit: 'HOURS') {
                         return
                     }
 
-                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS}  -y;"
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" ${CMP_PKGS}  -y;"
                     check = 'contrail-status'
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveSubset, 'type': 'compound'], command, null, args, null)
@@ -481,7 +481,7 @@ timeout(time: 12, unit: 'HOURS') {
                         return
                     }
 
-                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\" -o Dpkg::Options::=\"--force-confdef\" ${CMP_PKGS} -y;"
+                    args = "export DEBIAN_FRONTEND=noninteractive; apt install --allow-downgrades -o Dpkg::Options::=\"--force-confold\"  ${CMP_PKGS} -y;"
                     check = 'contrail-status'
 
                     out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, args, null)

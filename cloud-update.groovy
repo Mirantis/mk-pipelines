@@ -168,9 +168,9 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
         }
         def osRelease = salt.getGrain(pepperEnv, target, 'lsb_distrib_codename')
         if (osRelease.toString().toLowerCase().contains('trusty')) {
-            args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --force-yes -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" '
+            args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --force-yes -o Dpkg::Options::=\"--force-confold\" '
         } else {
-            args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q -f --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" '
+            args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q -f --allow-downgrades -o Dpkg::Options::=\"--force-confold\" '
         }
         if (out.toString().contains('errors:')) {
             try {
@@ -278,7 +278,7 @@ def rollbackPkgs(pepperEnv, target, targetType = "", targetPackages="") {
     }
 
     stage('Apply package downgrades') {
-        args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" '
+        args = 'export DEBIAN_FRONTEND=noninteractive; apt-get -y -q --allow-downgrades -o Dpkg::Options::=\"--force-confold\" '
         common.infoMsg('Performing pkgs purge/remove ... ')
         try {
             if (PURGE_PKGS != "") {
