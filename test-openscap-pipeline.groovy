@@ -25,6 +25,9 @@
  *
  *  UPLOAD_TO_DASHBOARD         Boolean. Upload results to the WORP or not
  *  DASHBOARD_API_URL           The WORP api base url. Mandatory if UPLOAD_TO_DASHBOARD is true
+ *  CLOUD_NAME                  Name of the cloud to post results to dashboard for.
+                                If not specified, the internal cloud name resolved from Salt master will be used.
+                                Suitable for CI-like use case.
  */
 
 
@@ -237,7 +240,12 @@ node('python') {
                 // Attempt to upload the scanning results to the dashboard
                 if (UPLOAD_TO_DASHBOARD.toBoolean()) {
                     if (common.validInputParam('DASHBOARD_API_URL')) {
-                        def cloudName = salt.getGrain(pepperEnv, minion, 'domain')['return'][0].values()[0].values()[0]
+                        def cloudName
+                        if (common.validInputParam('CLOUD_NAME')) {
+                            cloudName = CLOUD_NAME
+                        } else {
+                            cloudName = salt.getGrain(pepperEnv, minion, 'domain')['return'][0].values()[0].values()[0]
+                        }
                         try {
                             def nodeResults = readFile "${benchmarkResultsDir}/results.json"
                             reportId = uploadResultToDashboard(DASHBOARD_API_URL, cloudName, minion, reportType, reportId, nodeResults)
