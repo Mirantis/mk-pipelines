@@ -18,6 +18,7 @@ salt = new com.mirantis.mk.Salt()
 python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
+def supportedOcTargetVersions = ['4.0', '4.1']
 def targetLiveSubset
 def targetLiveAll
 def minions
@@ -39,18 +40,43 @@ def controlServices = ['ifmap-server', 'supervisor-control', 'redis-server']
 def thirdPartyServicesToDisable = ['kafka', 'zookeeper', 'cassandra']
 def config4Services = ['zookeeper', 'contrail-webui-middleware', 'contrail-webui', 'contrail-api', 'contrail-schema', 'contrail-svc-monitor', 'contrail-device-manager', 'contrail-config-nodemgr', 'contrail-database']
 
-def runCommonCommands(pepperEnv, target, command, args, check) {
 
-    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, null, args, null)
-    salt.printSaltCommandResult(out)
-    // wait until $check is in correct state
-    if ( check == "nodetool status" ) {
-        salt.commandStatus(pepperEnv, target, check, 'Status=Up')
-    } else if ( check == "doctrail all contrail-status" ) {
-        salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v FOR | grep -v \\* | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/", null, false, true, null, true, 500)
-    } else if ( check == "contrail-status" ) {
-        salt.commandStatus(pepperEnv, target, "${check} | grep -v == | grep -v FOR | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/", null, false, true, null, true, 500)
+def checkContrailServices(pepperEnv, oc_version, target) {
+
+    def checkCmd
+
+    if (oc_version.startsWith('4')) {
+
+        checkCmd = "doctrail all contrail-status | grep -v == | grep -v FOR | grep -v \\* | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/"
+
+        if (oc_version == '4.1') {
+            def targetMinions = salt.getMinions(pepperEnv, target)
+            def collectorMinionsInTarget = targetMinions.intersect(salt.getMinions(pepperEnv, 'I@opencontrail:collector'))
+
+            if (collectorMinionsInTarget.size() != 0) {
+                def cassandraConfigYaml = readYaml text: salt.getFileContent(pepperEnv, 'I@opencontrail:control:role:primary', '/etc/cassandra/cassandra.yaml')
+
+                def currentCassandraNativeTransportPort = cassandraConfigYaml['native_transport_port'] ?: "9042"
+                def currentCassandraRpcPort = cassandraConfigYaml['rpc_port'] ?: "9160"
+
+                def cassandraNativeTransportPort = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "opencontrail:database:bind:port_configdb")
+                def cassandraCassandraRpcPort = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "opencontrail:database:bind:rpc_port_configdb")
+
+                if (currentCassandraNativeTransportPort != cassandraNativeTransportPort) {
+                    checkCmd += ' | grep -v \'contrail-collector.*(Database:Cassandra connection down)\''
+                }
+
+                if (currentCassandraRpcPort != cassandraCassandraRpcPort) {
+                    checkCmd += ' | grep -v \'contrail-alarm-gen.*(Database:Cassandra\\[\\] connection down)\''
+                }
+            }
+        }
+
+    } else {
+        checkCmd = "contrail-status | grep -v == | grep -v FOR | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup | grep -v -F /var/crashes/"
     }
+
+    salt.commandStatus(pepperEnv, target, checkCmd, null, false, true, null, true, 500)
 }
 
 def getValueForPillarKey(pepperEnv, target, pillarKey) {
@@ -58,7 +84,7 @@ def getValueForPillarKey(pepperEnv, target, pillarKey) {
     if (out == '') {
         throw new Exception("Cannot get value for ${pillarKey} key on ${target} target")
     }
-    return out
+    return out.toString()
 }
 
 timeout(time: 12, unit: 'HOURS') {
@@ -80,9 +106,18 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Opencontrail controllers upgrade') {
+
+                // Sync data on minions
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.refresh_pillar', [], null, true)
+                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.sync_all', [], null, true)
+
+                // Verify specified target OpenContrail version before upgrade
+                def targetOcVersion = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "_param:opencontrail_version")
+                if (!supportedOcTargetVersions.contains(targetOcVersion)) {
+                    throw new Exception("Specified OpenContrail version ${targetOcVersion} is not supported by upgrade pipeline. Supported versions: ${supportedOcTargetVersions}")
+                }
+
                 try {
-                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.refresh_pillar', [], null, true)
-                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.sync_all', [], null, true)
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'file.remove', ["/etc/apt/sources.list.d/mcp_opencontrail.list"], null, true)
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'file.remove', ["/etc/apt/sources.list.d/cassandra.list"], null, true)
                     salt.enforceState(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'linux.system.repo')
@@ -98,7 +133,7 @@ timeout(time: 12, unit: 'HOURS') {
                     analyticsdbImage = getValueForPillarKey(pepperEnv, "I@opencontrail:collector:role:primary", "docker:client:compose:opencontrail:service:analyticsdb:image")
 
                     salt.enforceState(pepperEnv, 'I@opencontrail:database', 'docker.host')
-                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'state.sls', ['opencontrail.client'])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'dockerng.pull', [controllerImage])
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'dockerng.pull', [analyticsImage])
@@ -136,19 +171,24 @@ timeout(time: 12, unit: 'HOURS') {
                         salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'service.stop', [service])
                     }
                     result = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'file.directory_exists', ['/var/lib/analyticsdb/data'])['return'][0].values()[0]
-                    if (result == false) {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'file.makedirs', ['/var/lib/analyticsdb'])
+                    // Keep analyticsdb only for 4.0 version
+                    if (result == false && targetOcVersion == '4.0') {
                         salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'file.move', ['/var/lib/cassandra', '/var/lib/analyticsdb'])
                         salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'file.copy', ['/var/lib/zookeeper', '/var/lib/analyticsdb_zookeeper_data','recurse=True'])
                     }
-                    check = 'doctrail all contrail-status'
                     salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'docker.client')
-                    runCommonCommands(pepperEnv, 'I@opencontrail:collector:role:primary', command, args, check)
+                    if (targetOcVersion == '4.1') {
+                        sleep(15)
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector', 'cmd.shell', ["doctrail analyticsdb systemctl restart confluent-kafka"], null, true)
+                    }
+                    checkContrailServices(pepperEnv, targetOcVersion, 'I@opencontrail:collector')
                 } catch (Exception er) {
                     common.errorMsg("Opencontrail Analytics failed to be upgraded.")
                     throw er
                 }
                 try {
-                    check = 'doctrail all contrail-status'
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
 
                     for (service in configServices) {
                         salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', [service])
@@ -165,8 +205,7 @@ timeout(time: 12, unit: 'HOURS') {
                     }
 
                     salt.enforceState(pepperEnv, 'I@opencontrail:control:role:secondary', 'docker.client')
-
-                    runCommonCommands(pepperEnv, 'I@opencontrail:control:role:secondary', command, args, check)
+                    checkContrailServices(pepperEnv, targetOcVersion, 'I@opencontrail:control:role:secondary')
 
                     sleep(120)
 
@@ -175,6 +214,7 @@ timeout(time: 12, unit: 'HOURS') {
                     }
 
                     salt.enforceState(pepperEnv, 'I@opencontrail:control:role:primary', 'docker.client')
+                    checkContrailServices(pepperEnv, targetOcVersion, 'I@opencontrail:control:role:primary')
 
                     salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.install', [neutronServerPkgs])
                     salt.runSaltProcessStep(pepperEnv, 'I@horizon:server', 'pkg.install', [dashboardPanelPkg])
@@ -355,13 +395,15 @@ timeout(time: 12, unit: 'HOURS') {
                 }
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:secondary', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
 
-                check = 'contrail-status'
-                runCommonCommands(pepperEnv, 'I@opencontrail:control:role:secondary', command, args, check)
+                def rollbackOcVersion = getValueForPillarKey(pepperEnv, 'I@opencontrail:control:role:primary', '_param:opencontrail_version')
+                checkContrailServices(pepperEnv, rollbackOcVersion, 'I@opencontrail:control:role:secondary or I@opencontrail:collector')
 
                 sleep(120)
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'cmd.shell', ['cd /etc/docker/compose/opencontrail/; docker-compose down'], null, true)
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'state.sls', ['opencontrail', 'exclude=opencontrail.client'])
+
+                checkContrailServices(pepperEnv, rollbackOcVersion, 'I@opencontrail:control:role:primary')
 
                 salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'])
                 salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'pkg.remove', [neutronServerPkgs])
