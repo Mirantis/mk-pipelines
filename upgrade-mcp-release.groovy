@@ -111,19 +111,40 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             }
             // end bw comp. for 2018.X => 2018.11 release
             def gitTargetMcpVersion = env.getProperty('GIT_REFSPEC')
-            if (targetMcpVersion == 'testing') {
+            if (targetMcpVersion in ['testing', 'proposed']) {
                 gitTargetMcpVersion = 'master'
                 common.warningMsg("gitTargetMcpVersion has been changed to:${gitTargetMcpVersion}")
+            } else if (!gitTargetMcpVersion) {
+                // backward compatibility for 2018.11.0
+                gitTargetMcpVersion = "release/${targetMcpVersion}"
             }
+            def saltMastURL = ''
+            def saltMastCreds = ''
+            def upgradeSaltStack = ''
+            def updateClusterModel = ''
+            def updatePipelines = ''
+            def updateLocalRepos = ''
+            def reclassSystemBranch = ''
             def driteTrainParamsYaml = env.getProperty('DRIVE_TRAIN_PARAMS')
-            def driteTrainParams = readYaml text: driteTrainParamsYaml
-            def saltMastURL = driteTrainParams.get('SALT_MASTER_URL')
-            def saltMastCreds = driteTrainParams.get('SALT_MASTER_CREDENTIALS')
-            def upgradeSaltStack = driteTrainParams.get('UPGRADE_SALTSTACK', false).toBoolean()
-            def updateClusterModel = driteTrainParams.get('UPDATE_CLUSTER_MODEL', false).toBoolean()
-            def updatePipelines = driteTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
-            def updateLocalRepos = driteTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
-            def reclassSystemBranch = driteTrainParams.get('RECLASS_SYSTEM_BRANCH', gitTargetMcpVersion)
+            if (driteTrainParamsYaml) {
+                def driteTrainParams = readYaml text: driteTrainParamsYaml
+                saltMastURL = driteTrainParams.get('SALT_MASTER_URL')
+                defsaltMastCreds = driteTrainParams.get('SALT_MASTER_CREDENTIALS')
+                upgradeSaltStack = driteTrainParams.get('UPGRADE_SALTSTACK', false).toBoolean()
+                updateClusterModel = driteTrainParams.get('UPDATE_CLUSTER_MODEL', false).toBoolean()
+                updatePipelines = driteTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
+                updateLocalRepos = driteTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
+                reclassSystemBranch = driteTrainParams.get('RECLASS_SYSTEM_BRANCH', gitTargetMcpVersion)
+            } else {
+                // backward compatibility for 2018.11.0
+                saltMastURL = env.getProperty('SALT_MASTER_URL')
+                saltMastCreds = env.getProperty('SALT_MASTER_CREDENTIALS')
+                upgradeSaltStack = env.getProperty('UPGRADE_SALTSTACK', false).toBoolean()
+                updateClusterModel = env.getProperty('UPDATE_CLUSTER_MODEL', false).toBoolean()
+                updatePipelines = env.getProperty('UPDATE_PIPELINES', false).toBoolean()
+                updateLocalRepos = env.getProperty('UPDATE_LOCAL_REPOS', false).toBoolean()
+                reclassSystemBranch = gitTargetMcpVersion
+            }
 
             python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
 
@@ -150,6 +171,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     // Do the same, for deprecated variable-duplicate
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs --no-run-if-empty sed -i 's/apt_mk_version: .*/apt_mk_version: \"$targetMcpVersion\"/g'")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                        "grep -r --exclude-dir=aptly -l 'jenkins_pipelines_branch: .*' * | xargs --no-run-if-empty sed -i 's/jenkins_pipelines_branch: .*/jenkins_pipelines_branch: \"$gitTargetMcpVersion\"/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add new defaults
                     common.infoMsg("Add new defaults")
