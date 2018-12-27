@@ -89,8 +89,12 @@ def archiveReclassModelChanges(ArrayList saltMinions, String oldSuffix='before',
     }
 }
 
-if (common.validInputParam('PIPELINE_TIMEOUT') && env.PIPELINE_TIMEOUT.isInteger()) {
-    pipelineTimeout = env.PIPELINE_TIMEOUT.toInteger()
+if (common.validInputParam('PIPELINE_TIMEOUT')) {
+    try {
+        pipelineTimeout = env.PIPELINE_TIMEOUT.toInteger()
+    } catch(Exception e) {
+        common.warningMsg("Provided PIPELINE_TIMEOUT parameter has invalid value: ${env.PIPELINE_TIMEOUT} - should be interger")
+    }
 }
 
 timeout(time: pipelineTimeout, unit: 'HOURS') {
