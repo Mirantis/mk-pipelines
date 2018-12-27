@@ -16,7 +16,6 @@ def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
 def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
 def saltVersion = env.SALT_VERSION ?: ""
 def dockerLib = new com.mirantis.mk.Docker()
-def img = dockerLib.getImage(env.SMOKE_TEST_DOCKER_IMG, "ubuntu:16.04")
 
 def checkouted = false
 
@@ -64,6 +63,7 @@ def triggerTestFormulaJob(testEnv, defaultGitRef, defaultGitUrl) {
 
 timeout(time: 4, unit: 'HOURS') {
   node(slaveNode) {
+    def img = dockerLib.getImage(env.SMOKE_TEST_DOCKER_IMG, "ubuntu:16.04")
     try {
       if (fileExists("tests/build")) {
         common.infoMsg('Cleaning test env')
