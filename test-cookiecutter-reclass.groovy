@@ -196,8 +196,10 @@ def globalVariatorsUpdate() {
         testDistribRevision = testDistribRevision.split('/')[-1]
     }
     // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
-    if (!common.checkRemoteBinary([mcp_version: testDistribRevision]).linux_system_repo_url) {
-        common.errorMsg("Binary release: ${testDistribRevision} not exist. Fallback to 'proposed'! ")
+    // After 2018q4 releases, need to also check 'static' repo, for example ubuntu.
+    binTest = checkRemoteBinary(['mcp_version' : testDistribRevision])
+    if (!binTest.linux_system_repo_url || !binTest.linux_system_repo_ubuntu_url) {
+        common.errorMsg("Binary release: ${testDistribRevision} not exist or not full. Fallback to 'proposed'! ")
         testDistribRevision = 'proposed'
         messages.add("DISTRIB_REVISION => ${testDistribRevision}")
     }
