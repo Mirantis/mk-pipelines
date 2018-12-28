@@ -108,8 +108,8 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Opencontrail controllers upgrade') {
 
                 // Sync data on minions
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.refresh_pillar', [], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.sync_all', [], null, true)
+                salt.runSaltProcessStep(pepperEnv, 'I@keystone:server:role:primary or I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.refresh_pillar', [], null, true)
+                salt.runSaltProcessStep(pepperEnv, 'I@keystone:server:role:primary or I@opencontrail:database or I@neutron:server or I@horizon:server', 'saltutil.sync_all', [], null, true)
 
                 // Verify specified target OpenContrail version before upgrade
                 def targetOcVersion = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "_param:opencontrail_version")
@@ -126,6 +126,9 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg("Opencontrail component on I@opencontrail:control, I@opencontrail:collector, I@neutron:server or I@horizon:server probably failed to be replaced.")
                     throw er
                 }
+
+                // Make sure that dedicated opencontrail user is created
+                salt.enforceState(pepperEnv, 'I@keystone:server:role:primary', 'keystone.client.server')
 
                 try {
                     controllerImage = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "docker:client:compose:opencontrail:service:controller:image")
