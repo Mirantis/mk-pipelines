@@ -69,6 +69,8 @@ node(slaveNode) {
             }
         }
 
+        // remove file if exists
+        sh "rm -rf ${fileName}"
         writeYaml file: fileName, data: ['parameters': meta ]
         archiveArtifacts artifacts: fileName
     }
