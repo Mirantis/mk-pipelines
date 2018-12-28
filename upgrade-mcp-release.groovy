@@ -143,10 +143,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // backward compatibility for 2018.11.0
                 saltMastURL = env.getProperty('SALT_MASTER_URL')
                 saltMastCreds = env.getProperty('SALT_MASTER_CREDENTIALS')
-                upgradeSaltStack = env.getProperty('UPGRADE_SALTSTACK', false).toBoolean()
-                updateClusterModel = env.getProperty('UPDATE_CLUSTER_MODEL', false).toBoolean()
-                updatePipelines = env.getProperty('UPDATE_PIPELINES', false).toBoolean()
-                updateLocalRepos = env.getProperty('UPDATE_LOCAL_REPOS', false).toBoolean()
+                upgradeSaltStack = env.getProperty('UPGRADE_SALTSTACK').toBoolean()
+                updateClusterModel = env.getProperty('UPDATE_CLUSTER_MODEL').toBoolean()
+                updatePipelines = env.getProperty('UPDATE_PIPELINES').toBoolean()
+                updateLocalRepos = env.getProperty('UPDATE_LOCAL_REPOS').toBoolean()
                 reclassSystemBranch = gitTargetMcpVersion
             }
 
