@@ -30,7 +30,7 @@ timeout(time: 12, unit: 'HOURS') {
         try {
             stage("promote") {
                 // promote is restricted to users in aptly-promote-users LDAP group
-                if(jenkinsUtils.currentUserInGroups(["mcp-cicd-admins", "release-engineering"])){
+                if(jenkinsUtils.currentUserInGroups(["mcp-cicd-admins", "release-engineering", "opencontrail-all"])){
                   lock("aptly-api") {
                       for (storage in storages) {
                           if (storage == "local") {
