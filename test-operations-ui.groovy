@@ -52,9 +52,8 @@ timeout(time: 30, unit: 'MINUTES') {
 
             if (checkouted) {
                 stage("test") {
-                    img.inside("-v ${env.WORKSPACE}/:/operations-ui/") {
+                    img.inside("-u root:root -v ${env.WORKSPACE}/:/operations-ui/ -e npm_config_cache=/operations-ui/.npm -e CI=true") {
                         sh('''#!/bin/bash -xe
-                          export CI=true
                           cd /operations-ui
                           npm install
                           npm test
@@ -69,6 +68,11 @@ timeout(time: 30, unit: 'MINUTES') {
         } finally {
             if (fileExists(testReportFile)) {
                 archiveArtifacts artifacts: testReportFile
+            }
+            stage("Cleanup"){
+                img.inside("-u root:root -v ${env.WORKSPACE}/:/operations-ui/") {
+                    sh("rm -rf /operations-ui/*")
+                }
             }
         }
     }
