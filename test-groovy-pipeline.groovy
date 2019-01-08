@@ -18,8 +18,8 @@ if (env.GERRIT_USER) {
 }
 
 // Use gerrit parameters if set with fallback to job param
-String git_repo_url = env.GERRIT_HOST ? "${env.GERRIT_SCHEME}://${git_user}${env.GERRIT_HOST}:${env.GERRIT_PORT}/${env.GERRIT_PROJECT}" : env.GIT_URL
-String git_ref = env.GERRIT_REFSPEC ?: env.GIT_REF
+String git_repo_url = env.GERRIT_HOST ? "${env.GERRIT_SCHEME}://${git_user}${env.GERRIT_HOST}:${env.GERRIT_PORT}/${env.GERRIT_PROJECT}" : env.DEFAULT_GIT_URL
+String git_ref = env.GERRIT_REFSPEC ?: env.DEFAULT_GIT_REF
 String git_credentials_id = env.CREDENTIALS_ID
 
 String docker_registry = env.DOCKER_REGISTRY ?: 'docker-dev-virtual.docker.mirantis.net'
