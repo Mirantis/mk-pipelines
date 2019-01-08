@@ -70,7 +70,9 @@ def triggerEbfRepoJob(snapshotId, snapshotName) {
 def triggerGitTagJob(gitRepoList, gitCredentials, tag, sourceTag) {
     // There is no `nightly` and `testing` build-IDs` in release process
     // for git repos
-    if (sourceTag in ['nightly', 'testing']) sourceTag = 'master'
+    if (sourceTag in ['nightly', 'testing']) {
+        sourceTag = 'master'
+    }
     build job: "tag-git-repos-all", parameters: [
         [$class: 'TextParameterValue', name: 'GIT_REPO_LIST', value: gitRepoList],
         [$class: 'StringParameterValue', name: 'GIT_CREDENTIALS', value: gitCredentials],
@@ -92,12 +94,12 @@ def triggerPkgPromoteJob(PkgRepoList, PromoteFrom, PromoteTo) {
     def repos = PkgRepoList.trim().tokenize()
     def RepoName, RepoDist, PackagesToPromote
     for (repo in repos) {
-        if(repo.startsWith('#')){
+        if (repo.startsWith('#')) {
             common.warningMsg("Skipping repo ${repo}")
             continue
         }
-        if(repo.trim().indexOf(' ') == -1){
-             throw new IllegalArgumentException("Wrong format of repository and commit input")
+        if (repo.trim().indexOf(' ') == -1) {
+            throw new IllegalArgumentException("Wrong format of repository and commit input")
         }
         repoArray = repo.trim().tokenize(' ')
         RepoName = repoArray[0]
