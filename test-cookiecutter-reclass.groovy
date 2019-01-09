@@ -80,12 +80,12 @@ def testModel(modelFile, reclassArtifactName, artifactCopyPath, useExtraRepos = 
     //* Grub all models and send it to check in paralell - by one in thread.
     def _uuid = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}_${modelFile.toLowerCase()}_" + UUID.randomUUID().toString().take(8)
     def _values = [
-        MODELS_TARGZ: "${env.BUILD_URL}/artifact/${reclassArtifactName}",
-        DockerCName: _uuid,
-        testReclassEnv: "model/${modelFile}/",
-        modelFile: "contexts/${modelFile}.yml",
+        MODELS_TARGZ    : "${env.BUILD_URL}/artifact/${reclassArtifactName}",
+        DockerCName     : _uuid,
+        testReclassEnv  : "model/${modelFile}/",
+        modelFile       : "contexts/${modelFile}.yml",
         DISTRIB_REVISION: testDistribRevision,
-        useExtraRepos: useExtraRepos,
+        useExtraRepos   : useExtraRepos,
     ]
     def _values_string = JsonOutput.toJson(_values << extraVars)
     def chunkJob = build job: chunkJobName, parameters: [
@@ -197,7 +197,7 @@ def globalVariatorsUpdate() {
     }
     // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
     // After 2018q4 releases, need to also check 'static' repo, for example ubuntu.
-    binTest = common.checkRemoteBinary(['mcp_version' : testDistribRevision])
+    binTest = common.checkRemoteBinary(['mcp_version': testDistribRevision])
     if (!binTest.linux_system_repo_url || !binTest.linux_system_repo_ubuntu_url) {
         common.errorMsg("Binary release: ${testDistribRevision} not exist or not full. Fallback to 'proposed'! ")
         testDistribRevision = 'proposed'
@@ -298,11 +298,20 @@ timeout(time: 1, unit: 'HOURS') {
             }
             stage("Check workflow_definition") {
                 // Check only for patchset
-                python.setupVirtualenv(vEnv, 'python2', [], "${templateEnvPatched}/requirements.txt")
                 if (gerritDataCC.get('gerritRefSpec', null)) {
-                    common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
+                    if (fileExists(new File(templateEnvPatched, 'tox.ini').toString())) {
+                        dir(templateEnvPatched) {
+                            output = sh(returnStdout: true, script: "tox -ve test")
+                            common.infoMsg("[Cookiecutter test] Result: ${output}")
+                        }
+
+                    } else {
+                        common.warningMsg('Old Cookiecutter env detected!')
+                        common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
+                        python.setupVirtualenv(vEnv, 'python2', [], "${templateEnvPatched}/requirements.txt")
+                    }
                 } else {
-                    common.infoMsg('No need to process: workflow_definition')
+                    common.infoMsg('No need to process: workflow_definition test')
                 }
             }
 
