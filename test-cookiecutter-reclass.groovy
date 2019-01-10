@@ -298,20 +298,16 @@ timeout(time: 1, unit: 'HOURS') {
             }
             stage("Check workflow_definition") {
                 // Check only for patchset
-                if (gerritDataCC.get('gerritRefSpec', null)) {
-                    if (fileExists(new File(templateEnvPatched, 'tox.ini').toString())) {
-                        dir(templateEnvPatched) {
-                            output = sh(returnStdout: true, script: "tox -ve test")
-                            common.infoMsg("[Cookiecutter test] Result: ${output}")
-                        }
-
-                    } else {
-                        common.warningMsg('Old Cookiecutter env detected!')
-                        python.setupVirtualenv(vEnv, 'python2', [], "${templateEnvPatched}/requirements.txt")
-                        common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
+                if (fileExists(new File(templateEnvPatched, 'tox.ini').toString())) {
+                    dir(templateEnvPatched) {
+                        output = sh(returnStdout: true, script: "tox -ve test")
+                        common.infoMsg("[Cookiecutter test] Result: ${output}")
                     }
+
                 } else {
-                    common.infoMsg('No need to process: workflow_definition test')
+                    common.warningMsg('Old Cookiecutter env detected!')
+                    python.setupVirtualenv(vEnv, 'python2', [], "${templateEnvPatched}/requirements.txt")
+                    common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
                 }
             }
 
