@@ -307,8 +307,8 @@ timeout(time: 1, unit: 'HOURS') {
 
                     } else {
                         common.warningMsg('Old Cookiecutter env detected!')
-                        common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
                         python.setupVirtualenv(vEnv, 'python2', [], "${templateEnvPatched}/requirements.txt")
+                        common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
                     }
                 } else {
                     common.infoMsg('No need to process: workflow_definition test')
