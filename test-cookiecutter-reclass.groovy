@@ -296,7 +296,11 @@ timeout(time: 1, unit: 'HOURS') {
                     common.infoMsg("Using custom context provided from job parameter 'CUSTOM_COOKIECUTTER_CONTEXT'")
                 }
             }
-            stage("Check workflow_definition") {
+            stage('Check workflow_definition') {
+                // Prepare venv for old env's, aka non-tox based
+                if (!fileExists(new File(templateEnvPatched, 'tox.ini').toString()) || !fileExists(new File(templateEnvHead, 'tox.ini').toString())) {
+                    python.setupVirtualenv(vEnv, 'python2', [], "${templateEnvPatched}/requirements.txt")
+                }
                 // Check only for patchset
                 if (fileExists(new File(templateEnvPatched, 'tox.ini').toString())) {
                     dir(templateEnvPatched) {
@@ -306,12 +310,11 @@ timeout(time: 1, unit: 'HOURS') {
 
                 } else {
                     common.warningMsg('Old Cookiecutter env detected!')
-                    python.setupVirtualenv(vEnv, 'python2', [], "${templateEnvPatched}/requirements.txt")
                     common.infoMsg(python.runVirtualenvCommand(vEnv, "python ${templateEnvPatched}/workflow_definition_test.py"))
                 }
             }
 
-            stage("generate models") {
+            stage('generate models') {
                 dir("${templateEnvHead}/contexts") {
                     for (String x : findFiles(glob: "*.yml")) {
                         contextFileListHead.add(x)
