@@ -15,7 +15,7 @@
 
 def common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
-def dockerLib = new com.mirantis.mk.Docker()
+def python = new com.mirantis.mk.Python()
 
 def gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
 def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
@@ -27,6 +27,7 @@ def gerritProject = env.GERRIT_PROJECT ?: null
 def version = env.MCP_VERSION ?: 'testing'
 def dockerRegistry = env.DOCKER_REGISTRY ?: 'docker-prod-local.docker.mirantis.net'
 def dockerReviewRegistry = env.DOCKER_REVIEW_REGISTRY ?: 'docker-dev-local.docker.mirantis.net'
+def cvpImageName = env.CVP_DOCKER_IMG ? "${dockerRegistry}/${env.CVP_DOCKER_IMG}:${version}" : "${dockerRegistry}/mirantis/cvp/cvp-trymcp-tests:${version}"
 
 def checkouted = false
 def testReportFile = "${env.WORKSPACE}/reports/report.html"
@@ -40,7 +41,7 @@ def uiImage
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
         sh "mkdir -p reports ${apiProject} ${uiProject}"
-        def img = dockerLib.getImage("${env.CVP_DOCKER_IMG}:${version}", "${dockerRegistry}/mirantis/cvp/cvp-trymcp-tests:${version}")
+        def testImage = docker.image(cvpImageName)
         try {
             stage("checkout") {
                 if (event) {
@@ -75,8 +76,8 @@ timeout(time: 1, unit: 'HOURS') {
                                 extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: uiProject]],
                                 userRemoteConfigs: [[url: env.UI_GERRIT_REPO, refspec: uiGerritRef, credentialsId: gerritCredentials],],
                         ])
-                        apiImage = image("${dockerReviewRegistry}/review/${env.FLAVOR}-${env.GERRIT_CHANGE_NUMBER}:${env.GERRIT_PATCHSET_NUMBER}")
-                        uiImage = image("${dockerRegistry}/${env.UI_DOCKER_IMG ?: "mirantis/model-generator/operations-ui"}:${version}")
+                        apiImage = docker.image("${dockerReviewRegistry}/review/${env.FLAVOR}-${env.GERRIT_CHANGE_NUMBER}:${env.GERRIT_PATCHSET_NUMBER}")
+                        uiImage = docker.image("${dockerRegistry}/${env.UI_DOCKER_IMG ?: "mirantis/model-generator/operations-ui"}:${version}")
                     } else if (env.FLAVOR == uiProject) {
                         // Second project is API
                         checkout([
@@ -85,8 +86,8 @@ timeout(time: 1, unit: 'HOURS') {
                                 extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: apiProject]],
                                 userRemoteConfigs: [[url: env.API_GERRIT_REPO, refspec: apiGerritRef, credentialsId: gerritCredentials],],
                         ])
-                        apiImage = image("${dockerRegistry}/${env.API_DOCKER_IMG ?: "mirantis/model-generator/operations-api"}:${version}")
-                        uiImage = image("${dockerReviewRegistry}/review/${env.FLAVOR}-${env.GERRIT_CHANGE_NUMBER}:${env.GERRIT_PATCHSET_NUMBER}")
+                        apiImage = docker.image("${dockerRegistry}/${env.API_DOCKER_IMG ?: "mirantis/model-generator/operations-api"}:${version}")
+                        uiImage = docker.image("${dockerReviewRegistry}/review/${env.FLAVOR}-${env.GERRIT_CHANGE_NUMBER}:${env.GERRIT_PATCHSET_NUMBER}")
                     }
                 } else if (manualTrigger) {
                     checkout([
@@ -101,41 +102,42 @@ timeout(time: 1, unit: 'HOURS') {
                             extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: uiProject]],
                             userRemoteConfigs: [[url: env.UI_GERRIT_REPO, refspec: uiGerritRef, credentialsId: gerritCredentials],],
                     ])
-                    apiImage = image("${dockerRegistry}/${env.API_DOCKER_IMG ?: "mirantis/model-generator/operations-api"}:${version}")
-                    uiImage = image("${dockerRegistry}/${env.UI_DOCKER_IMG ?: "mirantis/model-generator/operations-ui"}:${version}")
+                    apiImage = docker.image("${dockerRegistry}/${env.API_DOCKER_IMG ?: "mirantis/model-generator/operations-api"}:${version}")
+                    uiImage = docker.image("${dockerRegistry}/${env.UI_DOCKER_IMG ?: "mirantis/model-generator/operations-ui"}:${version}")
                 } else {
                     throw new Exception('Cannot checkout gerrit repositories. Please verify that parameters for repositories are properly set')
                 }
             }
 
             stage('Pull docker images') {
-                apiImage.pull()
-                uiImage.pull()
+                common.retry(3, 5) {
+                    apiImage.pull()
+                }
+                common.retry(3, 5) {
+                    uiImage.pull()
+                }
+                common.retry(3, 5) {
+                    testImage.pull()
+                }
             }
 
             stage('Prepare and run docker compose services') {
-                sh """
-                    virtualenv ${env.WORKSPACE}/venv
-                    source ${env.WORKSPACE}/venv/bin/activate
-                    pip install docker-compose==1.22.0
-                """
+                python.setupVirtualenv("${env.WORKSPACE}/venv", 'python2', ['docker-compose==1.22.0'])
 
                 dir(apiProject) {
-                    sh """
-                        export IMAGE=${apiImage}
-                        source ${env.WORKSPACE}/venv/bin/activate && ./bootstrap_env.sh up
-                    """
+                    python.runVirtualenvCommand("${env.WORKSPACE}/venv",
+                            "export IMAGE=${apiImage.id}; ./bootstrap_env.sh up")
                 }
                 dir(uiProject) {
-                    sh """
-                        export IMAGE=${uiImage}
-                        source ${env.WORKSPACE}/venv/bin/activate && docker-compose up -d
-                    """
+                    python.runVirtualenvCommand("${env.WORKSPACE}/venv",
+                            "export IMAGE=${uiImage.id}; docker-compose up -d")
                 }
             }
 
-            stage("test") {
-                img.inside("-u root:root -v ${env.WORKSPACE}/reports:/var/lib/qa_reports") {
+            stage('Test') {
+                testImage.inside("-u root:root" +
+                        " -v ${env.WORKSPACE}/reports:/var/lib/qa_reports" +
+                        "--entrypoint=/bin/bash") {
                     sh "pytest -m 'not trymcp'"
                 }
             }
@@ -150,22 +152,24 @@ timeout(time: 1, unit: 'HOURS') {
             stage("Cleanup") {
                 if (fileExists("${env.WORKSPACE}/venv")) {
                     dir(apiProject) {
-                        sh "source ${env.WORKSPACE}/venv/bin/activate && ./bootstrap_env.sh down || true"
+                        python.runVirtualenvCommand("${env.WORKSPACE}/venv", "./bootstrap_env.sh down || true")
                     }
                     dir(uiProject) {
-                        sh "source ${env.WORKSPACE}/venv/bin/activate && docker-compose down || true"
+                        python.runVirtualenvCommand("${env.WORKSPACE}/venv", "docker-compose down || true")
                     }
                     sh "rm -rf ${env.WORKSPACE}/venv/"
                 }
                 if (apiImage && apiImage.id) {
-                    sh "docker rm -f ${apiImage.id}"
+                    sh "docker rmi ${apiImage.id}"
                 }
                 if (uiImage && uiImage.id) {
-                    sh "docker rm -f ${uiImage.id}"
+                    sh "docker rmi ${uiImage.id}"
                 }
                 // Remove everything what is owned by root
-                img.inside("-u root:root -v ${env.WORKSPACE}:/temp") {
-                    sh('rm -rf /temp/reports/* /temp/cockroach_data')
+                testImage.inside("-u root:root" +
+                        " -v ${env.WORKSPACE}/reports:/var/lib/qa_reports" +
+                        "--entrypoint=/bin/bash") {
+                    sh("rm -rf /var/lib/qa_reports/* /${env.WORKSPACE}/cockroach_data")
                 }
             }
         }
