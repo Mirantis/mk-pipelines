@@ -75,7 +75,7 @@ timeout(time: 4, unit: 'HOURS') {
             tagInRelease = tags.any { tag -> releaseTags.any { tag.contains(it) } }
             if (tagInRelease) {
                 if (!jenkinsUtils.currentUserInGroups(allowedGroups)) {
-                    error: "You - ${user} - don't have permissions to run this job with tags ${tags}!"
+                    throw new Exception("You - ${user} - don't have permissions to run this job with tags ${tags}!")
                 } else {
                     echo "User `${user}` belongs to one of groups `${allowedGroups}`. Proceeding..."
                 }
