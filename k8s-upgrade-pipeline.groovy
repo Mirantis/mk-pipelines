@@ -28,6 +28,8 @@
  *   KUBERNETES_CALICO_CNI_IPAM_SOURCE_HASH    Сalico/ipam binary hash. Should be null if update rolling via reclass-system level
  *   KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE  Target calico/kube-controllers image. May be null in case of reclass-system rollout.
  *   CALICO_UPGRADE_VERSION                    Version of "calico-upgrade" utility to be used ("v1.0.5" for Calico v3.1.3 target).
+ *   KUBERNETES_ETCD_SOURCE      Target etcd binary. May be null in case of reclass-system rollout.
+ *   KUBERNETES_ETCD_SOURCE_HASH Target etcd binary checksum. May be null in case of reclass-system rollout.
  *
 **/
 import groovy.json.JsonSlurper
@@ -84,6 +86,27 @@ def downloadCalicoUpgrader(pepperEnv, target) {
         salt.cmdRun(pepperEnv, target, "rm -f ./calico-upgrade")
         salt.cmdRun(pepperEnv, target, "wget https://github.com/projectcalico/calico-upgrade/releases/download/${CALICO_UPGRADE_VERSION}/calico-upgrade")
         salt.cmdRun(pepperEnv, target, "chmod +x ./calico-upgrade")
+    }
+}
+
+def overrideEtcdSource(pepperEnv) {
+    def salt = new com.mirantis.mk.Salt()
+
+    def k8sSaltOverrides = """
+        kubernetes_etcd_source: ${KUBERNETES_ETCD_SOURCE}
+        kubernetes_etcd_source_hash: ${KUBERNETES_ETCD_SOURCE_HASH}
+    """
+    stage("Override etcd binaries to target version") {
+        salt.setSaltOverrides(pepperEnv,  k8sSaltOverrides)
+    }
+}
+
+def performEtcdUpdateAndServicesRestart(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+
+    stage("Performing etcd update and services restart on ${target}") {
+        salt.enforceState(pepperEnv, target, "etcd.server.service")
+        salt.cmdRun(pepperEnv, target, ". /var/lib/etcd/configenv && etcdctl cluster-health")
     }
 }
 
@@ -645,6 +668,17 @@ timeout(time: 12, unit: 'HOURS') {
                 performCalicoConfigurationUpdateAndServicesRestart(pepperEnv, POOL, ctl_node)
                 completeCalicoUpgrade(pepperEnv, ctl_node)
                 // no downtime is expected after this point
+            }
+
+            /*
+                * Execute etcd update
+            */
+            if ((common.validInputParam('KUBERNETES_ETCD_SOURCE')) && (common.validInputParam('KUBERNETES_ETCD_SOURCE_HASH'))) {
+                overrideEtcdSource(pepperEnv)
+            }
+            def targetHosts = salt.getMinionsSorted(pepperEnv, "I@etcd:server")
+            for (t in targetHosts) {
+                performEtcdUpdateAndServicesRestart(pepperEnv, t)
             }
 
             /*
