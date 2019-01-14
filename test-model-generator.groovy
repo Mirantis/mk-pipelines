@@ -23,7 +23,6 @@ def event = env.GERRIT_EVENT_TYPE ?: null
 def defaultRef = 'master'
 def apiGerritRef = env.API_GERRIT_REF ?: defaultRef
 def uiGerritRef = env.UI_GERRIT_REF ?: defaultRef
-def gerritProject = env.GERRIT_PROJECT ?: null
 def version = env.MCP_VERSION ?: 'testing'
 def dockerRegistry = env.DOCKER_REGISTRY ?: 'docker-prod-local.docker.mirantis.net'
 def dockerReviewRegistry = env.DOCKER_REVIEW_REGISTRY ?: 'docker-dev-local.docker.mirantis.net'
@@ -45,7 +44,7 @@ timeout(time: 1, unit: 'HOURS') {
         try {
             stage("checkout") {
                 if (event) {
-                    dir(gerritProject) {
+                    dir(env.FLAVOR) {
                         // job is triggered by Gerrit
                         def gerritChange = gerrit.getGerritChange(env.GERRIT_NAME, env.GERRIT_HOST, env.GERRIT_CHANGE_NUMBER, gerritCredentials, true)
                         if (gerritChange.commitMessage.contains("WIP")) {
