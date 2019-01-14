@@ -29,7 +29,8 @@ def dockerReviewRegistry = env.DOCKER_REVIEW_REGISTRY ?: 'docker-dev-local.docke
 def cvpImageName = env.CVP_DOCKER_IMG ? "${dockerRegistry}/${env.CVP_DOCKER_IMG}:${version}" : "${dockerRegistry}/mirantis/cvp/cvp-trymcp-tests:${version}"
 
 def checkouted = false
-def testReportFile = 'reports/report.html'
+def testReportHTMLFile = 'reports/report.html'
+def testReportXMLFile = 'reports/report.xml'
 def manualTrigger = false
 
 def apiProject = 'operations-api'
@@ -164,8 +165,11 @@ timeout(time: 1, unit: 'HOURS') {
             currentBuild.result = "FAILURE"
             throw e
         } finally {
-            if (fileExists(testReportFile)) {
-                archiveArtifacts artifacts: testReportFile
+            if (fileExists(testReportHTMLFile)) {
+                archiveArtifacts artifacts: testReportHTMLFile
+            }
+            if (fileExists(testReportXMLFile)) {
+                archiveArtifacts artifacts: testReportXMLFile
             }
             stage("Cleanup") {
                 if (fileExists("${env.WORKSPACE}/venv")) {
