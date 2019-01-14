@@ -23,13 +23,13 @@ def event = env.GERRIT_EVENT_TYPE ?: null
 def defaultRef = 'master'
 def apiGerritRef = env.API_GERRIT_REF ?: defaultRef
 def uiGerritRef = env.UI_GERRIT_REF ?: defaultRef
-def version = env.MCP_VERSION ?: 'testing'
+def version = env.MCP_VERSION ?: 'nightly'
 def dockerRegistry = env.DOCKER_REGISTRY ?: 'docker-prod-local.docker.mirantis.net'
 def dockerReviewRegistry = env.DOCKER_REVIEW_REGISTRY ?: 'docker-dev-local.docker.mirantis.net'
 def cvpImageName = env.CVP_DOCKER_IMG ? "${dockerRegistry}/${env.CVP_DOCKER_IMG}:${version}" : "${dockerRegistry}/mirantis/cvp/cvp-trymcp-tests:${version}"
 
 def checkouted = false
-def testReportFile = "${env.WORKSPACE}/reports/report.html"
+def testReportFile = 'reports/report.html'
 def manualTrigger = false
 
 def apiProject = 'operations-api'
@@ -41,6 +41,7 @@ timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
         sh "mkdir -p reports ${apiProject} ${uiProject}"
         def testImage = docker.image(cvpImageName)
+        def testImageOptions = "-u root:root --network=host -v ${env.WORKSPACE}/reports:/var/lib/qa_reports --entrypoint=''"
         try {
             stage("checkout") {
                 if (event) {
@@ -123,21 +124,39 @@ timeout(time: 1, unit: 'HOURS') {
             stage('Prepare and run docker compose services') {
                 python.setupVirtualenv("${env.WORKSPACE}/venv", 'python2', ['docker-compose==1.22.0'])
 
+                // Make sure cockroach_data is cleaned up
+                if(fileExists("${apiProject}/cockroach_data")) {
+                    testImage.inside(testImageOptions) {
+                        sh("rm -rf ${env.WORKSPACE}/${apiProject}/cockroach_data")
+                    }
+                }
+
                 dir(apiProject) {
                     python.runVirtualenvCommand("${env.WORKSPACE}/venv",
                             "export IMAGE=${apiImage.id}; ./bootstrap_env.sh up")
+                    common.retry(5, 20) {
+                        sh 'curl -v http://127.0.0.1:8001/api/v1 > /dev/null'
+                    }
                 }
                 dir(uiProject) {
                     python.runVirtualenvCommand("${env.WORKSPACE}/venv",
                             "export IMAGE=${uiImage.id}; docker-compose up -d")
+                    common.retry(5, 20) {
+                        sh 'curl -v http://127.0.0.1:3000 > /dev/null'
+                    }
                 }
             }
 
             stage('Test') {
-                testImage.inside("-u root:root" +
-                        " -v ${env.WORKSPACE}/reports:/var/lib/qa_reports" +
-                        "--entrypoint=/bin/bash") {
-                    sh "pytest -m 'not trymcp'"
+                testImage.inside(testImageOptions) {
+                    sh """
+                        export TEST_LOGIN=test
+                        export TEST_PASSWORD=default
+                        export TEST_MODELD_URL=127.0.0.1
+                        export TEST_MODELD_PORT=3000
+                        cd /var/lib/trymcp-tests
+                        pytest -m 'not trymcp'
+                    """
                 }
             }
         } catch (Throwable e) {
@@ -165,10 +184,8 @@ timeout(time: 1, unit: 'HOURS') {
                     sh "docker rmi ${uiImage.id}"
                 }
                 // Remove everything what is owned by root
-                testImage.inside("-u root:root" +
-                        " -v ${env.WORKSPACE}/reports:/var/lib/qa_reports" +
-                        "--entrypoint=/bin/bash") {
-                    sh("rm -rf /var/lib/qa_reports/* /${env.WORKSPACE}/cockroach_data")
+                testImage.inside(testImageOptions) {
+                    sh("rm -rf /var/lib/qa_reports/* ${env.WORKSPACE}/${apiProject}/cockroach_data")
                 }
             }
         }
