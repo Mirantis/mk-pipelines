@@ -4,6 +4,7 @@
  * Expected parameters:
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API.
  *   SALT_MASTER_URL            Full Salt API address [http://10.10.10.1:8000].
+ *   ASK_CONFIRMATION           Ask confirmation for restore
  *
 **/
 
@@ -11,9 +12,10 @@ def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def openstack = new com.mirantis.mk.Openstack()
 def python = new com.mirantis.mk.Python()
-
 def pepperEnv = "pepperEnv"
 def resultCode = 99
+
+askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -35,15 +37,31 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
             if (resultCode == 1) {
-                common.warningMsg("There was a problem with parsing the status output or with determining it. Do you want to run a restore?")
+                if(askConfirmation){
+                    common.warningMsg("There was a problem with parsing the status output or with determining it. Do you want to run a restore?")
+                } else {
+                    common.warningMsg("There was a problem with parsing the status output or with determining it. Try to restore.")
+                }
             } else if (resultCode > 1) {
-                common.warningMsg("There's something wrong with the cluster, do you want to run a restore?")
+                if(askConfirmation){
+                    common.warningMsg("There's something wrong with the cluster, do you want to run a restore?")
+                } else {
+                    common.warningMsg("There's something wrong with the cluster, try to restore.")
+                }
             } else {
-                common.warningMsg("There seems to be everything alright with the cluster, do you still want to run a restore?")
+                if(askConfirmation){
+                  common.warningMsg("There seems to be everything alright with the cluster, do you still want to run a restore?")
+                } else {
+                  common.warningMsg("There seems to be everything alright with the cluster, do nothing")
+                }
             }
-            input message: "Are you sure you want to run a restore? Click to confirm"
+            if(askConfirmation){
+              input message: "Are you sure you want to run a restore? Click to confirm"
+            }
             try {
-                openstack.restoreGaleraDb(pepperEnv)
+                if((!askConfirmation && resultCode > 0) || askConfirmation){
+                  openstack.restoreGaleraDb(pepperEnv)
+                }
             } catch (Exception e) {
                 common.errorMsg("Restoration process has failed.")
             }
