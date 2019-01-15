@@ -133,7 +133,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             if (driteTrainParamsYaml) {
                 def driteTrainParams = readYaml text: driteTrainParamsYaml
                 saltMastURL = driteTrainParams.get('SALT_MASTER_URL')
-                defsaltMastCreds = driteTrainParams.get('SALT_MASTER_CREDENTIALS')
+                saltMastCreds = driteTrainParams.get('SALT_MASTER_CREDENTIALS')
                 upgradeSaltStack = driteTrainParams.get('UPGRADE_SALTSTACK', false).toBoolean()
                 updateClusterModel = driteTrainParams.get('UPDATE_CLUSTER_MODEL', false).toBoolean()
                 updatePipelines = driteTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
@@ -171,19 +171,19 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     common.infoMsg('Perform: UPDATE_CLUSTER_MODEL')
                     def dateTime = common.getDatetime()
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                        "grep -r --exclude-dir=aptly -l 'mcp_version: .*' * | xargs --no-run-if-empty sed -i 's/mcp_version: .*/mcp_version: \"$targetMcpVersion\"/g'")
+                        "grep -r --exclude-dir=aptly -l 'mcp_version: .*' * | xargs --no-run-if-empty sed -i 's|mcp_version: .*|mcp_version: \"$targetMcpVersion\"|g'")
                     // Do the same, for deprecated variable-duplicate
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                        "grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs --no-run-if-empty sed -i 's/apt_mk_version: .*/apt_mk_version: \"$targetMcpVersion\"/g'")
+                        "grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs --no-run-if-empty sed -i 's|apt_mk_version: .*|apt_mk_version: \"$targetMcpVersion\"|g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                        "grep -r --exclude-dir=aptly -l 'jenkins_pipelines_branch: .*' * | xargs --no-run-if-empty sed -i 's/jenkins_pipelines_branch: .*/jenkins_pipelines_branch: \"$gitTargetMcpVersion\"/g'")
+                        "grep -r --exclude-dir=aptly -l 'jenkins_pipelines_branch: .*' * | xargs --no-run-if-empty sed -i 's|jenkins_pipelines_branch: .*|jenkins_pipelines_branch: \"$gitTargetMcpVersion\"|g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
-                        "sed -i 's/^  _param:/  _param:\\n    mcp_version: \"$targetMcpVersion\"/' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml")
+                        "sed -i 's|^  _param:|  _param:\\n    mcp_version: \"$targetMcpVersion\"|' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^- system.defaults\$' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
-                        "sed -i 's/^classes:/classes:\\n- system.defaults/' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml")
+                        "sed -i 's|^classes:|classes:\\n- system.defaults|' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml")
                     common.infoMsg("The following changes were made to the cluster model and will be commited. " +
                         "Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
