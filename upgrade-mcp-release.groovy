@@ -293,6 +293,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     triggerMirrorJob("git-mirror-downstream-pipeline-library")
                 }
 
+                // updating users and keys
+                salt.enforceState(venvPepper, "I@linux:system", 'linux.system.user', true)
+                salt.enforceState(venvPepper, "I@linux:system", 'openssh', true)
+
                 salt.enforceState(venvPepper, "I@jenkins:client", 'jenkins.client', true)
 
                 salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client' state.sls docker.client --async")
