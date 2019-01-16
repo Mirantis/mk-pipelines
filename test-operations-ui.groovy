@@ -22,9 +22,11 @@ timeout(time: 30, unit: 'MINUTES') {
     node(slaveNode) {
         def img = dockerLib.getImage(env.NPM_DOCKER_IMG, "npm:8.12.0")
         try {
-            if (fileExists("build/")) {
+            if (fileExists('build') || fileExists('.npm')) {
                 common.infoMsg('Cleaning test env')
-                sh("rm -rf build/")
+                img.inside("-u root:root -v ${env.WORKSPACE}/:/operations-ui/") {
+                    sh("rm -rf /operations-ui/build/ /operations-ui/.npm")
+                }
             }
             stage("checkout") {
                 if (gerritRef) {
