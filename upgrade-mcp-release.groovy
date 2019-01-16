@@ -182,6 +182,12 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     // Set new k8s param
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'kubernetes_containerd_enabled: .*' * | xargs --no-run-if-empty sed -i 's|kubernetes_containerd_enabled: .*|kubernetes_containerd_enabled: True|g'")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                        "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.salt' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.salt/system.linux.system.repo.mcp.apt_mirantis.salt-formulas/g'")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                        "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.contrail' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.salt/system.linux.system.repo.mcp.apt_mirantis.contrail/g'")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                        "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.updates' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.salt/system.linux.system.repo.mcp.apt_mirantis.update/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add new defaults
                     common.infoMsg("Add new defaults")
