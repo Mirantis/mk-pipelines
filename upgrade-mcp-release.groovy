@@ -115,13 +115,15 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             }
             // end bw comp. for 2018.X => 2018.11 release
             def gitTargetMcpVersion = env.getProperty('GIT_REFSPEC')
-            if (targetMcpVersion in ['testing', 'proposed']) {
+            if (targetMcpVersion in ['nightly', 'testing']) {
                 gitTargetMcpVersion = 'master'
-                common.warningMsg("gitTargetMcpVersion has been changed to:${gitTargetMcpVersion}")
+            } else if (targetMcpVersion == 'proposed') {
+                gitTargetMcpVersion = 'proposed'
             } else if (!gitTargetMcpVersion) {
                 // backward compatibility for 2018.11.0
                 gitTargetMcpVersion = "release/${targetMcpVersion}"
             }
+            common.warningMsg("gitTargetMcpVersion has been changed to:${gitTargetMcpVersion}")
             def saltMastURL = ''
             def saltMastCreds = ''
             def upgradeSaltStack = ''
