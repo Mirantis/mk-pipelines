@@ -189,7 +189,7 @@ timeout(time: 1, unit: 'HOURS') {
                 }
                 // Remove everything what is owned by root
                 testImage.inside(testImageOptions) {
-                    sh("rm -rf /var/lib/qa_reports/* ${env.WORKSPACE}/${apiProject}/cockroach_data")
+                    sh("rm -rf /var/lib/qa_reports/* ${env.WORKSPACE}/${apiProject} ${env.WORKSPACE}/${uiProject}")
                 }
             }
         }
