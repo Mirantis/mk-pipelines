@@ -294,7 +294,7 @@ def printVersionInfo(pepperEnv, target) {
         common.infoMsg("Cluster health info:")
         salt.cmdRun(pepperEnv, target, "kubectl get cs")
         common.infoMsg("ETCD health info:")
-        salt.cmdRun(pepperEnv, target, "source /var/lib/etcd/configenv && etcdctl cluster-health")
+        salt.cmdRun(pepperEnv, target, ". /var/lib/etcd/configenv && etcdctl cluster-health")
         common.infoMsg("Calico peers info:")
         salt.cmdRun(pepperEnv, target, "calicoctl node status")
     }
