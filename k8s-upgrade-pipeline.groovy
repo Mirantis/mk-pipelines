@@ -2,26 +2,32 @@
  * Update kuberentes cluster
  *
  * Expected parameters:
- *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API.
- *   SALT_MASTER_URL            Full Salt API address [https://10.10.10.1:8000].
- *   KUBERNETES_HYPERKUBE_IMAGE Target kubernetes version. May be null in case of reclass-system rollout
- *   KUBERNETES_PAUSE_IMAGE     Kubernetes pause image should have same version as hyperkube. May be null in case of reclass-system rollout
- *   TARGET_UPDATES             Comma separated list of nodes to update (Valid values are ctl,cmp)
- *   CTL_TARGET                 Salt targeted kubernetes CTL nodes (ex. I@kubernetes:master). Kubernetes control plane
- *   CMP_TARGET                 Salt targeted compute nodes (ex. cmp* and 'I@kubernetes:pool') Kubernetes computes
- *   PER_NODE                   Target nodes will be managed one by one (bool)
- *   SIMPLE_UPGRADE             Use previous version of upgrade without conron/drain abilities
- *   UPGRADE_DOCKER             Upgrade docker component
- *   CONFORMANCE_RUN_AFTER      Run Kubernetes conformance tests after update
- *   CONFORMANCE_RUN_BEFORE     Run Kubernetes conformance tests before update
- *   TEST_K8S_API_SERVER        Kubernetes API server address for test execution
- *   ARTIFACTORY_URL            Artifactory URL where docker images located. Needed to correctly fetch conformance images.
- *   UPGRADE_CALICO_V2_TO_V3    Perform Calico upgrade from v2 to v3.
- *   KUBERNETES_CALICO_IMAGE                  Target calico/node image. May be null in case of reclass-system rollout.
- *   KUBERNETES_CALICO_CALICOCTL_IMAGE        Target calico/ctl image. May be null in case of reclass-system rollout.
- *   KUBERNETES_CALICO_CNI_IMAGE              Target calico/cni image. May be null in case of reclass-system rollout.
- *   KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE Target calico/kube-controllers image. May be null in case of reclass-system rollout.
- *   CALICO_UPGRADE_VERSION     Version of "calico-upgrade" utility to be used ("v1.0.5" for Calico v3.1.3 target).
+ *   SALT_MASTER_CREDENTIALS                   Credentials to the Salt API.
+ *   SALT_MASTER_URL                           Full Salt API address [https://10.10.10.1:8000].
+ *   KUBERNETES_HYPERKUBE_SOURCE               Versioned hyperkube binary to update control plane from. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_HYPERKUBE_SOURCE_HASH          Versioned hyperkube binary to update control plane from. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_PAUSE_IMAGE                    Kubernetes pause image should have same version as hyperkube. May be null in case of reclass-system rollout
+ *   TARGET_UPDATES                            Comma separated list of nodes to update (Valid values are ctl,cmp)
+ *   CTL_TARGET                                Salt targeted kubernetes CTL nodes (ex. I@kubernetes:master). Kubernetes control plane
+ *   CMP_TARGET                                Salt targeted compute nodes (ex. cmp* and 'I@kubernetes:pool') Kubernetes computes
+ *   PER_NODE                                  Target nodes will be managed one by one (bool)
+ *   SIMPLE_UPGRADE                            Use previous version of upgrade without conron/drain abilities
+ *   CONFORMANCE_RUN_AFTER                     Run Kubernetes conformance tests after update
+ *   CONFORMANCE_RUN_BEFORE                    Run Kubernetes conformance tests before update
+ *   TEST_K8S_API_SERVER                       Kubernetes API server address for test execution
+ *   ARTIFACTORY_URL                           Artifactory URL where docker images located. Needed to correctly fetch conformance images.
+ *   UPGRADE_CALICO_V2_TO_V3                   Perform Calico upgrade from v2 to v3.
+ *   KUBERNETES_CALICO_IMAGE                   Target calico/node image. May be null in case of reclass-system rollout.
+ *   KUBERNETES_CALICO_CALICOCTL_SOURCE        Versioned calico/ctl binary. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_CALICO_CALICOCTL_SOURCE_HASH   Calico/ctl binary md5 hash. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_CALICO_CNI_SOURCE              Versioned calico/cni binary. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_CALICO_CNI_SOURCE_HASH         Сalico/cni binary hash. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_CALICO_BIRDCL_SOURCE           Versioned calico/bird binary. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_CALICO_BIRDCL_SOURCE_HASH      Сalico/bird binary hash. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_CALICO_CNI_IPAM_SOURCE         Versioned calico/ipam binary. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_CALICO_CNI_IPAM_SOURCE_HASH    Сalico/ipam binary hash. Should be null if update rolling via reclass-system level
+ *   KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE  Target calico/kube-controllers image. May be null in case of reclass-system rollout.
+ *   CALICO_UPGRADE_VERSION                    Version of "calico-upgrade" utility to be used ("v1.0.5" for Calico v3.1.3 target).
  *
 **/
 import groovy.json.JsonSlurper
@@ -35,7 +41,6 @@ def updates = TARGET_UPDATES.tokenize(",").collect{it -> it.trim()}
 def pepperEnv = "pepperEnv"
 
 def POOL = "I@kubernetes:pool"
-def calicoImagesValid = false
 
 ETCD_ENDPOINTS = ""
 
@@ -43,7 +48,8 @@ def overrideKubernetesImage(pepperEnv) {
     def salt = new com.mirantis.mk.Salt()
 
     def k8sSaltOverrides = """
-        kubernetes_hyperkube_image: ${KUBERNETES_HYPERKUBE_IMAGE}
+        kubernetes_hyperkube_source: ${KUBERNETES_HYPERKUBE_SOURCE}
+        kubernetes_hyperkube_source_hash: ${KUBERNETES_HYPERKUBE_SOURCE_HASH}
         kubernetes_pause_image: ${KUBERNETES_PAUSE_IMAGE}
     """
     stage("Override kubernetes images to target version") {
@@ -56,8 +62,14 @@ def overrideCalicoImages(pepperEnv) {
 
     def calicoSaltOverrides = """
         kubernetes_calico_image: ${KUBERNETES_CALICO_IMAGE}
-        kubernetes_calico_calicoctl_image: ${KUBERNETES_CALICO_CALICOCTL_IMAGE}
-        kubernetes_calico_cni_image: ${KUBERNETES_CALICO_CNI_IMAGE}
+        kubernetes_calico_calicoctl_source: ${KUBERNETES_CALICO_CALICOCTL_SOURCE}
+        kubernetes_calico_calicoctl_source_hash: ${KUBERNETES_CALICO_CALICOCTL_SOURCE_HASH}
+        kubernetes_calico_birdcl_source: ${KUBERNETES_CALICO_BIRDCL_SOURCE}
+        kubernetes_calico_birdcl_source_hash: ${KUBERNETES_CALICO_BIRDCL_SOURCE_HASH}
+        kubernetes_calico_cni_source: ${KUBERNETES_CALICO_CNI_SOURCE}
+        kubernetes_calico_cni_source_hash: ${KUBERNETES_CALICO_CNI_SOURCE_HASH}
+        kubernetes_calico_cni_ipam_source: ${KUBERNETES_CALICO_CNI_IPAM_SOURCE}
+        kubernetes_calico_cni_ipam_source_hash: ${KUBERNETES_CALICO_CNI_IPAM_SOURCE_HASH}
         kubernetes_calico_kube_controllers_image: ${KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE}
     """
     stage("Override calico images to target version") {
@@ -72,17 +84,6 @@ def downloadCalicoUpgrader(pepperEnv, target) {
         salt.cmdRun(pepperEnv, target, "rm -f ./calico-upgrade")
         salt.cmdRun(pepperEnv, target, "wget https://github.com/projectcalico/calico-upgrade/releases/download/${CALICO_UPGRADE_VERSION}/calico-upgrade")
         salt.cmdRun(pepperEnv, target, "chmod +x ./calico-upgrade")
-    }
-}
-
-def pullCalicoImages(pepperEnv, target) {
-    def salt = new com.mirantis.mk.Salt()
-
-    stage("Pulling updated Calico docker images") {
-        salt.cmdRun(pepperEnv, target, "docker pull ${KUBERNETES_CALICO_IMAGE}")
-        salt.cmdRun(pepperEnv, target, "docker pull ${KUBERNETES_CALICO_CALICOCTL_IMAGE}")
-        salt.cmdRun(pepperEnv, target, "docker pull ${KUBERNETES_CALICO_CNI_IMAGE}")
-        salt.cmdRun(pepperEnv, target, "docker pull ${KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE}")
     }
 }
 
@@ -281,6 +282,22 @@ def conformancePodDefExists(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
     return salt.cmdRun(pepperEnv, target, "test -e /srv/kubernetes/conformance.yml && echo 'true' || echo 'false'"
                        )['return'][0].values()[0].replaceAll('Salt command execution success','').trim().toBoolean()
+}
+
+def printVersionInfo(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def common = new com.mirantis.mk.Common()
+
+    stage("Gather version and runtime information") {
+        common.infoMsg("Version and runtime info:")
+        salt.cmdRun(pepperEnv, target, "kubectl get no -o wide")
+        common.infoMsg("Cluster health info:")
+        salt.cmdRun(pepperEnv, target, "kubectl get cs")
+        common.infoMsg("ETCD health info:")
+        salt.cmdRun(pepperEnv, target, "source /var/lib/etcd/configenv && etcdctl cluster-health")
+        common.infoMsg("Calico peers info:")
+        salt.cmdRun(pepperEnv, target, "calicoctl node status")
+    }
 }
 
 def calicoEnabled(pepperEnv, target) {
@@ -586,11 +603,16 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             if ((common.validInputParam('KUBERNETES_CALICO_IMAGE'))
-                && (common.validInputParam('KUBERNETES_CALICO_CALICOCTL_IMAGE'))
-                && (common.validInputParam('KUBERNETES_CALICO_CNI_IMAGE'))
+                && (common.validInputParam('KUBERNETES_CALICO_CALICOCTL_SOURCE'))
+                && (common.validInputParam('KUBERNETES_CALICO_CALICOCTL_SOURCE_HASH'))
+                && (common.validInputParam('KUBERNETES_CALICO_CNI_SOURCE'))
+                && (common.validInputParam('KUBERNETES_CALICO_CNI_SOURCE_HASH'))
+                && (common.validInputParam('KUBERNETES_CALICO_BIRDCL_SOURCE'))
+                && (common.validInputParam('KUBERNETES_CALICO_BIRDCL_SOURCE_HASH'))
+                && (common.validInputParam('KUBERNETES_CALICO_CNI_IPAM_SOURCE'))
+                && (common.validInputParam('KUBERNETES_CALICO_CNI_IPAM_SOURCE_HASH'))
                 && (common.validInputParam('KUBERNETES_CALICO_KUBE_CONTROLLERS_IMAGE'))
                 ) {
-                calicoImagesValid = true
                 overrideCalicoImages(pepperEnv)
             }
 
@@ -614,11 +636,6 @@ timeout(time: 12, unit: 'HOURS') {
 
                 // check the possibility of upgrading of Calico
                 checkCalicoUpgradePossibility(pepperEnv, ctl_node)
-
-                // prepare for upgrade. when done in advance, this will decrease downtime during upgrade
-                if (calicoImagesValid) {
-                    pullCalicoImages(pepperEnv, POOL)
-                }
 
                 // check and adjust Calico policy setting
                 checkCalicoPolicySetting(pepperEnv, ctl_node)
@@ -646,9 +663,6 @@ timeout(time: 12, unit: 'HOURS') {
                             cordonNode(pepperEnv, t)
                             drainNode(pepperEnv, t)
                             regenerateCerts(pepperEnv, t)
-                            if (UPGRADE_DOCKER.toBoolean()) {
-                                upgradeDocker(pepperEnv, t)
-                            }
                             performKubernetesControlUpdate(pepperEnv, t)
                             updateAddonManager(pepperEnv, t)
                             uncordonNode(pepperEnv, t)
@@ -678,9 +692,6 @@ timeout(time: 12, unit: 'HOURS') {
                             cordonNode(pepperEnv, t)
                             drainNode(pepperEnv, t)
                             regenerateCerts(pepperEnv, t)
-                            if (UPGRADE_DOCKER.toBoolean()) {
-                                upgradeDocker(pepperEnv, t)
-                            }
                             performKubernetesComputeUpdate(pepperEnv, t)
                             uncordonNode(pepperEnv, t)
                         }
@@ -694,6 +705,7 @@ timeout(time: 12, unit: 'HOURS') {
             if (calicoEnabled(pepperEnv, ctl_node)) {
                 checkCalicoClusterState(pepperEnv, POOL)
             }
+            printVersionInfo(pepperEnv, ctl_node)
 
             if (CONFORMANCE_RUN_AFTER.toBoolean()) {
                 def target = CTL_TARGET
