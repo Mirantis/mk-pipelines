@@ -6,6 +6,7 @@
  *   SALT_MASTER_URL            Full Salt API address [http://10.10.10.1:8000].
  *   ASK_CONFIRMATION           Ask confirmation for restore
  *   VERIFICATION_RETRIES       Number of restries to verify the restoration.
+ *   CHECK_TIME_SYNC            Set to true to check time synchronization accross selected nodes.
  *
 **/
 
@@ -17,6 +18,7 @@ def pepperEnv = "pepperEnv"
 def resultCode = 99
 
 askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
+checkTimeSync = (env.getProperty('CHECK_TIME_SYNC') ?: true).toBoolean()
 
 if (common.validInputParam(VERIFICATION_RETRIES) && VERIFICATION_RETRIES.isInteger()) {
     verificationRetries = VERIFICATION_RETRIES.toInteger()
@@ -30,11 +32,11 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
         stage('Verify status')
-            resultCode = openstack.verifyGaleraStatus(pepperEnv, false)
+            resultCode = openstack.verifyGaleraStatus(pepperEnv, false, checkTimeSync)
         stage('Restore') {
             if (resultCode == 128) {
                 common.errorMsg("Unable to connect to Galera Master. Trying slaves...")
-                resultCode = openstack.verifyGaleraStatus(pepperEnv, true)
+                resultCode = openstack.verifyGaleraStatus(pepperEnv, true, checkTimeSync)
                 if (resultCode == 129) {
                     common.errorMsg("Unable to obtain Galera slave minions list". "Without fixing this issue, pipeline cannot continue in verification and restoration.")
                     currentBuild.result = "FAILURE"
@@ -44,6 +46,10 @@ timeout(time: 12, unit: 'HOURS') {
                     currentBuild.result = "FAILURE"
                     return
                 }
+            }
+            if (resultCode == 131) {
+                common.errorMsg("Time desynced - Click proceed when the issue is fixed or abort.")
+                currentBuild.result = "FAILURE"
             }
             if (resultCode == 1) {
                 if(askConfirmation){
