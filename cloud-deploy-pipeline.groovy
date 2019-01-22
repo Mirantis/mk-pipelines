@@ -134,12 +134,19 @@ timeout(time: 12, unit: 'HOURS') {
                     }
 
                     if (STACK_REUSE.toBoolean() == false) {
-                        // Don't allow to set custom heat stack name
+                        // TODO(vsaienko): remove stack creation from this pipeline to separate job
+                        // Allow to set custom stack name but user-id will be added anyway
+                        // This will fix issue with cleanup when job is aborted by jenkins and
+                        // still guarantee stack count per user.
+                        def stackNameSuffix = "${JOB_NAME}-${BUILD_NUMBER}"
+                        if (STACK_NAME != ''){
+                          stackNameSuffix = STACK_NAME
+                        }
                         wrap([$class: 'BuildUser']) {
                             if (env.BUILD_USER_ID) {
-                                STACK_NAME = "${env.BUILD_USER_ID}-${JOB_NAME}-${BUILD_NUMBER}"
+                                STACK_NAME = "${env.BUILD_USER_ID}-${stackNameSuffix}"
                             } else {
-                                STACK_NAME = "jenkins-${JOB_NAME}-${BUILD_NUMBER}"
+                                STACK_NAME = "jenkins-${stackNameSuffix}"
                             }
                             currentBuild.description = STACK_NAME
                         }
