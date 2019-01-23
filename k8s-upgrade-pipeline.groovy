@@ -123,7 +123,7 @@ def performKubernetesControlUpdate(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
 
     stage("Execute Kubernetes control plane update on ${target}") {
-        salt.enforceStateWithExclude(pepperEnv, target, "kubernetes", "kubernetes.master.setup")
+        salt.enforceStateWithExclude(pepperEnv, target, "kubernetes", "kubernetes.master.setup,kubernetes.master.kube-addons")
         // Restart kubelet
         salt.runSaltProcessStep(pepperEnv, target, 'service.restart', ['kubelet'])
     }
@@ -227,6 +227,69 @@ def updateAddonManager(pepperEnv, target) {
 
     stage("Upgrading AddonManager at ${target}") {
         salt.enforceState(pepperEnv, target, "kubernetes.master.setup")
+    }
+}
+
+def buildDaemonsetMap(pepperEnv, target) {
+    def salt = new com.mirantis.mk.Salt()
+    def daemonset_lists
+    daemonset_lists = salt.cmdRun(pepperEnv, target, "kubectl get ds --all-namespaces | tail -n+2 | awk '{print \$2, \$1}'"
+        )['return'][0].values()[0].replaceAll('Salt command execution success','').tokenize("\n")
+    def daemonset_map = []
+    for (ds in daemonset_lists) {
+        a = ds.tokenize(" ")
+        daemonset_map << a
+    }
+    print("Built daemonset map")
+    print(daemonset_map)
+    return daemonset_map
+}
+
+def purgeDaemonsetPods(pepperEnv, target, daemonSetMap) {
+   def salt = new com.mirantis.mk.Salt()
+   def originalTarget = "I@kubernetes:master and not ${target}"
+   def nodeShortName = target.tokenize(".")[0]
+   firstTarget = salt.getFirstMinion(pepperEnv, originalTarget)
+
+   if (daemonSetMap) {
+       stage("Purging daemonset-managed pods on ${target}") {
+           for (ds in daemonSetMap) {
+               print("Purging "+ ds[0] +" inside "+ ds[1] +" namespace")
+               salt.cmdRun(pepperEnv, firstTarget, "kubectl get po -n ${ds[1]} -o wide | grep ${nodeShortName}" +
+               " | grep ${ds[0]} | awk '{print \$1}' | xargs --no-run-if-empty kubectl delete po -n ${ds[1]} --grace-period=0 --force")
+           }
+       }
+   }
+}
+
+def isNodeReady(pepperEnv, target) {
+   def salt = new com.mirantis.mk.Salt()
+   def originalTarget = "I@kubernetes:master and not ${target}"
+   def nodeShortName = target.tokenize(".")[0]
+   firstTarget = salt.getFirstMinion(pepperEnv, originalTarget)
+
+   status = salt.cmdRun(pepperEnv, firstTarget, "kubectl get no | grep ${nodeShortName} | awk '{print \$2}'"
+   )['return'][0].values()[0].replaceAll('Salt command execution success',''
+   ).replaceAll(',SchedulingDisabled','').trim()
+
+   if (status == "Ready") {
+       return true
+   } else {
+       return false
+   }
+}
+
+def rebootKubernetesNode(pepperEnv, target, times=15, delay=10) {
+    def common = new com.mirantis.mk.Common()
+    def debian = new com.mirantis.mk.Debian()
+
+    stage("Rebooting ${target}") {
+        debian.osReboot(pepperEnv, target)
+        common.retry(times, delay) {
+            if(!isNodeReady(pepperEnv, target)) {
+                error("Node still not in Ready state...")
+            }
+        }
     }
 }
 
@@ -602,6 +665,9 @@ timeout(time: 12, unit: 'HOURS') {
                 python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             }
 
+            def ctl_node = salt.getMinionsSorted(pepperEnv, CTL_TARGET)[0]
+            def daemonsetMap = buildDaemonsetMap(pepperEnv, ctl_node)
+
             if (CONFORMANCE_RUN_BEFORE.toBoolean()) {
                 def target = CTL_TARGET
                 def mcp_repo = ARTIFACTORY_URL
@@ -646,9 +712,6 @@ timeout(time: 12, unit: 'HOURS') {
                 * as Calico etcd schema has different formats for Calico v2.x and Calico v3.x.
             */
             if (UPGRADE_CALICO_V2_TO_V3.toBoolean()) {
-                // one CTL node will be used for running upgrade of Calico etcd schema
-                def ctl_node = salt.getMinionsSorted(pepperEnv, CTL_TARGET)[0]
-
                 // get ETCD_ENDPOINTS in use by Calico
                 def ep_str = salt.cmdRun(pepperEnv, ctl_node, "cat /etc/calico/calicoctl.cfg | grep etcdEndpoints")['return'][0].values()[0]
                 ETCD_ENDPOINTS = ep_str.split("\n")[0].tokenize(' ')[1]
@@ -699,6 +762,10 @@ timeout(time: 12, unit: 'HOURS') {
                             regenerateCerts(pepperEnv, t)
                             performKubernetesControlUpdate(pepperEnv, t)
                             updateAddonManager(pepperEnv, t)
+                            if (daemonsetMap) {
+                                purgeDaemonsetPods(pepperEnv, t, daemonsetMap)
+                                rebootKubernetesNode(pepperEnv, t)
+                            }
                             uncordonNode(pepperEnv, t)
                         }
                     }
@@ -727,6 +794,10 @@ timeout(time: 12, unit: 'HOURS') {
                             drainNode(pepperEnv, t)
                             regenerateCerts(pepperEnv, t)
                             performKubernetesComputeUpdate(pepperEnv, t)
+                            if (daemonsetMap) {
+                                purgeDaemonsetPods(pepperEnv, t, daemonsetMap)
+                                rebootKubernetesNode(pepperEnv, t)
+                            }
                             uncordonNode(pepperEnv, t)
                         }
                     }
@@ -735,7 +806,6 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            def ctl_node = salt.getMinionsSorted(pepperEnv, CTL_TARGET)[0]
             if (calicoEnabled(pepperEnv, ctl_node)) {
                 checkCalicoClusterState(pepperEnv, POOL)
             }
