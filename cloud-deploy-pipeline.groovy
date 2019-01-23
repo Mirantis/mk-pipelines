@@ -397,6 +397,9 @@ timeout(time: 12, unit: 'HOURS') {
 
                 stage('Install Kubernetes control') {
                     orchestrate.installKubernetesControl(venvPepper, extra_tgt)
+                    if (common.checkContains('STACK_INSTALL', 'contrail')) {
+                        orchestrate.checkContrailApiReadiness(venvPepper, extra_tgt)
+                    }
 
                     // collect artifacts (kubeconfig)
                     writeFile(file: 'kubeconfig', text: salt.getFileContent(venvPepper, "I@kubernetes:master and *01* ${extra_tgt}", '/etc/kubernetes/admin-kube-config'))
@@ -473,6 +476,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                     if (common.checkContains('STACK_INSTALL', 'contrail')) {
                         orchestrate.installContrailNetwork(venvPepper, extra_tgt)
+                        orchestrate.checkContrailApiReadiness(venvPepper, extra_tgt)
                     } else if (common.checkContains('STACK_INSTALL', 'ovs')) {
                         orchestrate.installOpenstackNetwork(venvPepper, extra_tgt)
                     }
