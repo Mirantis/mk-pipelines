@@ -29,11 +29,9 @@ timeout(time: 12, unit: 'HOURS') {
                 if (resultCode == 129) {
                     common.errorMsg("Unable to obtain Galera slave minions list". "Without fixing this issue, pipeline cannot continue in verification and restoration.")
                     currentBuild.result = "FAILURE"
-                    return
                 } else if (resultCode == 130) {
                     common.errorMsg("Neither master or slaves are reachable. Without fixing this issue, pipeline cannot continue in verification and restoration.")
                     currentBuild.result = "FAILURE"
-                    return
                 }
             }
             if (resultCode == 1) {
@@ -48,6 +46,16 @@ timeout(time: 12, unit: 'HOURS') {
                 openstack.restoreGaleraDb(pepperEnv)
             } catch (Exception e) {
                 common.errorMsg("Restoration process has failed.")
+            }
+        }
+        stage('Verify restoration result') {
+            exitCode = openstack.verifyGaleraStatus(pepperEnv, false)
+            if (exitCode >= 1) {
+                common.errorMsg("Restoration procedure was probably not successful. See verification report for more information.")
+                currentBuild.result = "FAILURE"
+            } else {
+                common.infoMsg("Restoration procedure seems to be successful. See verification report to be sure.")
+                currentBuild.result = "SUCCESS"
             }
         }
     }
