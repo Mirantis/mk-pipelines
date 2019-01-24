@@ -739,8 +739,8 @@ timeout(time: 12, unit: 'HOURS') {
             if ((common.validInputParam('KUBERNETES_ETCD_SOURCE')) && (common.validInputParam('KUBERNETES_ETCD_SOURCE_HASH'))) {
                 overrideEtcdSource(pepperEnv)
             }
-            def targetHosts = salt.getMinionsSorted(pepperEnv, "I@etcd:server")
-            for (t in targetHosts) {
+            def targetHostsEtcd = salt.getMinionsSorted(pepperEnv, "I@etcd:server")
+            for (t in targetHostsEtcd) {
                 performEtcdUpdateAndServicesRestart(pepperEnv, t)
             }
 
