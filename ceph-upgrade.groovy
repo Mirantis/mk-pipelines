@@ -147,6 +147,31 @@ timeout(time: 12, unit: 'HOURS') {
         // create connection to salt master
         python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
+        stage ('Check user choices') {
+            if (STAGE_UPGRADE_RGW.toBoolean() == true) {
+                // if rgw, check if other stuff has required version
+                def mon_ok = true
+                if (STAGE_UPGRADE_MON.toBoolean() == false) {
+                    def mon_v = runCephCommand(pepperEnv, ADMIN_HOST, "ceph mon versions")['return'][0].values()[0]
+                    mon_ok = mon_v.contains("${TARGET_RELEASE}") && !mon_v.contains("${ORIGIN_RELEASE}")
+                }
+                def mgr_ok = true
+                if (STAGE_UPGRADE_MGR.toBoolean() == false) {
+                    def mgr_v = runCephCommand(pepperEnv, ADMIN_HOST, "ceph mgr versions")['return'][0].values()[0]
+                    mgr_ok = mgr_v.contains("${TARGET_RELEASE}") && !mgr_v.contains("${ORIGIN_RELEASE}")
+                }
+                def osd_ok = true
+                if (STAGE_UPGRADE_OSD.toBoolean() == false) {
+                    def osd_v = runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd versions")['return'][0].values()[0]
+                    osd_ok = osd_v.contains("${TARGET_RELEASE}") && !osd_v.contains("${ORIGIN_RELEASE}")
+                }
+                if (!mon_ok || !osd_ok || !mgr_ok) {
+                    common.errorMsg('You may choose stages in any order, but RGW should be upgraded last')
+                    throw new InterruptedException()
+                }
+            }
+        }
+
         if (BACKUP_ENABLED.toBoolean() == true) {
             if (STAGE_UPGRADE_MON.toBoolean() == true) {
                 backup(pepperEnv, 'mon')
