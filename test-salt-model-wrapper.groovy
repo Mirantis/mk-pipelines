@@ -19,7 +19,7 @@ voteMatrix = [
   'test-drivetrain': true,
   'oscore-test-cookiecutter-models': false,
   'test-salt-model-infra': true,
-  'test-salt-model-mcp-virtual-lab': true,
+  'test-salt-model-mcp-virtual-lab': false,
 ]
 
 baseGerritConfig = [:]
