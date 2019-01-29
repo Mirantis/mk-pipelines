@@ -134,6 +134,7 @@ timeout(time: 12, unit: 'HOURS') {
             baseGerritConfig = [
                 'gerritName': gerritName,
                 'gerritHost': gerritHost,
+                'gerritPort': gerritPort,
                 'gerritChangeNumber': gerritChangeNumber,
                 'credentialsId': gerritCredentials,
                 'gerritPatchSetNumber': gerritPatchSetNumber,
