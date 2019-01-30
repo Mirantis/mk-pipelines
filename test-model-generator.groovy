@@ -37,6 +37,7 @@ def apiProject = 'operations-api'
 def uiProject = 'operations-ui'
 def apiImage
 def uiImage
+def component = ''
 
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
@@ -79,6 +80,7 @@ timeout(time: 1, unit: 'HOURS') {
                         ])
                         apiImage = docker.image("${dockerReviewRegistry}/review/${env.FLAVOR}-${env.GERRIT_CHANGE_NUMBER}:${env.GERRIT_PATCHSET_NUMBER}")
                         uiImage = docker.image("${dockerRegistry}/${env.UI_DOCKER_IMG ?: "mirantis/model-generator/operations-ui"}:${version}")
+                        component = "-k 'api'"
                     } else if (env.FLAVOR == uiProject) {
                         // Second project is API
                         checkout([
@@ -89,6 +91,7 @@ timeout(time: 1, unit: 'HOURS') {
                         ])
                         apiImage = docker.image("${dockerRegistry}/${env.API_DOCKER_IMG ?: "mirantis/model-generator/operations-api"}:${version}")
                         uiImage = docker.image("${dockerReviewRegistry}/review/${env.FLAVOR}-${env.GERRIT_CHANGE_NUMBER}:${env.GERRIT_PATCHSET_NUMBER}")
+                        component = "-k 'ui'"
                     }
                 } else if (manualTrigger) {
                     checkout([
@@ -156,7 +159,7 @@ timeout(time: 1, unit: 'HOURS') {
                         export TEST_MODELD_URL=127.0.0.1
                         export TEST_MODELD_PORT=3000
                         cd /var/lib/trymcp-tests
-                        pytest -m 'not trymcp'
+                        pytest -m 'not trymcp' ${component}
                     """
                 }
             }
