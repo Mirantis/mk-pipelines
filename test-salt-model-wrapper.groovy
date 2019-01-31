@@ -191,19 +191,20 @@ timeout(time: 12, unit: 'HOURS') {
             if (gerritProject == reclassSystemRepo || gerritProject == cookiecutterTemplatesRepo) {
                 branchJobName = 'test-mk-cookiecutter-templates'
                 branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
+            }
+
+            if (!gateMode) {
                 // testing backward compatibility
                 if (gerritBranch == 'master' && gerritProject == reclassSystemRepo) {
                     def backwardCompatibilityRefsToTest = ['proposed', 'release/2018.11.0', 'release/2019.2.0']
                     for (String oldRef in backwardCompatibilityRefsToTest) {
-                        buildTestParams['COOKIECUTTER_TEMPLATE_REF'] = ''
-                        buildTestParams['COOKIECUTTER_TEMPLATE_BRANCH'] = oldRef
-                        threadName = "${branchJobName}-${oldRef}"
-                        branches[threadName] = runTests(branchJobName, yamlJobParameters(buildTestParams), threadName)
+                        LinkedHashMap buildTestParamsOld = buildTestParams.clone()
+                        buildTestParamsOld['COOKIECUTTER_TEMPLATE_REF'] = ''
+                        buildTestParamsOld['COOKIECUTTER_TEMPLATE_BRANCH'] = oldRef
+                        String threadName = "${branchJobName}-${oldRef}"
+                        branches[threadName] = runTests(branchJobName, yamlJobParameters(buildTestParamsOld), threadName)
                     }
                 }
-            }
-
-            if (!gateMode) {
                 if (gerritProject == cookiecutterTemplatesRepo) {
                     branchJobName = 'test-drivetrain'
                     branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))

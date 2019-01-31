@@ -31,7 +31,6 @@ slaveNode = env.SLAVE_NODE ?: 'virtual'
 checkIncludeOrder = env.CHECK_INCLUDE_ORDER ?: false
 
 // Global var's
-alreadyMerged = false
 gerritConData = [credentialsId       : env.CREDENTIALS_ID,
                  gerritName          : env.GERRIT_NAME ?: 'mcp-jenkins',
                  gerritHost          : env.GERRIT_HOST ?: 'gerrit.mcp.mirantis.com',
@@ -114,30 +113,16 @@ def StepTestModel(basename, reclassArtifactName, artifactCopyPath, useExtraRepos
 def StepPrepareGit(templateEnvFolder, gerrit_data) {
     // return git clone  object
     return {
-        def checkouted = false
         common.infoMsg("StepPrepareGit: ${gerrit_data}")
         // fetch needed sources
         dir(templateEnvFolder) {
-            if (gerrit_data['gerritRefSpec']) {
-                // Those part might be not work,in case manual var's pass
-                def gerritChange = gerrit.getGerritChange(gerrit_data['gerritName'], gerrit_data['gerritHost'],
-                    gerrit_data['GERRIT_CHANGE_NUMBER'], gerrit_data['credentialsId'])
-                merged = gerritChange.status == "MERGED"
-                if (!merged) {
-                    checkouted = gerrit.gerritPatchsetCheckout(gerrit_data)
-                } else {
-                    // update global variable for pretty return from pipeline
-                    alreadyMerged = true
-                    common.successMsg("Change ${gerrit_data['GERRIT_CHANGE_NUMBER']} is already merged, no need to gate them")
-                    error('change already merged')
-                }
-            } else {
+            if (! gerrit_data['gerritRefSpec']) {
                 // Get clean HEAD
                 gerrit_data['useGerritTriggerBuildChooser'] = false
-                checkouted = gerrit.gerritPatchsetCheckout(gerrit_data)
-                if (!checkouted) {
-                    error("Failed to get repo:${gerrit_data}")
-                }
+            }
+            def checkouted = gerrit.gerritPatchsetCheckout(gerrit_data)
+            if (!checkouted) {
+                error("Failed to get repo:${gerrit_data}")
             }
         }
     }
@@ -450,11 +435,6 @@ timeout(time: 1, unit: 'HOURS') {
             sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
 
         } catch (Throwable e) {
-            if (alreadyMerged) {
-                currentBuild.result = 'ABORTED'
-                currentBuild.description = "Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them"
-                return
-            }
             currentBuild.result = "FAILURE"
             currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
             throw e
