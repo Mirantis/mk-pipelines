@@ -30,15 +30,15 @@ commentLock = false
 // post Gerrit review comment to patch
 def setGerritReviewComment() {
     if (baseGerritConfig) {
-        while(commentLock) {
+        while (commentLock) {
             sleep 5
         }
         commentLock = true
         LinkedHashMap config = baseGerritConfig.clone()
         String jobResultComment = ''
-        jobResultComments.each { job, info ->
-            String skipped = voteMatrix.get(job, 'true') ? '' : '(non-voting)'
-            jobResultComment += "- ${job} ${info.url}console : ${info.status} ${skipped}".trim() + '\n'
+        jobResultComments.each { threadName, info ->
+            String skipped = voteMatrix.get(info.job, 'true') ? '' : '(non-voting)'
+            jobResultComment += "- ${threadName} ${info.url}console : ${info.status} ${skipped}".trim() + '\n'
         }
         config['message'] = sh(script: "echo '${jobResultComment}'", returnStdout: true).trim()
         gerrit.postGerritComment(config)
@@ -54,14 +54,15 @@ def yamlJobParameters(LinkedHashMap jobParams) {
 }
 
 // run needed job with params
-def runTests(String jobName, ArrayList jobParams) {
+def runTests(String jobName, ArrayList jobParams, String threadName = '') {
+    threadName = threadName ? threadName : jobName
     def propagateStatus = voteMatrix.get(jobName, true)
     return {
         def jobBuild = build job: jobName, propagate: false, parameters: jobParams
-        jobResultComments[jobName] = [ 'url': jobBuild.absoluteUrl, 'status': jobBuild.result ]
+        jobResultComments[threadName] = [ 'url': jobBuild.absoluteUrl, 'status': jobBuild.result, 'job': jobName ]
         setGerritReviewComment()
         if (propagateStatus && jobBuild.result == 'FAILURE') {
-            throw new Exception("Build ${jobName} is failed!")
+            throw new Exception("Build ${threadName} is failed!")
         }
     }
 }
@@ -190,6 +191,16 @@ timeout(time: 12, unit: 'HOURS') {
             if (gerritProject == reclassSystemRepo || gerritProject == cookiecutterTemplatesRepo) {
                 branchJobName = 'test-mk-cookiecutter-templates'
                 branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
+                // testing backward compatibility
+                if (gerritBranch == 'master' && gerritProject == reclassSystemRepo) {
+                    def backwardCompatibilityRefsToTest = ['proposed', 'release/2018.11.0', 'release/2019.2.0']
+                    for (String oldRef in backwardCompatibilityRefsToTest) {
+                        buildTestParams['COOKIECUTTER_TEMPLATE_REF'] = ''
+                        buildTestParams['COOKIECUTTER_TEMPLATE_BRANCH'] = oldRef
+                        threadName = "${branchJobName}-${oldRef}"
+                        branches[threadName] = runTests(branchJobName, yamlJobParameters(buildTestParams), threadName)
+                    }
+                }
             }
 
             if (!gateMode) {
