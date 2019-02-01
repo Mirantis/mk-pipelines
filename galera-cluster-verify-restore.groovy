@@ -6,6 +6,7 @@
  *   SALT_MASTER_URL            Full Salt API address [http://10.10.10.1:8000].
  *   ASK_CONFIRMATION           Ask confirmation for restore
  *   CHECK_TIME_SYNC            Set to true to check time synchronization accross selected nodes.
+ *   VERIFICATION_RETRIES       Number of restries to verify the restoration.
  *
 **/
 
@@ -18,6 +19,11 @@ def resultCode = 99
 
 askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 checkTimeSync = (env.getProperty('CHECK_TIME_SYNC') ?: true).toBoolean()
+if (common.validInputParam(VERIFICATION_RETRIES) && VERIFICATION_RETRIES.isInteger()) {
+    verificationRetries = VERIFICATION_RETRIES.toInteger()
+} else {
+    verificationRetries = 5
+}
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -33,9 +39,11 @@ timeout(time: 12, unit: 'HOURS') {
                 if (resultCode == 129) {
                     common.errorMsg("Unable to obtain Galera slave minions list". "Without fixing this issue, pipeline cannot continue in verification and restoration.")
                     currentBuild.result = "FAILURE"
+                    return
                 } else if (resultCode == 130) {
                     common.errorMsg("Neither master or slaves are reachable. Without fixing this issue, pipeline cannot continue in verification and restoration.")
                     currentBuild.result = "FAILURE"
+                    return
                 }
             }
             if (resultCode == 131) {
@@ -73,13 +81,14 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
         stage('Verify restoration result') {
-            exitCode = openstack.verifyGaleraStatus(pepperEnv, false, false)
-            if (exitCode >= 1) {
-                common.errorMsg("Restoration procedure was probably not successful. See verification report for more information.")
-                currentBuild.result = "FAILURE"
-            } else {
-                common.infoMsg("Restoration procedure seems to be successful. See verification report to be sure.")
-                currentBuild.result = "SUCCESS"
+            common.retry(verificationRetries, 15) {
+                exitCode = openstack.verifyGaleraStatus(pepperEnv, false, false)
+                if (exitCode >= 1) {
+                    error("Verification attempt finished with an error. This may be caused by cluster not having enough time to come up or to sync. Next verification attempt in 5 seconds.")
+                } else {
+                    common.infoMsg("Restoration procedure seems to be successful. See verification report to be sure.")
+                    currentBuild.result = "SUCCESS"
+                }
             }
         }
     }
