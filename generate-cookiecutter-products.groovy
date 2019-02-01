@@ -36,7 +36,10 @@ def globalVariatorsUpdate() {
             return true
         }
     }
-
+    if ("${context['salt_master_hostname']}.${context['cluster_domain']}".length() > 64) {
+      common.errorMsg("Cluster domain has too long name. Make ${context['cluster_domain']} shorter than 58 symbols.")
+      error('Invalid context provided')
+    }
     // Use mcpVersion git tag if not specified branch for cookiecutter-templates
     if (!context.get('cookiecutter_template_branch')) {
         context['cookiecutter_template_branch'] = gitGuessedVersion ?: context['mcp_version']
