@@ -13,7 +13,8 @@ def ruby = new com.mirantis.mk.Ruby()
 def gerritRef = env.GERRIT_REFSPEC ?: null
 def defaultGitRef = env.DEFAULT_GIT_REF ?: null
 def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
-def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
+// def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
+def slaveNode = env.SLAVE_NODE ?: 'hardware'
 def saltVersion = env.SALT_VERSION ?: ""
 def dockerLib = new com.mirantis.mk.Docker()
 
