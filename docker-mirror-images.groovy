@@ -71,7 +71,7 @@ timeout(time: 4, unit: 'HOURS') {
         currentBuild.description = "${user}: [${env.SOURCE_IMAGE_TAG} => ${env.IMAGE_TAG}]\n${env.IMAGE_LIST}"
         try {
             allowedGroups = ['release-engineering']
-            releaseTags = ['proposed', 'release', 'testing', '2018', '2019', '2020']
+            releaseTags = ['proposed', 'release',  '2018', '2019', '2020']
             tags = [env.SOURCE_IMAGE_TAG, env.IMAGE_TAG]
             tagInRelease = tags.any { tag -> releaseTags.any { tag.contains(it) } }
             if (tagInRelease) {
