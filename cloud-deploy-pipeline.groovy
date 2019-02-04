@@ -101,6 +101,7 @@ if (common.validInputParam('SLAVE_NODE')) {
 }
 
 def extra_tgt = ''
+def extra_tgt_bckp = ''
 if (common.validInputParam('EXTRA_TARGET')) {
     extra_tgt = "${EXTRA_TARGET}"
 }
@@ -359,11 +360,11 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Install infra') {
-              if (common.checkContains('STACK_INSTALL', 'core') ||
+                if (common.checkContains('STACK_INSTALL', 'core') ||
                     common.checkContains('STACK_INSTALL', 'openstack') ||
-                      common.checkContains('STACK_INSTALL', 'oss')) {
-                  orchestrate.installInfra(venvPepper, extra_tgt)
-              }
+                    common.checkContains('STACK_INSTALL', 'oss')) {
+                        orchestrate.installInfra(venvPepper, extra_tgt)
+                }
             }
 
             if (common.validInputParam('STACK_INSTALL')) {
@@ -374,7 +375,8 @@ timeout(time: 12, unit: 'HOURS') {
 
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
-
+                extra_tgt_bckp = extra_tgt
+                extra_tgt = 'and not kdt* ' + extra_tgt_bckp
                 stage('Install Kubernetes infra') {
                     if (STACK_TYPE == 'aws') {
                         // configure kubernetes_control_address - save loadbalancer
@@ -442,6 +444,29 @@ timeout(time: 12, unit: 'HOURS') {
                     // Setup kubernetes addons for opencontrail. More info in the definition of the func.
                     orchestrate.setupKubeAddonForContrail(venvPepper, extra_tgt)
                 }
+                extra_tgt = extra_tgt_bckp
+            }
+
+            // install kdt (drivetrain on k8s) cluster
+            if (common.checkContains('STACK_INSTALL', 'kdt')){
+                extra_tgt_bckp = extra_tgt
+                extra_tgt = 'and kdt* ' + extra_tgt_bckp
+                stage('Install Kubernetes infra for kdt') {
+                    // ensure certificates are generated properly
+                    salt.runSaltProcessStep(venvPepper, "I@kubernetes:* ${extra_tgt}", 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(venvPepper, "I@kubernetes:* ${extra_tgt}", ['salt.minion.cert'], true)
+                }
+
+                stage('Install Kubernetes control for kdt') {
+                    salt.enforceStateWithTest([saltId: venvPepper, target: "I@kubernetes:master ${extra_tgt}", state: 'kubernetes.master.kube-addons'])
+                    orchestrate.installKubernetesControl(venvPepper, extra_tgt)
+
+                    // collect artifacts (kubeconfig)
+                    writeFile(file: 'kubeconfig-kdt', text: salt.getFileContent(venvPepper, "I@kubernetes:master and *01* ${extra_tgt}", '/etc/kubernetes/admin-kube-config'))
+                    archiveArtifacts(artifacts: 'kubeconfig-kdt')
+                }
+
+                extra_tgt = extra_tgt_bckp
             }
 
             // install ceph
@@ -530,8 +555,21 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (common.checkContains('STACK_INSTALL', 'cicd')) {
                 stage('Install Cicd') {
+                    extra_tgt_bckp = extra_tgt
+                    extra_tgt = 'and cid* ' + extra_tgt_bckp
                     orchestrate.installInfra(venvPepper, extra_tgt)
                     orchestrate.installCicd(venvPepper, extra_tgt)
+                    extra_tgt = extra_tgt_bckp
+                }
+            }
+
+            if (common.checkContains('STACK_INSTALL', 'kdt')) {
+                stage('Install Cicd on kdt') {
+                    extra_tgt_bckp = extra_tgt
+                    extra_tgt = 'and kdt* ' + extra_tgt_bckp
+                    orchestrate.installInfra(venvPepper, extra_tgt)
+                    orchestrate.installCicd(venvPepper, extra_tgt)
+                    extra_tgt = extra_tgt_bckp
                 }
             }
 
