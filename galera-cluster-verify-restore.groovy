@@ -19,7 +19,7 @@ def resultCode = 99
 
 askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 checkTimeSync = (env.getProperty('CHECK_TIME_SYNC') ?: true).toBoolean()
-if (common.validInputParam(VERIFICATION_RETRIES) && VERIFICATION_RETRIES.isInteger()) {
+if (common.validInputParam('VERIFICATION_RETRIES') && VERIFICATION_RETRIES.isInteger()) {
     verificationRetries = VERIFICATION_RETRIES.toInteger()
 } else {
     verificationRetries = 5
@@ -84,7 +84,7 @@ timeout(time: 12, unit: 'HOURS') {
             common.retry(verificationRetries, 15) {
                 exitCode = openstack.verifyGaleraStatus(pepperEnv, false, false)
                 if (exitCode >= 1) {
-                    error("Verification attempt finished with an error. This may be caused by cluster not having enough time to come up or to sync. Next verification attempt in 5 seconds.")
+                    error("Verification attempt finished with an error. This may be caused by cluster not having enough time to come up or to sync. Next verification attempt in 15 seconds.")
                 } else {
                     common.infoMsg("Restoration procedure seems to be successful. See verification report to be sure.")
                     currentBuild.result = "SUCCESS"
