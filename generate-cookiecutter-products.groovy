@@ -234,7 +234,11 @@ timeout(time: 1, unit: 'HOURS') {
                 if (context['local_repositories'] == 'True') {
                     def localRepoIP = context['local_repo_url']
                     smc['MCP_SALT_REPO_KEY'] = "http://${localRepoIP}/public.gpg"
-                    smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}/ubuntu-xenial"
+                    if (context['mcp_version'] in ['2018.4.0', '2018.8.0', '2018.8.0-milestone1', '2018.11.0']) {
+                        smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}/ubuntu-xenial"
+                    } else {
+                        smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}"
+                    }
                     smc['PIPELINES_FROM_ISO'] = 'false'
                     smc['PIPELINE_REPO_URL'] = "http://${localRepoIP}:8088"
                     smc['LOCAL_REPOS'] = 'true'
