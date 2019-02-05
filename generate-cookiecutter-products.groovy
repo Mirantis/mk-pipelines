@@ -232,13 +232,15 @@ timeout(time: 1, unit: 'HOURS') {
                 smc['DNS_SERVERS'] = context['dns_server01']
                 smc['MCP_VERSION'] = "${context['mcp_version']}"
                 if (context['local_repositories'] == 'True') {
-                    def localRepoIP = context['local_repo_url']
-                    smc['MCP_SALT_REPO_KEY'] = "http://${localRepoIP}/public.gpg"
+                    def localRepoIP = ''
                     if (context['mcp_version'] in ['2018.4.0', '2018.8.0', '2018.8.0-milestone1', '2018.11.0']) {
+                        localRepoIP = context['local_repo_url']
                         smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}/ubuntu-xenial"
                     } else {
+                        localRepoIP = context['aptly_server_deploy_address']
                         smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}"
                     }
+                    smc['MCP_SALT_REPO_KEY'] = "http://${localRepoIP}/public.gpg"
                     smc['PIPELINES_FROM_ISO'] = 'false'
                     smc['PIPELINE_REPO_URL'] = "http://${localRepoIP}:8088"
                     smc['LOCAL_REPOS'] = 'true'
