@@ -94,7 +94,7 @@ def triggerPromoteVCPJob(VcpImageList, tag, sourceTag) {
 def triggerPkgPromoteJob(PkgRepoList, PromoteFrom, PromoteTo) {
     //For repositories with per-package promote such as extra, ceph
     //we use different approaches for different steps of promoting
-    def repos = PkgRepoList.trim().tokenize()
+    def repos = PkgRepoList.trim().tokenize("\n")
     def RepoName, RepoDist, PackagesToPromote
     for (repo in repos) {
         if (repo.startsWith('#')) {
@@ -111,17 +111,17 @@ def triggerPkgPromoteJob(PkgRepoList, PromoteFrom, PromoteTo) {
         //During promote from testing to proposed we use per-package promote
         if (SOURCE_REVISION == 'testing') {
             build job: "pkg-promote", parameters: [
-               [$class: 'ChoiceParameterValue', name: 'repoName', value: RepoName],
-               [$class: 'ChoiceParameterValue', name: 'repoDist', value: RepoDist],
-               [$class: 'ChoiceParameterValue', name: 'promoteFrom', value: PromoteFrom],
-               [$class: 'ChoiceParameterValue', name: 'promoteTo', value: PromoteTo],
+               [$class: 'StringParameterValue', name: 'repoName', value: RepoName],
+               [$class: 'StringParameterValue', name: 'repoDist', value: RepoDist],
+               [$class: 'StringParameterValue', name: 'promoteFrom', value: PromoteFrom],
+               [$class: 'StringParameterValue', name: 'promoteTo', value: PromoteTo],
                [$class: 'TextParameterValue', name: 'packagesToPromote', value: PackagesToPromote],
             ]
         //In promote from proposed to release we move links to snapshots
         } else if (SOURCE_REVISION == 'proposed') {
             build job: "mirror-snapshot-pkg-name-${RepoName}-${RepoDist}", parameters: [
-               [$class: 'ChoiceParameterValue', name: 'Snapshot_Name', value: PromoteFrom],
-               [$class: 'ChoiceParameterValue', name: 'Snapshot_Id', value: PromoteTo],
+               [$class: 'StringParameterValue', name: 'Snapshot_Name', value: PromoteFrom],
+               [$class: 'StringParameterValue', name: 'Snapshot_Id', value: PromoteTo],
             ]
         }
     }
