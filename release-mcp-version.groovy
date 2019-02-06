@@ -120,8 +120,8 @@ def triggerPkgPromoteJob(PkgRepoList, PromoteFrom, PromoteTo) {
         //In promote from proposed to release we move links to snapshots
         } else if (SOURCE_REVISION == 'proposed') {
             build job: "mirror-snapshot-pkg-name-${RepoName}-${RepoDist}", parameters: [
-               [$class: 'StringParameterValue', name: 'Snapshot_Name', value: PromoteFrom],
-               [$class: 'StringParameterValue', name: 'Snapshot_Id', value: PromoteTo],
+               [$class: 'StringParameterValue', name: 'MCP_VERSION', value: PromoteTo],
+               [$class: 'StringParameterValue', name: 'SNAPSHOT_ID', value: PromoteFrom],
             ]
         }
     }
