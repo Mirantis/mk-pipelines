@@ -8,18 +8,19 @@
  */
 
 import groovy.json.JsonOutput
+
 gerrit = new com.mirantis.mk.Gerrit()
 
-cookiecutterTemplatesRepo='mk/cookiecutter-templates'
-reclassSystemRepo='salt-models/reclass-system'
+cookiecutterTemplatesRepo = 'mk/cookiecutter-templates'
+reclassSystemRepo = 'salt-models/reclass-system'
 slaveNode = env.getProperty('SLAVE_NODE') ?: 'virtual'
 
 voteMatrix = [
-  'test-mk-cookiecutter-templates': true,
-  'test-drivetrain': true,
-  'oscore-test-cookiecutter-models': false,
-  'test-salt-model-infra': true,
-  'test-salt-model-mcp-virtual-lab': false,
+    'test-mk-cookiecutter-templates' : true,
+    'test-drivetrain'                : true,
+    'oscore-test-cookiecutter-models': false,
+    'test-salt-model-infra'          : true,
+    'test-salt-model-mcp-virtual-lab': false,
 ]
 
 baseGerritConfig = [:]
@@ -49,7 +50,7 @@ def setGerritReviewComment() {
 // get job parameters for YAML-based job parametrization
 def yamlJobParameters(LinkedHashMap jobParams) {
     return [
-        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: JsonOutput.toJson(jobParams) ]
+        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: JsonOutput.toJson(jobParams)]
     ]
 }
 
@@ -59,7 +60,7 @@ def runTests(String jobName, ArrayList jobParams, String threadName = '') {
     def propagateStatus = voteMatrix.get(jobName, true)
     return {
         def jobBuild = build job: jobName, propagate: false, parameters: jobParams
-        jobResultComments[threadName] = [ 'url': jobBuild.absoluteUrl, 'status': jobBuild.result, 'job': jobName ]
+        jobResultComments[threadName] = ['url': jobBuild.absoluteUrl, 'status': jobBuild.result, 'job': jobName]
         setGerritReviewComment()
         if (propagateStatus && jobBuild.result == 'FAILURE') {
             throw new Exception("Build ${threadName} is failed!")
@@ -114,12 +115,14 @@ timeout(time: 12, unit: 'HOURS') {
         String distribRevision = 'nightly'
         //checking if the branch is from release
         if (gerritBranch.startsWith('release')) {
-            def distribRevisionRelease = gerritBranch.tokenize('/')[-1]
-            if (!common.checkRemoteBinary([apt_mk_version: distribRevisionRelease]).linux_system_repo_url) {
-              common.infoMsg("Binary release ${distribRevisionRelease} does not exist on http://mirror.mirantis.com. Falling back to 'proposed'.")
-              distribRevision = 'proposed'
+            distribRevision = gerritBranch.tokenize('/')[-1]
+            // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
+            // After 2018q4 releases, need to also check 'static' repo, for example ubuntu.
+            binTest = common.checkRemoteBinary(['mcp_version': distribRevision])
+            if (!binTest.linux_system_repo_url || !binTest.linux_system_repo_ubuntu_url) {
+                common.errorMsg("Binary release: ${distribRevision} not exist or not full. Fallback to 'proposed'! ")
+                distribRevision = 'proposed'
             }
-            distribRevision = distribRevisionRelease
         }
         ArrayList testModels = job_env.get('TEST_MODELS', 'mcp-virtual-lab,infra').split(',')
 
@@ -131,13 +134,13 @@ timeout(time: 12, unit: 'HOURS') {
                 currentBuild.result = 'SUCCESS'
                 return
             }
-            buildTestParams << job_env.findAll { k,v -> k ==~ /GERRIT_.+/ }
+            buildTestParams << job_env.findAll { k, v -> k ==~ /GERRIT_.+/ }
             baseGerritConfig = [
-                'gerritName': gerritName,
-                'gerritHost': gerritHost,
-                'gerritPort': gerritPort,
-                'gerritChangeNumber': gerritChangeNumber,
-                'credentialsId': gerritCredentials,
+                'gerritName'          : gerritName,
+                'gerritHost'          : gerritHost,
+                'gerritPort'          : gerritPort,
+                'gerritChangeNumber'  : gerritChangeNumber,
+                'credentialsId'       : gerritCredentials,
                 'gerritPatchSetNumber': gerritPatchSetNumber,
             ]
             LinkedHashMap gerritDependingProjects = gerrit.getDependentPatches(baseGerritConfig)
@@ -148,7 +151,7 @@ timeout(time: 12, unit: 'HOURS') {
                 "Branch for ${gerritProject} => ${gerritBranch}"
             ]
             descriptionMsgs.add("Distrib revision => ${distribRevision}")
-            for(String project in gerritDependingProjects.keySet()) {
+            for (String project in gerritDependingProjects.keySet()) {
                 descriptionMsgs.add("---")
                 descriptionMsgs.add("Depending patch to ${project} found:")
                 descriptionMsgs.add("Ref for ${project} => ${gerritDependingProjects[project]['ref']}")
@@ -182,8 +185,8 @@ timeout(time: 12, unit: 'HOURS') {
                     def jobParams = [
                         [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: clusterGitUrl],
                         [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: "HEAD"],
-                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultSystemURL ],
-                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: gerritRef ],
+                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_URL', value: defaultSystemURL],
+                        [$class: 'StringParameterValue', name: 'SYSTEM_GIT_REF', value: gerritRef],
                     ]
                     branches[branchJobName] = runTests(branchJobName, jobParams)
                 }
@@ -215,7 +218,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             branches.keySet().each { key ->
                 if (branches[key] instanceof Closure) {
-                    jobResultComments[key] = [ 'url': job_env.get('BUILD_URL'), 'status': 'WAITING' ]
+                    jobResultComments[key] = ['url': job_env.get('BUILD_URL'), 'status': 'WAITING']
                 }
             }
             setGerritReviewComment()
