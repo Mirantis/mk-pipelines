@@ -9,8 +9,7 @@ def saltModelTesting = new com.mirantis.mk.SaltModelTesting()
  *  SLAVE_NODE:
  */
 
-// slaveNode = env.SLAVE_NODE ?: 'python&&docker'
-slaveNode = env.SLAVE_NODE ?: 'hardware'
+slaveNode = env.SLAVE_NODE ?: 'virtual'
 
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {

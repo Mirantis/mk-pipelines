@@ -15,8 +15,7 @@ git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
-// slaveNode = env.getProperty('SLAVE_NODE') ?: 'python&&docker'
-slaveNode = env.getProperty('SLAVE_NODE') ?: 'hardware'
+slaveNode = env.getProperty('SLAVE_NODE') ?: 'virtual'
 gerritCredentials = env.getProperty('CREDENTIALS_ID') ?: 'gerrit'
 runTestModel = (env.getProperty('TEST_MODEL') ?: true).toBoolean()
 distribRevision = 'proposed'
