@@ -71,6 +71,7 @@ node (SLAVE_NODE) {
                     'baseRepoPreConfig': false,
                     'dockerMaxCpus': 2,
                     'dockerExtraOpts' : [
+                        "--network=host",
                         "-v /root/qa_results/:/root/qa_results/",
                         "-v ${env.WORKSPACE}/${artifacts_dir}/:${container_workdir}/${artifacts_dir}/",
                     ],
