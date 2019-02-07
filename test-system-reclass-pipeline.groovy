@@ -12,8 +12,7 @@ if (extraVarsYaml != '') {
     extraVarsYaml = JsonOutput.toJson(env.getEnvironment().findAll{ it.key.startsWith('GERRIT_') })
 }
 
-//def slaveNode = env.SLAVE_NODE ?: 'python&&docker'
-def slaveNode = env.SLAVE_NODE ?: 'hardware'
+def slaveNode = env.SLAVE_NODE ?: 'virtual'
 def gerritCredentials = env.CREDENTIALS_ID ?: 'gerrit'
 
 def gerritRef = env.GERRIT_REFSPEC ?: null

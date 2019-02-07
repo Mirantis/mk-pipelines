@@ -24,8 +24,7 @@ jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 external = false
 externalMarker = '/mirantis/external/'
 
-// slaveNode = env.SLAVE_NODE ?: 'docker'
-slaveNode = env.SLAVE_NODE ?: 'hardware'
+slaveNode = env.SLAVE_NODE ?: 'virtual'
 setDefaultArtifactoryProperties = env.SET_DEFAULT_ARTIFACTORY_PROPERTIES ?: true
 
 

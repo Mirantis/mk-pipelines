@@ -27,8 +27,7 @@ if (extraVarsYAML) {
     extraVars = [:]
 }
 
-// slaveNode = env.SLAVE_NODE ?: 'virtual'
-slaveNode = env.SLAVE_NODE ?: 'hardware'
+slaveNode = env.SLAVE_NODE ?: 'virtual'
 checkIncludeOrder = env.CHECK_INCLUDE_ORDER ?: false
 
 // Global var's
