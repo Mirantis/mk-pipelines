@@ -43,7 +43,7 @@ timeout(time: 12, unit: 'HOURS') {
             def doSubmit = false
             def skipProjectsVerify = ['mk/docker-jnlp-slave']
             stage("test") {
-                if (gerritChange.status != "MERGED" && env.SKIP_TEST.toBoolean()) {
+                if (gerritChange.status != "MERGED" && !env.SKIP_TEST.toBoolean()) {
                     // test max CodeReview
                     if (gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Code-Review", "+")) {
                         doSubmit = true
