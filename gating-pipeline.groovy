@@ -12,6 +12,7 @@ def ssh = new com.mirantis.mk.Ssh()
 
 slaveNode = env.SLAVE_NODE ?: 'virtual'
 giveVerify = false
+defGerritPort = env.GERRIT_PORT ?: '29418'
 
 @NonCPS
 def isJobExists(jobName) {
@@ -19,10 +20,10 @@ def isJobExists(jobName) {
 }
 
 def callJobWithExtraVars(String jobName) {
-    def gerritVars = env.getEnvironment().findAll{ it.key.startsWith('GERRIT_') }
+    def gerritVars = env.getEnvironment().findAll { it.key.startsWith('GERRIT_') }
     gerritVars['GERRIT_CI_MERGE_TRIGGER'] = true
     testJob = build job: jobName, parameters: [
-        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: JsonOutput.toJson(gerritVars) ]
+        [$class: 'TextParameterValue', name: 'EXTRA_VARIABLES_YAML', value: JsonOutput.toJson(gerritVars)]
     ]
     if (testJob.getResult() != 'SUCCESS') {
         error("Gate job ${testJob.getBuildUrl().toString()}  finished with ${testJob.getResult()} !")
@@ -35,13 +36,14 @@ timeout(time: 12, unit: 'HOURS') {
     node(slaveNode) {
         try {
             // test if change is not already merged
-            ssh.prepareSshAgentKey(CREDENTIALS_ID)
-            ssh.ensureKnownHosts(GERRIT_HOST)
+            ssh.prepareSshAgentKey(env.CREDENTIALS_ID)
+            // TODO: those should be refactored, and covered in gerrit module.
+            ssh.ensureKnownHosts("${env.GERRIT_HOST}:${defGerritPort}")
             def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
             def doSubmit = false
             def skipProjectsVerify = ['mk/docker-jnlp-slave']
             stage("test") {
-                if (gerritChange.status != "MERGED" && !SKIP_TEST.equals("true")) {
+                if (gerritChange.status != "MERGED" && env.SKIP_TEST.toBoolean()) {
                     // test max CodeReview
                     if (gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Code-Review", "+")) {
                         doSubmit = true
@@ -91,9 +93,9 @@ timeout(time: 12, unit: 'HOURS') {
                 } else if (doSubmit) {
                     if (giveVerify) {
                         common.warningMsg("Change ${GERRIT_CHANGE_NUMBER} don't have a Verified, but tests were successful, so adding Verified and submitting")
-                        ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit review --verified +1 --submit %s,%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+                        ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review --verified +1 --submit %s,%s", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
                     } else {
-                        ssh.agentSh(String.format("ssh -p 29418 %s@%s gerrit review --submit %s,%s", GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+                        ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review --submit %s,%s", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
                     }
                     common.infoMsg(String.format("Gerrit review %s,%s submitted", GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
                 }
