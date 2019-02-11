@@ -37,8 +37,8 @@ def globalVariatorsUpdate() {
         }
     }
     if ("${context['salt_master_hostname']}.${context['cluster_domain']}".length() > 64) {
-      common.errorMsg("Cluster domain has too long name. Make ${context['cluster_domain']} shorter than 58 symbols.")
-      error('Invalid context provided')
+        common.errorMsg("Cluster domain has too long name. Make ${context['cluster_domain']} shorter than 58 symbols.")
+        error('Invalid context provided')
     }
     // Use mcpVersion git tag if not specified branch for cookiecutter-templates
     if (!context.get('cookiecutter_template_branch')) {
@@ -152,18 +152,18 @@ timeout(time: 1, unit: 'HOURS') {
                                 Name-Real: ${context['salt_master_hostname']}.${context['cluster_domain']}
                                 Name-Email: ${secretKeyID}
                             """.stripIndent()
-                            writeFile file:'gpg-batch.txt', text:batchData
+                            writeFile file: 'gpg-batch.txt', text: batchData
                             sh "gpg --gen-key --batch < gpg-batch.txt"
                             sh "gpg --export-secret-key -a ${secretKeyID} > gpgkey.asc"
                         } else {
-                            writeFile file:'gpgkey.asc', text:context['secrets_encryption_private_key']
+                            writeFile file: 'gpgkey.asc', text: context['secrets_encryption_private_key']
                             sh "gpg --import gpgkey.asc"
                             secretKeyID = sh(returnStdout: true, script: 'gpg --list-secret-keys --with-colons | awk -F: -e "/^sec/{print \\$5; exit}"').trim()
                         }
                         context['secrets_encryption_key_id'] = secretKeyID
                     }
                     if (context.get('cfg_failsafe_ssh_public_key')) {
-                        writeFile file:'failsafe-ssh-key.pub', text:context['cfg_failsafe_ssh_public_key']
+                        writeFile file: 'failsafe-ssh-key.pub', text: context['cfg_failsafe_ssh_public_key']
                     }
                     python.setupCookiecutterVirtualenv(cutterEnv)
                     // FIXME refactor generateModel
@@ -175,6 +175,10 @@ timeout(time: 1, unit: 'HOURS') {
             stage("Test") {
                 if (runTestModel) {
                     sh("cp -r ${modelEnv} ${testEnv}")
+                    if (fileExists('gpgkey.asc')) {
+                        common.infoMsg('gpgkey.asc found!Copy it into reclass folder for tests..')
+                        sh("cp -v gpgkey.asc ${testEnv}/salt_master_pillar.asc")
+                    }
                     def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
                     common.infoMsg("Attempt to run test against distribRevision: ${distribRevision}")
                     try {
