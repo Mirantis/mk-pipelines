@@ -17,6 +17,7 @@ SHAKER_PARAMS yaml example:
   SHAKER_SERVER_ENDPOINT: '10.13.0.15:5999'
   SHAKER_SCENARIOS: 'scenarios/essential'
   SKIP_LIST: ''
+  MATRIX: '{host:[ping.online.net, bouygues.iperf.fr]}'
   image_builder:
     - SHAKER_FLAVOR_DISK=4
     - SHAKER_FLAVOR_RAM=512
@@ -39,6 +40,11 @@ Where:
     scenarios/additional/cross_az
     scenarios/additional/external
     scenarios/additional/qos
+  "MATRIX" - Set the matrix of extra parameters for the scenario. The value is specified in JSON format.
+  To override a scenario duration one may provide: "{time: 10}", or to override list of hosts:
+  "{host:[ping.online.net, iperf.eenet.ee]}". When several parameters are overridden all combinations are
+  tested. It is a required field for some of external-category scenarios when the host name with iperf3
+  server needs to be provided as a command-line parameter, e.g. ``{host: 10.13.100.4}``.
   "SKIP_LIST" - Comma-separated list of Shaker scenarios to skip, directories or files inside scenarios/
   of cvp-shaker, e.g. "dense_l2.yaml,full_l2.yaml,l3"
   "image_builder" - shaker-image-builder env variables
@@ -52,6 +58,7 @@ Where:
     SCENARIO_AVAILABILITY_ZONE='nova,internal'
     SCENARIO_COMPUTE_NODES=2
     SHAKER_EXTERNAL_NET='public'
+
 For the more detailed description of the last two categories please refer to the shaker documentation
 https://pyshaker.readthedocs.io/en/latest/tools.html
 */
@@ -91,7 +98,8 @@ node (SLAVE_NODE) {
             def general_params = [
                 SHAKER_SERVER_ENDPOINT: (SHAKER_PARAMS.get('SHAKER_SERVER_ENDPOINT')),
                 SHAKER_SCENARIOS: (SHAKER_PARAMS.get('SHAKER_SCENARIOS')) ?: 'scenarios/essential',
-                SKIP_LIST: (SHAKER_PARAMS.get('SKIP_LIST'))
+                SKIP_LIST: (SHAKER_PARAMS.get('SKIP_LIST')),
+                MATRIX: (SHAKER_PARAMS.get('MATRIX'))
             ]
             if (! general_params['SHAKER_SERVER_ENDPOINT']) {
                 throw new Exception("SHAKER_SERVER_ENDPOINT address was not set in the SHAKER_PARAMS")
@@ -111,6 +119,11 @@ node (SLAVE_NODE) {
                 general_params['SHAKER_SCENARIOS'].replaceAll("^/+", ""),
                 general_params['SKIP_LIST']
             )
+
+            // Override scenarios params:
+            if (general_params['MATRIX']) {
+                cmd_shaker_args += " --matrix '${general_params.MATRIX}'"
+            }
 
             // Define docker commands
             def commands = [
