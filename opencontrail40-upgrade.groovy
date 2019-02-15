@@ -26,9 +26,9 @@ def args
 def probe = 1
 def command = 'cmd.shell'
 
-def controlPkgs = 'contrail-config,contrail-config-openstack,contrail-control,contrail-dns,contrail-lib,contrail-nodemgr,contrail-utils,contrail-web-controller,contrail-web-core,neutron-plugin-contrail,python-contrail,contrail-database'
+def controlPkgs = 'contrail-config,contrail-config-openstack,contrail-control,contrail-dns,contrail-lib,contrail-nodemgr,contrail-utils,contrail-web-controller,contrail-web-core,neutron-plugin-contrail,contrail-database'
 def thirdPartyControlPkgsToRemove = 'zookeeper,libzookeeper-java,kafka,cassandra,redis-server,ifmap-server,supervisor'
-def analyticsPkgs = 'contrail-analytics,contrail-lib,contrail-nodemgr,contrail-utils,python-contrail,contrail-database'
+def analyticsPkgs = 'contrail-analytics,contrail-lib,contrail-nodemgr,contrail-utils,contrail-database'
 def thirdPartyAnalyticsPkgsToRemove = 'zookeeper,libzookeeper-java,kafka,cassandra,python-cassandra,cassandra-cpp-driver,redis-server,supervisor'
 def cmpPkgs = 'contrail-lib contrail-nodemgr contrail-utils contrail-vrouter-agent contrail-vrouter-utils python-contrail python-contrail-vrouter-api python-opencontrail-vrouter-netns contrail-vrouter-dkms'
 def neutronServerPkgs = 'neutron-plugin-contrail,contrail-heat,python-contrail'
