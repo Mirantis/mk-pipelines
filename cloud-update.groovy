@@ -658,9 +658,8 @@ def clusterGalera(pepperEnv) {
 def restoreGalera(pepperEnv) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
-    def openstack = new com.mirantis.mk.Openstack()
-    salt.cmdRun(pepperEnv, 'I@xtrabackup:client', "rm -rf /var/lib/mysql/*")
-    openstack.restoreGaleraDb(pepperEnv)
+    def galera = new com.mirantis.mk.Galera()
+    galera.restoreGaleraDb(pepperEnv)
 }
 
 def backupZookeeper(pepperEnv) {

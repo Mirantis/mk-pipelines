@@ -12,7 +12,7 @@
 
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
-def openstack = new com.mirantis.mk.Openstack()
+def galera = new com.mirantis.mk.Galera()
 def python = new com.mirantis.mk.Python()
 def pepperEnv = "pepperEnv"
 def resultCode = 99
@@ -31,11 +31,11 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
         stage('Verify status')
-            resultCode = openstack.verifyGaleraStatus(pepperEnv, false, checkTimeSync)
+            resultCode = galera.verifyGaleraStatus(pepperEnv, false, checkTimeSync)
         stage('Restore') {
             if (resultCode == 128) {
                 common.errorMsg("Unable to connect to Galera Master. Trying slaves...")
-                resultCode = openstack.verifyGaleraStatus(pepperEnv, true, checkTimeSync)
+                resultCode = galera.verifyGaleraStatus(pepperEnv, true, checkTimeSync)
                 if (resultCode == 129) {
                     common.errorMsg("Unable to obtain Galera slave minions list". "Without fixing this issue, pipeline cannot continue in verification and restoration.")
                     currentBuild.result = "FAILURE"
@@ -74,7 +74,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
             try {
                 if((!askConfirmation && resultCode > 0) || askConfirmation){
-                  openstack.restoreGaleraDb(pepperEnv)
+                  galera.restoreGaleraDb(pepperEnv)
                 }
             } catch (Exception e) {
                 common.errorMsg("Restoration process has failed.")
@@ -82,7 +82,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
         stage('Verify restoration result') {
             common.retry(verificationRetries, 15) {
-                exitCode = openstack.verifyGaleraStatus(pepperEnv, false, false)
+                exitCode = galera.verifyGaleraStatus(pepperEnv, false, false)
                 if (exitCode >= 1) {
                     error("Verification attempt finished with an error. This may be caused by cluster not having enough time to come up or to sync. Next verification attempt in 15 seconds.")
                 } else {
