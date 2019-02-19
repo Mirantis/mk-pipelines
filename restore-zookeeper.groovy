@@ -12,6 +12,14 @@ def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
+
+def oc3SupervisorServices = ["supervisor-config", "supervisor-control"]
+def oc4ConfigServices = ["contrail-api", "contrail-schema", "contrail-svc-monitor", "contrail-device-manager", "contrail-config-nodemgr"]
+def oc4ControlServices = ["contrail-control", "contrail-named", "contrail-dns", "contrail-control-nodemgr"]
+def zkService = "zookeeper"
+def contrailStatusCheckCmd = "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup"
+def zkDbPath = "/var/lib/zookeeper/version-2"
+
 timeout(time: 12, unit: 'HOURS') {
     node() {
 
@@ -20,65 +28,86 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         stage('Restore') {
-            try {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['supervisor-config'], null, true)
-            } catch (Exception er) {
-                common.warningMsg('Supervisor-config service already stopped')
+
+            def ocVersionPillarKey = salt.getReturnValues(salt.getPillar(pepperEnv, "I@opencontrail:control:role:primary", "_param:opencontrail_version"))
+
+            if (ocVersionPillarKey == '') {
+                throw new Exception("Cannot get value for _param:opencontrail_version key on I@opencontrail:control:role:primary target")
             }
-            try {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['supervisor-control'], null, true)
-            } catch (Exception er) {
-                common.warningMsg('Supervisor-control service already stopped')
+
+            def ocVersion = ocVersionPillarKey.toString()
+
+            if (ocVersion >= "4.0") {
+
+                contrailStatusCheckCmd = "doctrail controller ${contrailStatusCheckCmd}"
+                zkDbPath = "/var/lib/config_zookeeper_data/version-2"
+
+                for (service in (oc4ConfigServices + oc4ControlServices + [zkService])) {
+                    try {
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'cmd.run', ["doctrail controller systemctl stop ${service}"])
+                    } catch (Exception er) {
+                        common.warningMsg("${service} cannot be stopped inside controller container")
+                    }
+                }
+                // wait until zookeeper service is down
+                salt.commandStatus(pepperEnv, 'I@opencontrail:control', "doctrail controller service ${zkService} status", 'Active: inactive')
+            } else {
+                for (service in (oc3SupervisorServices + [zkService])) {
+                    try {
+                        salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ["${service}"])
+                    } catch (Exception er) {
+                        common.warningMsg("${service} service cannot be stopped. It may be already stopped before.")
+                    }
+                }
+                // wait until zookeeper service is down
+                salt.commandStatus(pepperEnv, 'I@opencontrail:control', "service ${zkService} status", "stop")
             }
-            try {
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['zookeeper'], null, true)
-            } catch (Exception er) {
-                common.warningMsg('Zookeeper service already stopped')
-            }
-            //sleep(5)
-            // wait until zookeeper service is down
-            salt.commandStatus(pepperEnv, 'I@opencontrail:control', 'service zookeeper status', 'stop')
 
             try {
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "mkdir -p /root/zookeeper/zookeeper.bak")
             } catch (Exception er) {
-                common.warningMsg('Directory already exists')
+                common.warningMsg('/root/zookeeper/zookeeper.bak directory already exists')
             }
 
             try {
-                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "mv /var/lib/zookeeper/version-2/* /root/zookeeper/zookeeper.bak")
+                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "mv ${zkDbPath}/* /root/zookeeper/zookeeper.bak")
             } catch (Exception er) {
                 common.warningMsg('Files were already moved')
             }
             try {
-                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "rm -rf /var/lib/zookeeper/version-2/*")
+                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "rm -rf ${zkDbPath}/*")
             } catch (Exception er) {
                 common.warningMsg('Directory already empty')
             }
 
-            _pillar = salt.getPillar(pepperEnv, "I@opencontrail:control", 'zookeeper:backup:backup_dir')
-            backup_dir = _pillar['return'][0].values()[0]
-            if(backup_dir == null || backup_dir.isEmpty()) { backup_dir='/var/backups/zookeeper' }
-            print(backup_dir)
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'file.remove', ["${backup_dir}/dbrestored"], null, true)
+            backupDirPillarKey = salt.getPillar(pepperEnv, "I@opencontrail:control", 'zookeeper:backup:backup_dir')
+            backupDir = backupDirPillarKey['return'][0].values()[0]
+            if (backupDir == null || backupDir.isEmpty()) { backupDir='/var/backups/zookeeper' }
+            print(backupDir)
+            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'file.remove', ["${backupDir}/dbrestored"])
 
             // performs restore
             salt.enforceState(pepperEnv, 'I@opencontrail:control', "zookeeper.backup")
 
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.start', ['zookeeper'], null, true)
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.start', ['supervisor-config'], null, true)
-            salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.start', ['supervisor-control'], null, true)
+            if (ocVersion >= "4.0") {
+                for (service in ([zkService] + oc4ConfigServices + oc4ControlServices)) {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'cmd.run', ["doctrail controller systemctl start ${service}"])
+                }
+            } else {
+                for (service in ([zkService] + oc3SupervisorServices)) {
+                    salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.start', ["${service}"])
+                }
+            }
 
             // wait until contrail-status is up
-            salt.commandStatus(pepperEnv, 'I@opencontrail:control', "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)
+            salt.commandStatus(pepperEnv, 'I@opencontrail:control', contrailStatusCheckCmd, null, false)
 
-            salt.cmdRun(pepperEnv, 'I@opencontrail:control', "ls /var/lib/zookeeper/version-2")
+            salt.cmdRun(pepperEnv, 'I@opencontrail:control', "ls ${zkDbPath}")
             try {
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "echo stat | nc localhost 2181")
             } catch (Exception er) {
                 common.warningMsg('Check which node is zookeeper leader')
             }
-            salt.cmdRun(pepperEnv, 'I@opencontrail:control', "contrail-status")
         }
     }
 }
