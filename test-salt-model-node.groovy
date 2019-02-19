@@ -64,8 +64,11 @@ throttle(['test-model']) {
             common.infoMsg("Running salt model test for node ${NODE_TARGET} in cluster ${CLUSTER_NAME}")
 
             def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
+            def dockerHostname = NODE_TARGET.tokenize('.')[0]
+            def domain = NODE_TARGET - "${dockerHostname}."
             def config = [
-              'dockerHostname': NODE_TARGET,
+              'dockerHostname': dockerHostname,
+              'domain': domain,
               'clusterName': CLUSTER_NAME,
               'reclassEnv': workspace,
               'distribRevision': distribRevision,

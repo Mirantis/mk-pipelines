@@ -27,7 +27,8 @@ timeout(time: 1, unit: 'HOURS') {
                 def content = readFile(file: extraVars.modelFile)
                 def templateContext = readYaml text: content
                 def config = [
-                    'dockerHostname': "cfg01.${templateContext.default_context.cluster_domain}",
+                    'dockerHostname': "cfg01",
+                    'domain': "${templateContext.default_context.cluster_domain}",
                     'clusterName': templateContext.default_context.cluster_name,
                     'reclassEnv': extraVars.testReclassEnv,
                     'distribRevision': extraVars.DISTRIB_REVISION,
