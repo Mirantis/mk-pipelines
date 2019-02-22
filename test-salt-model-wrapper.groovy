@@ -205,7 +205,8 @@ timeout(time: 12, unit: 'HOURS') {
                         buildTestParamsOld['COOKIECUTTER_TEMPLATE_REF'] = ''
                         buildTestParamsOld['COOKIECUTTER_TEMPLATE_BRANCH'] = oldRef
                         String threadName = "${branchJobName}-${oldRef}"
-                        overrideVote = oldRef == 'release/2018.11.0' ? true : null
+                        // disable votes for release/2018.11.0 branch
+                        overrideVote = oldRef == 'release/2018.11.0' ? false : null
                         branches[threadName] = runTests(branchJobName, yamlJobParameters(buildTestParamsOld), threadName, overrideVote)
                     }
                 }
