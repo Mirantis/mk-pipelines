@@ -55,9 +55,9 @@ def yamlJobParameters(LinkedHashMap jobParams) {
 }
 
 // run needed job with params
-def runTests(String jobName, ArrayList jobParams, String threadName = '') {
+def runTests(String jobName, ArrayList jobParams, String threadName = '', Boolean voteOverride = null) {
     threadName = threadName ? threadName : jobName
-    def propagateStatus = voteMatrix.get(jobName, true)
+    def propagateStatus = voteOverride != null ? voteOverride : voteMatrix.get(jobName, true)
     return {
         def jobBuild = build job: jobName, propagate: false, parameters: jobParams
         jobResultComments[threadName] = ['url': jobBuild.absoluteUrl, 'status': jobBuild.result, 'job': jobName]
@@ -205,7 +205,8 @@ timeout(time: 12, unit: 'HOURS') {
                         buildTestParamsOld['COOKIECUTTER_TEMPLATE_REF'] = ''
                         buildTestParamsOld['COOKIECUTTER_TEMPLATE_BRANCH'] = oldRef
                         String threadName = "${branchJobName}-${oldRef}"
-                        branches[threadName] = runTests(branchJobName, yamlJobParameters(buildTestParamsOld), threadName)
+                        overrideVote = oldRef == 'release/2018.11.0' ? true : null
+                        branches[threadName] = runTests(branchJobName, yamlJobParameters(buildTestParamsOld), threadName, overrideVote)
                     }
                 }
                 if (gerritProject == cookiecutterTemplatesRepo) {
