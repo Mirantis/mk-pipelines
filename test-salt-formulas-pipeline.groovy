@@ -19,6 +19,7 @@ def dockerLib = new com.mirantis.mk.Docker()
 
 def checkouted = false
 
+envOverrides = []
 futureFormulas = []
 failedFormulas = []
 
@@ -176,6 +177,7 @@ timeout(time: 4, unit: 'HOURS') {
             if (fileExists(".kitchen.yml") || fileExists(".kitchen.openstack.yml")) {
               if (fileExists(".kitchen.openstack.yml")) {
                 common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
+                envOverrides.add("KITCHEN_YAML=.kitchen.openstack.yml")
                 if (fileExists(".kitchen.yml")) {
                   common.infoMsg("Ignoring the docker Kitchen test configuration file.")
                 }
@@ -191,8 +193,8 @@ timeout(time: 4, unit: 'HOURS') {
                 common.infoMsg("Override Gemfile found in the kitchen directory, using it.")
                 ruby.installKitchen()
               }
-              common.infoMsg = ruby.runKitchenCommand("list -b")
-              kitchenEnvs = ruby.runKitchenCommand("list -b").split()
+              common.infoMsg = ruby.runKitchenCommand("list -b", envOverrides.join(' '))
+              kitchenEnvs = ruby.runKitchenCommand("list -b", envOverrides.join(' ')).split()
               common.infoMsg(kitchenEnvs)
               common.infoMsg("Running kitchen testing in parallel mode")
               if (CUSTOM_KITCHEN_ENVS != null && CUSTOM_KITCHEN_ENVS != '') {
