@@ -208,29 +208,40 @@ timeout(time: 1, unit: 'HOURS') {
                     userRemoteConfigs: [[url: commonScriptsRepoUrl, refspec: context['mcp_common_scripts_branch'], credentialsId: gerritCredentials],],
                 ])
 
-                sh 'cp mcp-common-scripts/config-drive/create_config_drive.sh create-config-drive && chmod +x create-config-drive'
+                def outdateGeneration = false
+                if (fileExists('mcp-common-scripts/config-drive/create_config_drive.py')) {
+                    sh 'cp mcp-common-scripts/config-drive/create_config_drive.py create-config-drive.py'
+                } else {
+                    outdateGeneration = true
+                    sh 'cp mcp-common-scripts/config-drive/create_config_drive.sh create-config-drive && chmod +x create-config-drive'
+                }
                 sh '[ -f mcp-common-scripts/config-drive/master_config.sh ] && cp mcp-common-scripts/config-drive/master_config.sh user_data || cp mcp-common-scripts/config-drive/master_config.yaml user_data'
 
                 sh "git clone --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
                 sh "git clone --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
-                args = "--user-data user_data --hostname ${context['salt_master_hostname']} --model ${modelEnv} --mk-pipelines ${pipelineEnv}/mk-pipelines/ --pipeline-library ${pipelineEnv}/pipeline-library/ ${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"
+                args = [
+                    "--user-data user_data", , "--model ${modelEnv}",
+                    "--mk-pipelines ${pipelineEnv}/mk-pipelines/", "--pipeline-library ${pipelineEnv}/pipeline-library/"
+                ]
                 if (context['secrets_encryption_enabled'] == 'True') {
-                    args = "--gpg-key gpgkey.asc " + args
+                    args.add('--gpg-key gpgkey.asc')
                 }
                 if (context.get('cfg_failsafe_ssh_public_key')) {
-                    args = "--ssh-key failsafe-ssh-key.pub " + args
+                    args.add('--ssh-key failsafe-ssh-key.pub')
                 }
 
                 // load data from model
                 def smc = [:]
                 smc['SALT_MASTER_MINION_ID'] = "${context['salt_master_hostname']}.${context['cluster_domain']}"
                 smc['SALT_MASTER_DEPLOY_IP'] = context['salt_master_management_address']
-                smc['DEPLOY_NETWORK_GW'] = context['deploy_network_gateway']
-                smc['DEPLOY_NETWORK_NETMASK'] = context['deploy_network_netmask']
-                if (context.get('deploy_network_mtu')) {
-                    smc['DEPLOY_NETWORK_MTU'] = context['deploy_network_mtu']
+                if (outdateGeneration) {
+                    smc['DEPLOY_NETWORK_GW'] = context['deploy_network_gateway']
+                    smc['DEPLOY_NETWORK_NETMASK'] = context['deploy_network_netmask']
+                    if (context.get('deploy_network_mtu')) {
+                        smc['DEPLOY_NETWORK_MTU'] = context['deploy_network_mtu']
+                    }
+                    smc['DNS_SERVERS'] = context['dns_server01']
                 }
-                smc['DNS_SERVERS'] = context['dns_server01']
                 smc['MCP_VERSION'] = "${context['mcp_version']}"
                 if (context['local_repositories'] == 'True') {
                     def localRepoIP = ''
@@ -261,7 +272,16 @@ timeout(time: 1, unit: 'HOURS') {
                 }
 
                 // create cfg config-drive
-                sh "./create-config-drive ${args}"
+                if (outdateGeneration) {
+                    args += [ "--hostname ${context['salt_master_hostname']}", "${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso" ]
+                    sh "./create-config-drive ${args.join(' ')}"
+                } else {
+                    args += [
+                        "--name ${context['salt_master_hostname']}", "--hostname ${context['salt_master_hostname']}.${context['cluster_domain']}", "--clean-up",
+                        "--ip ${context['salt_master_management_address']}", "--netmask ${context['deploy_network_netmask']}", "--gateway ${context['deploy_network_gateway']}"
+                    ]
+                    sh "python ./create-config-drive.py ${args.join(' ')}"
+                }
                 sh("mkdir output-${context['cluster_name']} && mv ${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso output-${context['cluster_name']}/")
 
                 // save cfg iso to artifacts
@@ -273,8 +293,10 @@ timeout(time: 1, unit: 'HOURS') {
 
                     def smc_apt = [:]
                     smc_apt['SALT_MASTER_DEPLOY_IP'] = context['salt_master_management_address']
-                    smc_apt['APTLY_DEPLOY_IP'] = context['aptly_server_deploy_address']
-                    smc_apt['APTLY_DEPLOY_NETMASK'] = context['deploy_network_netmask']
+                    if (outdateGeneration) {
+                        smc_apt['APTLY_DEPLOY_IP'] = context['aptly_server_deploy_address']
+                        smc_apt['APTLY_DEPLOY_NETMASK'] = context['deploy_network_netmask']
+                    }
                     smc_apt['APTLY_MINION_ID'] = "${aptlyServerHostname}.${context['cluster_domain']}"
 
                     for (i in common.entries(smc_apt)) {
@@ -282,7 +304,15 @@ timeout(time: 1, unit: 'HOURS') {
                     }
 
                     // create apt config-drive
-                    sh "./create-config-drive --user-data mirror_config --hostname ${aptlyServerHostname} ${aptlyServerHostname}.${context['cluster_domain']}-config.iso"
+                    if (outdateGeneration) {
+                        sh "./create-config-drive --user-data mirror_config --hostname ${aptlyServerHostname} ${aptlyServerHostname}.${context['cluster_domain']}-config.iso"
+                    } else {
+                        args = [
+                            "--ip ${context['aptly_server_deploy_address']}", "--netmask ${context['deploy_network_netmask']}", "--gateway ${context['deploy_network_gateway']}",
+                            "--user-data mirror_config", "--hostname ${aptlyServerHostname}.${context['cluster_domain']}", "--name ${aptlyServerHostname}", "--clean-up"
+                        ]
+                        sh "python ./create-config-drive.py ${args.join(' ')}"
+                    }
                     sh("mv ${aptlyServerHostname}.${context['cluster_domain']}-config.iso output-${context['cluster_name']}/")
 
                     // save apt iso to artifacts
