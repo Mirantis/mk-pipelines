@@ -82,117 +82,14 @@ def globalVariatorsUpdate() {
     }
     common.warningMsg("Fetching:\n" +
         "DISTRIB_REVISION from ${distribRevision}")
-    common.infoMsg('Using context:\n')
-    print(prettyPrint(toJson(context)))
+    common.infoMsg("Using context:\n" + context)
+    print prettyPrint(toJson(context))
     return context
 
 }
 
-def generateModel(context, contextName, saltMasterName, virtualenv, modelEnv, templateEnvDir, multiModels = true) {
-    def common = new com.mirantis.mk.Common()
-    def generatedModel = multiModels ? "${modelEnv}/${contextName}" : modelEnv
-    def templateContext = readYaml text: context
-    def clusterDomain = templateContext.default_context.cluster_domain
-    def clusterName = templateContext.default_context.cluster_name
-    def outputDestination = "${generatedModel}/classes/cluster/${clusterName}"
-    def templateBaseDir = templateEnvDir
-    def templateDir = "${templateEnvDir}/dir"
-    def templateOutputDir = templateBaseDir
-    dir(templateEnvDir) {
-        if (fileExists(new File(templateEnvDir, 'tox.ini').toString())) {
-            tempContextFile = 'tempContext.yaml'
-            writeFile file: tempContextFile, text: context
-            common.warningMsg('Generating models using context:\n')
-            print(context)
-            withEnv(["CONFIG_FILE=$tempContextFile",
-                     "OUTPUT_DIR=$templateOutputDir",
-            ]) {
-                print('[Cookiecutter build] Result:\n' +
-                    sh(returnStdout: true, script: 'tox -ve generate_auto'))
-            }
-            // dropme after impelementation new format
-            sh "mkdir -p ${generatedModel}/nodes/"
-            def nodeFile = "${generatedModel}/nodes/${saltMasterName}.${clusterDomain}.yml"
-            def nodeString = """classes:
-- cluster.${clusterName}.infra.config
-parameters:
-  _param:
-    linux_system_codename: xenial
-    reclass_data_revision: master
-  linux:
-    system:
-      name: ${saltMasterName}
-      domain: ${clusterDomain}
-    """
-            writeFile(file: nodeFile, text: nodeString)
-            //
-        } else {
-            common.warningMsg("Old format: Generating model from context ${contextName}")
-            def productList = ["infra", "cicd", "kdt", "opencontrail", "kubernetes", "openstack", "oss", "stacklight", "ceph"]
-            for (product in productList) {
-                // get templateOutputDir and productDir
-                templateOutputDir = "${templateEnvDir}/output/${product}"
-                productDir = product
-                templateDir = "${templateEnvDir}/cluster_product/${productDir}"
-                // Bw for 2018.8.1 and older releases
-                if (product.startsWith("stacklight") && (!fileExists(templateDir))) {
-                    common.warningMsg("Old release detected! productDir => 'stacklight2' ")
-                    productDir = "stacklight2"
-                    templateDir = "${templateEnvDir}/cluster_product/${productDir}"
-                }
-                // generate infra unless its explicitly disabled
-                if ((product == "infra" && templateContext.default_context.get("infra_enabled", "True").toBoolean())
-                    || (templateContext.default_context.get(product + "_enabled", "False").toBoolean())) {
-
-                    common.infoMsg("Generating product " + product + " from " + templateDir + " to " + templateOutputDir)
-
-                    sh "rm -rf ${templateOutputDir} || true"
-                    sh "mkdir -p ${templateOutputDir}"
-                    sh "mkdir -p ${outputDestination}"
-
-                    buildCookiecutterTemplate(templateDir, context, templateOutputDir, virtualenv, templateBaseDir)
-                    sh "mv -v ${templateOutputDir}/${clusterName}/* ${outputDestination}"
-                } else {
-                    common.warningMsg("Product " + product + " is disabled")
-                }
-            }
-
-            def localRepositories = templateContext.default_context.local_repositories
-            localRepositories = localRepositories ? localRepositories.toBoolean() : false
-            def offlineDeployment = templateContext.default_context.offline_deployment
-            offlineDeployment = offlineDeployment ? offlineDeployment.toBoolean() : false
-            if (localRepositories && !offlineDeployment) {
-                def mcpVersion = templateContext.default_context.mcp_version
-                def aptlyModelUrl = templateContext.default_context.local_model_url
-                def ssh = new com.mirantis.mk.Ssh()
-                dir(path: modelEnv) {
-                    ssh.agentSh "git submodule add \"${aptlyModelUrl}\" \"classes/cluster/${clusterName}/cicd/aptly\""
-                    if (!(mcpVersion in ["nightly", "testing", "stable"])) {
-                        ssh.agentSh "cd \"classes/cluster/${clusterName}/cicd/aptly\";git fetch --tags;git checkout ${mcpVersion}"
-                    }
-                }
-            }
-
-            def nodeFile = "${generatedModel}/nodes/${saltMasterName}.${clusterDomain}.yml"
-            def nodeString = """classes:
-- cluster.${clusterName}.infra.config
-parameters:
-  _param:
-    linux_system_codename: xenial
-    reclass_data_revision: master
-  linux:
-    system:
-      name: ${saltMasterName}
-      domain: ${clusterDomain}
-    """
-            sh "mkdir -p ${generatedModel}/nodes/"
-            writeFile(file: nodeFile, text: nodeString)
-        }
-    }
-}
-
 timeout(time: 1, unit: 'HOURS') {
-    node('jsl-image-publisher.mcp.mirantis.net') {
+    node(slaveNode) {
         def context = globalVariatorsUpdate()
         def RequesterEmail = context.get('email_address', '')
         def templateEnv = "${env.WORKSPACE}/template"
@@ -264,13 +161,9 @@ timeout(time: 1, unit: 'HOURS') {
                     if (context.get('cfg_failsafe_ssh_public_key')) {
                         writeFile file: 'failsafe-ssh-key.pub', text: context['cfg_failsafe_ssh_public_key']
                     }
-                    templateEnv
-                    if (!fileExists(new File(templateEnv, 'tox.ini').toString())) {
-                        python.setupCookiecutterVirtualenv(cutterEnv)
-                    }
+                    python.setupCookiecutterVirtualenv(cutterEnv)
                     // FIXME refactor generateModel
-                    //python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
-                    generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
+                    python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
                     git.commitGitChanges(modelEnv, "Create model ${context['cluster_name']}", "${user}@localhost", "${user}")
                 }
             }
@@ -423,7 +316,7 @@ timeout(time: 1, unit: 'HOURS') {
             throw e
         } finally {
             stage('Clean workspace directories') {
-                //sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
+                sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
             }
             // common.sendNotification(currentBuild.result,"",["slack"])
         }
