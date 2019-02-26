@@ -22,6 +22,7 @@ def checkouted = false
 envOverrides = []
 futureFormulas = []
 failedFormulas = []
+kitchenFileName = ''
 
 def setupRunner(defaultGitRef, defaultGitUrl) {
   def branches = [:]
@@ -174,18 +175,21 @@ timeout(time: 4, unit: 'HOURS') {
         }/** TODO: End of block for removal */
         } else {
           if (checkouted) {
-            if (fileExists(".kitchen.yml") || fileExists(".kitchen.openstack.yml")) {
-              if (fileExists(".kitchen.openstack.yml")) {
-                common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
-                envOverrides.add("KITCHEN_YAML=.kitchen.openstack.yml")
-                if (fileExists(".kitchen.yml")) {
-                  common.infoMsg("Ignoring the docker Kitchen test configuration file.")
-                }
-              } else {
-                common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
-              }
+            if (fileExists(".kitchen.openstack.yml")) {
+              common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
+              kitchenFileName = ".kitchen.openstack.yml"
+              envOverrides.add("KITCHEN_YAML=${kitchenFileName}")
+            } else if (fileExists(".kitchen.yml")) {
+              common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
+              kitchenFileName = ".kitchen.yml"
+            }
+            if (kitchenFileName) {
               def kitchenEnvs = []
-              ruby.ensureRubyEnv()
+              def kitchenYML = readYaml(file: "${kitchenFileName}")
+              if (kitchenYML.containsKey("driver")) {
+                rubyVersion = kitchenYML.get("mcp_ruby_version", '2.4.1')
+              }
+              ruby.ensureRubyEnv(rubyVersion)
               if (!fileExists("Gemfile")) {
                 sh("curl -s -o ./Gemfile 'https://gerrit.mcp.mirantis.com/gitweb?p=salt-formulas/salt-formulas-scripts.git;a=blob_plain;f=Gemfile;hb=refs/heads/master'")
                 ruby.installKitchen()
@@ -209,9 +213,11 @@ timeout(time: 4, unit: 'HOURS') {
                 }
                 setupRunner(defaultGitRef, defaultGitUrl)
               } else {
+                common.errorMsg("No enviroments defined in the Kitchen file: ${kitchenFileName}")
+              }
+            } else {
                 common.warningMsg(".kitchen.yml nor .kitchen.openstack.yml file not found, no kitchen tests triggered.")
               }
-            }
           }
         }
       }
