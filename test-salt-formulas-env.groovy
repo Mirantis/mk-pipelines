@@ -27,6 +27,8 @@ def openstackTest = false
 def travisLess = false      /** TODO: Remove once formulas are witched to new config */
 def cleanEnv = ''           /** TODO: Remove once formulas are witched to new config */
 def testSuite = ''
+envOverrides = []
+kitchenFileName = ''
 
 throttle(['test-formula']) {
   timeout(time: 1, unit: 'HOURS') {
@@ -114,26 +116,29 @@ throttle(['test-formula']) {
           } else {
             if (checkouted) {
               travisLess = true
-              if (fileExists(".kitchen.yml") || fileExists(".kitchen.openstack.yml")) {
-                if (fileExists(".kitchen.openstack.yml")) {
-                  common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
-                  if (fileExists(".kitchen.yml")) {
-                    common.infoMsg("Ignoring the docker Kitchen test configuration file.")
-                  }
-                  openstackTest = true
-                  withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: openstack_credentials_id,
-                  usernameVariable: 'OS_USERNAME', passwordVariable: 'OS_PASSWORD'], ]) {
-                    env.OS_USERNAME = OS_USERNAME
-                    env.OS_PASSWORD = OS_PASSWORD
-                    env.OS_AUTH_URL = OS_AUTH_URL
-                    env.OS_PROJECT_NAME = OS_PROJECT_NAME
-                    env.OS_DOMAIN_NAME = OS_DOMAIN_NAME
-                    env.OS_AZ = OS_AZ
-                  }
-                } else {
-                  common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
+              if (fileExists(".kitchen.openstack.yml")) {
+                common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
+                kitchenFileName = ".kitchen.openstack.yml"
+                envOverrides.add("KITCHEN_YAML=${kitchenFileName}")
+                withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: openstack_credentials_id,
+                usernameVariable: 'OS_USERNAME', passwordVariable: 'OS_PASSWORD'], ]) {
+                  env.OS_USERNAME = OS_USERNAME
+                  env.OS_PASSWORD = OS_PASSWORD
+                  env.OS_AUTH_URL = OS_AUTH_URL
+                  env.OS_PROJECT_NAME = OS_PROJECT_NAME
+                  env.OS_DOMAIN_NAME = OS_DOMAIN_NAME
+                  env.OS_AZ = OS_AZ
                 }
-                ruby.ensureRubyEnv()
+              } else if (fileExists(".kitchen.yml")) {
+                common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
+                kitchenFileName = ".kitchen.yml"
+              }
+              if (kitchenFileName) {
+                def kitchenYML = readYaml(file: "${kitchenFileName}")
+                if (kitchenYML.containsKey("driver")) {
+                  rubyVersion = kitchenYML.get("mcp_ruby_version", '2.4.1')
+                }
+                ruby.ensureRubyEnv(rubyVersion)
                 if (!fileExists("Gemfile")) {
                   sh("curl -s -o ./Gemfile 'https://gerrit.mcp.mirantis.com/gitweb?p=salt-formulas/salt-formulas-scripts.git;a=blob_plain;f=Gemfile;hb=refs/heads/master'")
                   ruby.installKitchen()
@@ -144,16 +149,15 @@ throttle(['test-formula']) {
                 common.infoMsg("Running part of kitchen test")
                 if (KITCHEN_ENV != null && !KITCHEN_ENV.isEmpty() && KITCHEN_ENV != "") {
                   testSuite = KITCHEN_ENV.replaceAll("_", "-").trim()
-                  if (openstackTest) { testSuite = "KITCHEN_YAML=.kitchen.openstack.yml " + testSuite }
                   sh("grep apt.mirantis.com -Ril | xargs -I{} bash -c \"echo {}; sed -i 's/apt.mirantis.com/apt.mcp.mirantis.net/g' {}\"")
                   sh("grep apt-mk.mirantis.com -Ril | xargs -I{} bash -c \"echo {}; sed -i 's/apt-mk.mirantis.com/apt.mcp.mirantis.net/g' {}\"")
                   common.infoMsg("Running kitchen test with environment:" + testSuite)
-                  ruby.runKitchenTests("", testSuite)
+                  ruby.runKitchenTests(envOverrides.join(' '), testSuite)
                 } else {
                   throw new Exception("KITCHEN_ENV parameter is empty or invalid. This may indicate wrong env settings of initial test job or .travis.yml file.")
                 }
               } else {
-                throw new Exception(".kitchen.yml file not found, no kitchen tests triggered.")
+                throw new Exception(".kitchen.yml nor .kitchen.openstack.yml file not found, no kitchen tests triggered.")
               }
             }
           }
