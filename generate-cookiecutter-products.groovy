@@ -69,7 +69,7 @@ def globalVariatorsUpdate() {
     }
     // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
     // After 2018q4 releases, need to also check 'static' repo, for example ubuntu.
-    binTest = common.checkRemoteBinary(['mcp_version': distribRevision])
+    def binTest = common.checkRemoteBinary(['mcp_version': distribRevision])
     if (!binTest.linux_system_repo_url || !binTest.linux_system_repo_ubuntu_url) {
         common.errorMsg("Binary release: ${distribRevision} not exist or not full. Fallback to 'proposed'! ")
         distribRevision = 'proposed'
@@ -93,6 +93,7 @@ timeout(time: 1, unit: 'HOURS') {
         def context = globalVariatorsUpdate()
         def RequesterEmail = context.get('email_address', '')
         def templateEnv = "${env.WORKSPACE}/template"
+        // modelEnv - this is reclass root, aka /srv/salt/reclass
         def modelEnv = "${env.WORKSPACE}/model"
         def testEnv = "${env.WORKSPACE}/test"
         def pipelineEnv = "${env.WORKSPACE}/pipelines"
@@ -119,7 +120,7 @@ timeout(time: 1, unit: 'HOURS') {
             }
             stage('Create empty reclass model') {
                 dir(path: modelEnv) {
-                    sh "rm -rfv .git; git init"
+                    sh 'rm -rfv .git; git init'
                     sshagent(credentials: [gerritCredentials]) {
                         sh "git submodule add ${context['shared_reclass_url']} 'classes/system'"
                     }
@@ -130,7 +131,7 @@ timeout(time: 1, unit: 'HOURS') {
                     extensions       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: systemEnv]],
                     userRemoteConfigs: [[url: context['shared_reclass_url'], refspec: context['shared_reclass_branch'], credentialsId: gerritCredentials],],
                 ])
-                git.commitGitChanges(modelEnv, "Added new shared reclass submodule", "${user}@localhost", "${user}")
+                git.commitGitChanges(modelEnv, 'Added new shared reclass submodule', "${user}@localhost", "${user}")
             }
 
             stage('Generate model') {
@@ -161,9 +162,20 @@ timeout(time: 1, unit: 'HOURS') {
                     if (context.get('cfg_failsafe_ssh_public_key')) {
                         writeFile file: 'failsafe-ssh-key.pub', text: context['cfg_failsafe_ssh_public_key']
                     }
-                    python.setupCookiecutterVirtualenv(cutterEnv)
-                    // FIXME refactor generateModel
-                    python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
+                    if (!fileExists(new File(templateEnv, 'tox.ini').toString())) {
+                        python.setupCookiecutterVirtualenv(cutterEnv)
+                        python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
+                    } else {
+                        // tox-based CC generated structure of reclass,from the root. Otherwise for bw compat, modelEnv
+                        // still expect only lower lvl of project, aka model/classes/cluster/XXX/. So,lets dump result into
+                        // temp dir, and then copy it over initial structure.
+                        reclassTempRootDir = sh(script: "mktemp -d -p ${env.WORKSPACE}", returnStdout: true).trim()
+                        python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, reclassTempRootDir, templateEnv, false)
+                        dir(modelEnv) {
+                            common.warningMsg('Forming reclass-root structure...')
+                            sh("cp -ra ${reclassTempRootDir}/reclass/* .")
+                        }
+                    }
                     git.commitGitChanges(modelEnv, "Create model ${context['cluster_name']}", "${user}@localhost", "${user}")
                 }
             }
@@ -185,7 +197,7 @@ timeout(time: 1, unit: 'HOURS') {
                             'distribRevision'    : distribRevision,
                             'dockerContainerName': DockerCName,
                             'testContext'        : 'salt-model-node',
-                            'dockerExtraOpts'    : [ '--memory=3g' ]
+                            'dockerExtraOpts'    : ['--memory=3g']
                         ]
                         testResult = saltModelTesting.testNode(config)
                         common.infoMsg("Test finished: SUCCESS")
