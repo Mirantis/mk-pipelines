@@ -184,7 +184,8 @@ timeout(time: 1, unit: 'HOURS') {
                             'reclassEnv'         : testEnv,
                             'distribRevision'    : distribRevision,
                             'dockerContainerName': DockerCName,
-                            'testContext'        : 'salt-model-node'
+                            'testContext'        : 'salt-model-node',
+                            'dockerExtraOpts'    : [ '--memory=3g' ]
                         ]
                         testResult = saltModelTesting.testNode(config)
                         common.infoMsg("Test finished: SUCCESS")

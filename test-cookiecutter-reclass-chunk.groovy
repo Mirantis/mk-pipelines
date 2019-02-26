@@ -33,7 +33,8 @@ timeout(time: 1, unit: 'HOURS') {
                     'reclassEnv': extraVars.testReclassEnv,
                     'distribRevision': extraVars.DISTRIB_REVISION,
                     'dockerContainerName': extraVars.DockerCName,
-                    'testContext': extraVars.modelFile
+                    'testContext': extraVars.modelFile,
+                    'dockerExtraOpts': [ '--memory=3g' ]
                 ]
                 if (extraVars.useExtraRepos) {
                     config['extraRepos'] = extraVars.extraRepos ? extraVars.extraRepos : [:]

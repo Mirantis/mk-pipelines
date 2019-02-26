@@ -73,6 +73,7 @@ throttle(['test-model']) {
               'reclassEnv': workspace,
               'distribRevision': distribRevision,
               'dockerMaxCpus': MAX_CPU_PER_JOB.toInteger(),
+              'dockerExtraOpts': [ '--memory=3g' ],
               'ignoreClassNotfound': RECLASS_IGNORE_CLASS_NOTFOUND,
               'aptRepoUrl': APT_REPOSITORY,
               'aptRepoGPG': APT_REPOSITORY_GPG,
