@@ -120,6 +120,7 @@ throttle(['test-formula']) {
                 common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
                 kitchenFileName = ".kitchen.openstack.yml"
                 envOverrides.add("KITCHEN_YAML=${kitchenFileName}")
+                rubyVersion = '2.5.0'
                 withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: openstack_credentials_id,
                 usernameVariable: 'OS_USERNAME', passwordVariable: 'OS_PASSWORD'], ]) {
                   env.OS_USERNAME = OS_USERNAME
@@ -132,12 +133,9 @@ throttle(['test-formula']) {
               } else if (fileExists(".kitchen.yml")) {
                 common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
                 kitchenFileName = ".kitchen.yml"
+                rubyVersion = '2.4.1'
               }
               if (kitchenFileName) {
-                def kitchenYML = readYaml(file: "${kitchenFileName}")
-                if (kitchenYML.containsKey("driver")) {
-                  rubyVersion = kitchenYML.get("mcp_ruby_version", '2.4.1')
-                }
                 ruby.ensureRubyEnv(rubyVersion)
                 if (!fileExists("Gemfile")) {
                   sh("curl -s -o ./Gemfile 'https://gerrit.mcp.mirantis.com/gitweb?p=salt-formulas/salt-formulas-scripts.git;a=blob_plain;f=Gemfile;hb=refs/heads/master'")
