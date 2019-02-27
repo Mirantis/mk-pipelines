@@ -331,7 +331,7 @@ timeout(time: 12, unit: 'HOURS') {
 
 
             // Set up override params
-            if (common.validInputParam('SALT_OVERRIDES')) {
+            if (common.validInputParam('SALT_OVERRIDES') && common.validInputParam('STACK_INSTALL')) {
                 stage('Set Salt overrides') {
                     salt.setSaltOverrides(venvPepper,  SALT_OVERRIDES, '/srv/salt/reclass', extra_tgt)
                 }
@@ -366,8 +366,10 @@ timeout(time: 12, unit: 'HOURS') {
               }
             }
 
-            stage('Install Orchestrated Apps'){
-                orchestrate.OrchestrateApplications(venvPepper, "I@salt:master ${extra_tgt}", "orchestration.deploy.applications")
+            if (common.validInputParam('STACK_INSTALL')) {
+                stage('Install Orchestrated Apps'){
+                    orchestrate.OrchestrateApplications(venvPepper, "I@salt:master ${extra_tgt}", "orchestration.deploy.applications")
+                }
             }
 
             // install k8s
@@ -458,7 +460,9 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             // install docker swarm
-            orchestrate.installDockerSwarm(venvPepper, extra_tgt)
+            if (common.validInputParam('STACK_INSTALL')) {
+               orchestrate.installDockerSwarm(venvPepper, extra_tgt)
+            }
 
             // install openstack
             if (common.checkContains('STACK_INSTALL', 'openstack')) {
