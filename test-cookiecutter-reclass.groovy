@@ -116,7 +116,7 @@ def StepPrepareGit(templateEnvFolder, gerrit_data) {
         common.infoMsg("StepPrepareGit: ${gerrit_data}")
         // fetch needed sources
         dir(templateEnvFolder) {
-            if (!gerrit_data['gerritRefSpec']) {
+            if (! gerrit_data['gerritRefSpec']) {
                 // Get clean HEAD
                 gerrit_data['useGerritTriggerBuildChooser'] = false
             }
@@ -133,27 +133,7 @@ def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
         for (contextFile in _contextFileList) {
             def basename = common.GetBaseName(contextFile, '.yml')
             def context = readFile(file: "${_templateEnvDir}/contexts/${contextFile}")
-            if (!fileExists(new File(_templateEnvDir, 'tox.ini').toString())) {
-                common.warningMsg('Forming NEW reclass-root structure...')
-                python.generateModel(context, basename, 'cfg01', _virtualenv, "${_templateEnvDir}/model", _templateEnvDir)
-            } else {
-                // tox-based CC generated structure of reclass,from the root. Otherwise for bw compat, modelEnv
-                // still expect only lower lvl of project, aka model/classes/cluster/XXX/. So,lets dump result into
-                // temp dir, and then copy it over initial structure.
-                def reclassTempRootDir = sh(script: "mktemp -d -p ${env.WORKSPACE}", returnStdout: true).trim()
-                python.generateModel(context, basename, 'cfg01', _virtualenv, reclassTempRootDir, _templateEnvDir)
-                dir("${_templateEnvDir}/model/${basename}/") {
-                    if (fileExists(new File(reclassTempRootDir, 'reclass').toString())) {
-                        common.warningMsg('Forming NEW reclass-root structure...')
-                        sh("cp -ra ${reclassTempRootDir}/reclass/* .")
-                    } else {
-                        // those hack needed only for period release/2019.2.0 => current patch.
-                        common.warningMsg('Forming OLD reclass-root structure...')
-                        sh("mkdir -p classes/cluster/ ; cd classes/cluster/; cp -ra ${reclassTempRootDir}/* .")
-                    }
-                }
-            }
-            ///
+            python.generateModel(context, basename, 'cfg01', _virtualenv, "${_templateEnvDir}/model", _templateEnvDir)
         }
     }
 }
