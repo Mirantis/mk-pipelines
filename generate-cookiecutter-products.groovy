@@ -227,9 +227,12 @@ timeout(time: 1, unit: 'HOURS') {
                     args.add('--gpg-key gpgkey.asc')
                 }
                 if (context.get('cfg_failsafe_ssh_public_key')) {
-                    args.add('--ssh-key failsafe-ssh-key.pub')
+                    if (outdateGeneration) {
+                        args.add('--ssh-key failsafe-ssh-key.pub')
+                    } else {
+                        args.add('--ssh-keys failsafe-ssh-key.pub')
+                    }
                 }
-
                 // load data from model
                 def smc = [:]
                 smc['SALT_MASTER_MINION_ID'] = "${context['salt_master_hostname']}.${context['cluster_domain']}"
@@ -278,7 +281,8 @@ timeout(time: 1, unit: 'HOURS') {
                 } else {
                     args += [
                         "--name ${context['salt_master_hostname']}", "--hostname ${context['salt_master_hostname']}.${context['cluster_domain']}", "--clean-up",
-                        "--ip ${context['salt_master_management_address']}", "--netmask ${context['deploy_network_netmask']}", "--gateway ${context['deploy_network_gateway']}"
+                        "--ip ${context['salt_master_management_address']}", "--netmask ${context['deploy_network_netmask']}", "--gateway ${context['deploy_network_gateway']}",
+                        "--dns-nameservers ${context['dns_server01']},${context['dns_server02']}"
                     ]
                     sh "python ./create-config-drive.py ${args.join(' ')}"
                 }
@@ -309,7 +313,8 @@ timeout(time: 1, unit: 'HOURS') {
                     } else {
                         args = [
                             "--ip ${context['aptly_server_deploy_address']}", "--netmask ${context['deploy_network_netmask']}", "--gateway ${context['deploy_network_gateway']}",
-                            "--user-data mirror_config", "--hostname ${aptlyServerHostname}.${context['cluster_domain']}", "--name ${aptlyServerHostname}", "--clean-up"
+                            "--user-data mirror_config", "--hostname ${aptlyServerHostname}.${context['cluster_domain']}", "--name ${aptlyServerHostname}", "--clean-up",
+                            "--dns-nameservers ${context['dns_server01']},${context['dns_server02']}"
                         ]
                         sh "python ./create-config-drive.py ${args.join(' ')}"
                     }
