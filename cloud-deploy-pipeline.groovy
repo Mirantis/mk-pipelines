@@ -444,6 +444,7 @@ timeout(time: 12, unit: 'HOURS') {
                     // Setup kubernetes addons for opencontrail. More info in the definition of the func.
                     orchestrate.setupKubeAddonForContrail(venvPepper, extra_tgt)
                 }
+                orchestrate.installKubernetesClient(venvPepper, extra_tgt)
                 extra_tgt = extra_tgt_bckp
             }
 
@@ -465,7 +466,7 @@ timeout(time: 12, unit: 'HOURS') {
                     writeFile(file: 'kubeconfig-kdt', text: salt.getFileContent(venvPepper, "I@kubernetes:master and *01* ${extra_tgt}", '/etc/kubernetes/admin-kube-config'))
                     archiveArtifacts(artifacts: 'kubeconfig-kdt')
                 }
-
+                orchestrate.installKubernetesClient(venvPepper, extra_tgt)
                 extra_tgt = extra_tgt_bckp
             }
 
