@@ -328,8 +328,6 @@ timeout(time: 12, unit: 'HOURS') {
 
                 // Setup virtualenv for pepper
                 python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-                // Expose number of worker threads to the env variable
-                env['SALT_MASTER_OPT_WORKER_THREADS'] = salt.getReturnValues(salt.getPillar(venvPepper, "I@salt:master", "salt:master:worker_threads", 0))
             }
 
 
