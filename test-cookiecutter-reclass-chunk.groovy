@@ -36,6 +36,9 @@ timeout(time: 1, unit: 'HOURS') {
                     'testContext': extraVars.modelFile,
                     'dockerExtraOpts': [ '--memory=3g' ]
                 ]
+                if (extraVars.DISTRIB_REVISION == 'nightly') {
+                    config['nodegenerator'] = true
+                }
                 if (extraVars.useExtraRepos) {
                     config['extraRepos'] = extraVars.extraRepos ? extraVars.extraRepos : [:]
                     config['extraRepoMergeStrategy'] = extraVars.extraRepoMergeStrategy ? extraVars.extraRepoMergeStrategy : ''
