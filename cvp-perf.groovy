@@ -27,6 +27,10 @@ node() {
     try{
         stage('Initialization') {
             sh "rm -rf ${artifacts_dir}"
+            if (!TARGET_NODE) {
+              // This pillar will return us cid01
+              TARGET_NODE = "I@gerrit:client"
+            }
             saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
             salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_artifacts_dir}")
             salt.cmdRun(saltMaster, TARGET_NODE, "mkdir -p ${remote_artifacts_dir}")
