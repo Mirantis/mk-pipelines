@@ -213,11 +213,12 @@ timeout(time: 12, unit: 'HOURS') {
                 if (gerritProject == cookiecutterTemplatesRepo) {
                     branchJobName = 'test-drivetrain'
                     branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
+                }
+                if (gerritProject in [cookiecutterTemplatesRepo, reclassSystemRepo]) {
                     branchJobName = 'oscore-test-cookiecutter-models'
                     branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
                 }
             }
-
             branches.keySet().each { key ->
                 if (branches[key] instanceof Closure) {
                     jobResultComments[key] = ['url': job_env.get('BUILD_URL'), 'status': 'WAITING']
