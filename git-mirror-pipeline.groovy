@@ -4,7 +4,11 @@ stage("Mirror") {
   timeout(time: 12, unit: 'HOURS') {
     node() {
       try{
-        def branches = BRANCHES.tokenize(',')
+        if (BRANCHES.equals("*") || BRANCHES.contains('*')) {
+          branches = git.getBranchesForGitRepo(SOURCE_URL, BRANCHES)
+        } else {
+          branches = BRANCHES.tokenize(',')
+        }
         def pollBranches = []
         for (i=0; i < branches.size(); i++) {
             pollBranches.add([name:branches[i]])
