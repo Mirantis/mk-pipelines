@@ -367,6 +367,19 @@ timeout(time: 1, unit: 'HOURS') {
                 sh(script: 'find . -mindepth 1 -delete > /dev/null || true')
             }
             // common.sendNotification(currentBuild.result,"",["slack"])
+            stage('Save artifacts to Artifactory') {
+                def artifactory = new com.mirantis.mcp.MCPArtifactory()
+                def buildProps = [ "context=${context['cluster_name']}" ]
+                if (RequesterEmail != '' && !RequesterEmail.contains('example')) {
+                    buildProps.add("emailTo=${RequesterEmail}")
+                }
+                def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory([
+                    'artifactory': 'mcp-ci',
+                    'artifactoryRepo': "drivetrain-local/${JOB_NAME}/${context['cluster_name']}-${BUILD_NUMBER}",
+                    'buildProps': buildProps,
+                ])
+                currentBuild.description += "<br/>${artifactoryLink}"
+            }
         }
     }
 }

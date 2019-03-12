@@ -1,5 +1,3 @@
-package com.mirantis.mk
-
 def common = new com.mirantis.mk.Common()
 def saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
@@ -14,8 +12,8 @@ slaveNode = env.SLAVE_NODE ?: 'docker'
 timeout(time: 1, unit: 'HOURS') {
     node(slaveNode) {
         stage("RunTest") {
+            extraVars = readYaml text: EXTRA_VARIABLES_YAML
             try {
-                extraVars = readYaml text: EXTRA_VARIABLES_YAML
                 currentBuild.description = extraVars.modelFile
                 sh(script:  'find . -mindepth 1 -delete || true', returnStatus: true)
                 sh(script: """
@@ -49,6 +47,17 @@ timeout(time: 1, unit: 'HOURS') {
                 currentBuild.result = "FAILURE"
                 currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
                 throw e
+            } finally {
+                stage('Save artifacts to Artifactory') {
+                    def artifactory = new com.mirantis.mcp.MCPArtifactory()
+                    def envGerritVars = [ "GERRIT_PROJECT=${extraVars.get('GERRIT_PROJECT', '')}", "GERRIT_CHANGE_NUMBER=${extraVars.get('GERRIT_CHANGE_NUMBER', '')}",
+                                          "GERRIT_PATCHSET_NUMBER=${extraVars.get('GERRIT_PATCHSET_NUMBER', '')}", "GERRIT_CHANGE_ID=${extraVars.get('GERRIT_CHANGE_ID', '')}",
+                                          "GERRIT_PATCHSET_REVISION=${extraVars.get('GERRIT_PATCHSET_REVISION', '')}" ]
+                    withEnv(envGerritVars) {
+                        def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory(['artifactory': 'mcp-ci', 'artifactoryRepo': "drivetrain-local/${JOB_NAME}/${BUILD_NUMBER}"])
+                        currentBuild.description += "<br/>${artifactoryLink}"
+                    }
+                }
             }
         }
     }
