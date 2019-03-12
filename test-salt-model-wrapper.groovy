@@ -213,10 +213,14 @@ timeout(time: 12, unit: 'HOURS') {
                 if (gerritProject == cookiecutterTemplatesRepo) {
                     branchJobName = 'test-drivetrain'
                     branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
-                }
-                if (gerritProject in [cookiecutterTemplatesRepo, reclassSystemRepo]) {
                     branchJobName = 'oscore-test-cookiecutter-models'
                     branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
+                }
+                if (env['GERRIT_EVENT_COMMENT_TEXT'] && new String(env['GERRIT_EVENT_COMMENT_TEXT'].decodeBase64()) =~ /\ntest_schemas.*/) {
+                    if (gerritProject == reclassSystemRepo) {
+                       branchJobName = 'oscore-test-cookiecutter-models'
+                       branches[branchJobName] = runTests(branchJobName, yamlJobParameters(buildTestParams))
+                    }
                 }
             }
             branches.keySet().each { key ->
