@@ -33,7 +33,9 @@ def triggerMirrorJob(jobName){
 def updateSaltStack(target, pkgs){
     try{
         salt.runSaltProcessStep(venvPepper, target, 'pkg.install', ["force_yes=True", "pkgs='$pkgs'"], null, true, 5)
-    }catch(Exception ex){}
+    }catch(Exception ex){
+        common.warningMsg("Failed to update $pkgs, retrying...")
+    }
 
     common.retry(10, 30){
         salt.minionsReachable(venvPepper, 'I@salt:master', '*')
