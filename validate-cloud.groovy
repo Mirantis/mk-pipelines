@@ -76,6 +76,7 @@ timeout(time: 12, unit: 'HOURS') {
                              report_dir = REPORT_DIR
                          }
                     } catch (MissingPropertyException e) {
+                         common.warningMsg(e)
                     }
                     def rally_variables = ["floating_network=${FLOATING_NETWORK}",
                                            "rally_image=${RALLY_IMAGE}",
