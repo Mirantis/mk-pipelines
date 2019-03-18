@@ -5,7 +5,6 @@
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API.
  *   SALT_MASTER_URL            Full Salt API address [http://10.10.10.1:8000].
  *   ASK_CONFIRMATION           Ask confirmation for restore
- *   CHECK_TIME_SYNC            Set to true to check time synchronization accross selected nodes.
  *   VERIFICATION_RETRIES       Number of restries to verify the restoration.
  *
 **/
@@ -19,7 +18,6 @@ def pepperEnv = "pepperEnv"
 def resultCode = 99
 
 askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
-checkTimeSync = (env.getProperty('CHECK_TIME_SYNC') ?: true).toBoolean()
 if (common.validInputParam(VERIFICATION_RETRIES) && VERIFICATION_RETRIES.isInteger()) {
     verificationRetries = VERIFICATION_RETRIES.toInteger()
 } else {
@@ -63,7 +61,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
         stage('Verify restoration result') {
             common.retry(verificationRetries, 15) {
-                exitCode = openstack.verifyGaleraStatus(pepperEnv, false, false)
+                exitCode = openstack.verifyGaleraStatus(pepperEnv, false)
                 if (exitCode >= 1) {
                     error("Verification attempt finished with an error. This may be caused by cluster not having enough time to come up or to sync. Next verification attempt in 5 seconds.")
                 } else {
