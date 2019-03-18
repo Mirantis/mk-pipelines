@@ -242,7 +242,10 @@ timeout(time: 1, unit: 'HOURS') {
                     if (outdateGeneration) {
                         args.add('--ssh-key failsafe-ssh-key.pub')
                     } else {
-                        args.add('--ssh-keys failsafe-ssh-key.pub')
+                        if (context.get('cfg_failsafe_user')) {
+                            args.add('--ssh-keys failsafe-ssh-key.pub')
+                            args.add("--cloud-user-name ${context.get('cfg_failsafe_user')}")
+                        }
                     }
                 }
                 // load data from model
