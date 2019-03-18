@@ -172,7 +172,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 if (updateClusterModel) {
                     common.infoMsg('Perform: UPDATE_CLUSTER_MODEL')
                     def dateTime = common.getDatetime()
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/ && git submodule update")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/ && git submodule foreach git fetch")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'mcp_version: .*' * | xargs --no-run-if-empty sed -i 's|mcp_version: .*|mcp_version: \"$targetMcpVersion\"|g'")
                     // Do the same, for deprecated variable-duplicate
