@@ -376,7 +376,7 @@ timeout(time: 12, unit: 'HOURS') {
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
                 extra_tgt_bckp = extra_tgt
-                extra_tgt = 'and not kdt* ' + extra_tgt_bckp
+                extra_tgt = 'and not kdt* and not cfg* ' + extra_tgt_bckp
                 stage('Install Kubernetes infra') {
                     if (STACK_TYPE == 'aws') {
                         // configure kubernetes_control_address - save loadbalancer
@@ -460,8 +460,10 @@ timeout(time: 12, unit: 'HOURS') {
 
                 stage('Install Kubernetes control for kdt') {
                     salt.enforceStateWithTest([saltId: venvPepper, target: "I@kubernetes:master ${extra_tgt}", state: 'kubernetes.master.kube-addons'])
+                    salt.enforceStateWithTest([saltId: venvPepper, target: "I@kubernetes:master ${extra_tgt}", state: 'kubernetes.pool.images'])
                     orchestrate.installKubernetesControl(venvPepper, extra_tgt)
 
+                    salt.enforceStateWithTest([saltId: venvPepper, target: "I@kubernetes:master ${extra_tgt}", state: 'nginx.server'])
                     // collect artifacts (kubeconfig)
                     writeFile(file: 'kubeconfig-kdt', text: salt.getFileContent(venvPepper, "I@kubernetes:master and *01* ${extra_tgt}", '/etc/kubernetes/admin-kube-config'))
                     archiveArtifacts(artifacts: 'kubeconfig-kdt')
