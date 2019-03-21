@@ -7,6 +7,7 @@
  *   ASK_CONFIRMATION           Ask confirmation for restore
  *   CHECK_TIME_SYNC            Set to true to check time synchronization accross selected nodes.
  *   VERIFICATION_RETRIES       Number of restries to verify the restoration.
+ *   RESTORE_TYPE               Sets restoration method
  *
 **/
 
@@ -16,6 +17,9 @@ def galera = new com.mirantis.mk.Galera()
 def python = new com.mirantis.mk.Python()
 def pepperEnv = "pepperEnv"
 def resultCode = 99
+def restoreType = env.RESTORE_TYPE
+def runRestoreDb = false
+def runBackupDb = false
 
 askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 checkTimeSync = (env.getProperty('CHECK_TIME_SYNC') ?: true).toBoolean()
@@ -24,14 +28,31 @@ if (common.validInputParam('VERIFICATION_RETRIES') && VERIFICATION_RETRIES.isInt
 } else {
     verificationRetries = 5
 }
+if (restoreType.equals("BACKUP_AND_RESTORE") || restoreType.equals("ONLY_RESTORE")) {
+    runRestoreDb = true
+}
+if (restoreType.equals("BACKUP_AND_RESTORE")) {
+    runBackupDb = true
+}
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
         stage('Setup virtualenv for Pepper') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
-        stage('Verify status')
+        stage('Verify status') {
             resultCode = galera.verifyGaleraStatus(pepperEnv, false, checkTimeSync)
+        }
+        if (runBackupDb) {
+            stage('Backup') {
+                deployBuild = build( job: "galera-database-backup-pipeline", parameters: [
+                    [$class: string_value, name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
+                    [$class: string_value, name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
+                    [$class: string_value, name: 'OVERRIDE_BACKUP_NODE', value: "none"],
+                    ]
+                )
+            }
+        }
         stage('Restore') {
             if (resultCode == 128) {
                 common.errorMsg("Unable to connect to Galera Master. Trying slaves...")
@@ -74,7 +95,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
             try {
                 if((!askConfirmation && resultCode > 0) || askConfirmation){
-                  galera.restoreGaleraDb(pepperEnv)
+                  galera.restoreGaleraCluster(pepperEnv, runRestoreDb)
                 }
             } catch (Exception e) {
                 common.errorMsg("Restoration process has failed.")
