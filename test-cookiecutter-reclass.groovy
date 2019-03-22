@@ -15,8 +15,8 @@ Modes:
 import groovy.json.JsonOutput
 
 common = new com.mirantis.mk.Common()
+mcpCommon = new com.mirantis.mcp.Common()
 gerrit = new com.mirantis.mk.Gerrit()
-git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 
 extraVarsYAML = env.EXTRA_VARIABLES_YAML.trim() ?: ''
@@ -132,7 +132,14 @@ def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
     return {
         for (contextFile in _contextFileList) {
             def basename = common.GetBaseName(contextFile, '.yml')
-            def context = readFile(file: "${_templateEnvDir}/contexts/${contextFile}")
+            def contextYaml = readYaml text: readFile(file: "${_templateEnvDir}/contexts/${contextFile}")
+            // secrets_encryption overcomplicated for expected 'fast syntax tests'
+            // So, lets disable it. It would be tested only in generate-cookiecutter-products.groovy pipeline
+            if (contextYaml['default_context'].get('secrets_encryption_enabled')) {
+                common.warningMsg('Disabling secrets_encryption_enabled for tests!')
+                contextYaml['default_context']['secrets_encryption_enabled'] = 'False'
+            }
+            context = mcpCommon.dumpYAML(contextYaml)
             if (!fileExists(new File(_templateEnvDir, 'tox.ini').toString())) {
                 common.warningMsg('Forming NEW reclass-root structure...')
                 python.generateModel(context, basename, 'cfg01', _virtualenv, "${_templateEnvDir}/model", _templateEnvDir)

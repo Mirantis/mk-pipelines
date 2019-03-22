@@ -232,7 +232,7 @@ timeout(time: 1, unit: 'HOURS') {
                 sh "git clone --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
                 sh "git clone --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
                 args = [
-                    "--user-data user_data", , "--model ${modelEnv}",
+                    "--user-data user_data", "--model ${modelEnv}",
                     "--mk-pipelines ${pipelineEnv}/mk-pipelines/", "--pipeline-library ${pipelineEnv}/pipeline-library/"
                 ]
                 if (context['secrets_encryption_enabled'] == 'True') {
