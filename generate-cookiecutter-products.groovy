@@ -163,7 +163,12 @@ timeout(time: 1, unit: 'HOURS') {
                         writeFile file: 'failsafe-ssh-key.pub', text: context['cfg_failsafe_ssh_public_key']
                     }
                     if (!fileExists(new File(templateEnv, 'tox.ini').toString())) {
-                        python.setupCookiecutterVirtualenv(cutterEnv)
+                        reqs = new File(templateEnv, 'requirements.txt').toString()
+                        if (fileExists(reqs)) {
+                            python.setupVirtualenv(cutterEnv, 'python2', [], reqs)
+                        } else {
+                            python.setupCookiecutterVirtualenv(cutterEnv)
+                        }
                         python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, modelEnv, templateEnv, false)
                     } else {
                         // tox-based CC generated structure of reclass,from the root. Otherwise for bw compat, modelEnv
@@ -291,7 +296,7 @@ timeout(time: 1, unit: 'HOURS') {
 
                 // create cfg config-drive
                 if (outdateGeneration) {
-                    args += [ "--hostname ${context['salt_master_hostname']}", "${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso" ]
+                    args += ["--hostname ${context['salt_master_hostname']}", "${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"]
                     sh "./create-config-drive ${args.join(' ')}"
                 } else {
                     args += [
@@ -372,14 +377,14 @@ timeout(time: 1, unit: 'HOURS') {
             // common.sendNotification(currentBuild.result,"",["slack"])
             stage('Save artifacts to Artifactory') {
                 def artifactory = new com.mirantis.mcp.MCPArtifactory()
-                def buildProps = [ "context=${context['cluster_name']}" ]
+                def buildProps = ["context=${context['cluster_name']}"]
                 if (RequesterEmail != '' && !RequesterEmail.contains('example')) {
                     buildProps.add("emailTo=${RequesterEmail}")
                 }
                 def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory([
-                    'artifactory': 'mcp-ci',
+                    'artifactory'    : 'mcp-ci',
                     'artifactoryRepo': "drivetrain-local/${JOB_NAME}/${context['cluster_name']}-${BUILD_NUMBER}",
-                    'buildProps': buildProps,
+                    'buildProps'     : buildProps,
                 ])
                 currentBuild.description += "<br/>${artifactoryLink}"
             }
