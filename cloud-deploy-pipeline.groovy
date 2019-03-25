@@ -433,6 +433,7 @@ timeout(time: 12, unit: 'HOURS') {
                     // Setup kubernetes addons for opencontrail. More info in the definition of the func.
                     orchestrate.setupKubeAddonForContrail(venvPepper, extra_tgt)
                 }
+                orchestrate.installKubernetesClient(venvPepper, extra_tgt)
             }
 
             // install ceph
