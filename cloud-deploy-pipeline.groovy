@@ -370,8 +370,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Install infra') {
                 if (common.checkContains('STACK_INSTALL', 'core') ||
-                    common.checkContains('STACK_INSTALL', 'openstack') ||
-                    common.checkContains('STACK_INSTALL', 'oss')) {
+                    common.checkContains('STACK_INSTALL', 'openstack')) {
                         orchestrate.installInfra(venvPepper, extra_tgt)
                 }
             }
@@ -559,12 +558,6 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            if (common.checkContains('STACK_INSTALL', 'oss')) {
-              stage('Install Oss infra') {
-                orchestrate.installOssInfra(venvPepper, extra_tgt)
-              }
-            }
-
             if (common.checkContains('STACK_INSTALL', 'cicd')) {
                 stage('Install Cicd') {
                     extra_tgt_bckp = extra_tgt
@@ -596,16 +589,6 @@ timeout(time: 12, unit: 'HOURS') {
                 stage('Install StackLight') {
                     orchestrate.installStacklight(venvPepper, extra_tgt)
                 }
-            }
-
-            if (common.checkContains('STACK_INSTALL', 'oss')) {
-              stage('Install OSS') {
-                if (!common.checkContains('STACK_INSTALL', 'stacklight')) {
-                  // In case if StackLightv2 enabled containers already started
-                  salt.enforceState(venvPepper, "I@docker:swarm:role:master and I@devops_portal:config ${extra_tgt}", 'docker.client', true)
-                }
-                orchestrate.installOss(venvPepper, extra_tgt)
-              }
             }
 
             //
@@ -649,47 +632,6 @@ timeout(time: 12, unit: 'HOURS') {
                         // Copy test results
                         test.CopyConformanceResults(venvPepper, target, artifacts_dir, conformance_output_file)
                     }
-                }
-            }
-
-            if (common.checkContains('STACK_TEST', 'openstack')) {
-                if (common.checkContains('TEST_DOCKER_INSTALL', 'true')) {
-                    test.install_docker(venvPepper, TEST_TEMPEST_TARGET)
-                }
-                stage('Run OpenStack tests') {
-                    test.runTempestTests(venvPepper, TEST_TEMPEST_IMAGE, TEST_TEMPEST_TARGET, TEST_TEMPEST_PATTERN)
-                }
-
-                stage('Copy Tempest results to config node') {
-                    test.copyTempestResults(venvPepper, TEST_TEMPEST_TARGET)
-                }
-
-                stage('Archive rally artifacts') {
-                    test.archiveRallyArtifacts(venvPepper, TEST_TEMPEST_TARGET)
-                }
-
-                if (common.validInputParam('TESTRAIL_REPORT') && TESTRAIL_REPORT.toBoolean()) {
-                    stage('Upload test results to TestRail') {
-                        def date = sh(script: 'date +%Y-%m-%d', returnStdout: true).trim()
-                        def plan = TESTRAIL_PLAN ?: "[${TESTRAIL_MILESTONE}]System-Devcloud-${date}"
-                        def group = TESTRAIL_GROUP ?: STACK_TEMPLATE
-
-                        salt.cmdRun(venvPepper, TEST_TEMPEST_TARGET, "cd /root/rally_reports && cp \$(ls -t *xml | head -n1) report.xml")
-                        test.uploadResultsTestrail("/root/rally_reports/report.xml",
-                                TESTRAIL_REPORTER_IMAGE, group, TESTRAIL_QA_CREDENTIALS,
-                                plan, TESTRAIL_MILESTONE, TESTRAIL_SUITE)
-                    }
-                }
-            }
-
-
-            if (common.checkContains('STACK_TEST', 'ceph')) {
-                stage('Run infra tests') {
-                    sleep(120)
-                    def cmd = "apt-get install -y python-pip && pip install -r /usr/share/salt-formulas/env/ceph/files/testinfra/requirements.txt && python -m pytest --junitxml=/root/report.xml /usr/share/salt-formulas/env/ceph/files/testinfra/"
-                    salt.cmdRun(venvPepper, 'I@salt:master', cmd, false)
-                    writeFile(file: 'report.xml', text: salt.getFileContent(venvPepper, 'I@salt:master', '/root/report.xml'))
-                    junit(keepLongStdio: true, testResults: 'report.xml')
                 }
             }
 
