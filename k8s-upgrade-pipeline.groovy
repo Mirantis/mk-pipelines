@@ -285,6 +285,13 @@ def rebootKubernetesNode(pepperEnv, target, times=15, delay=10) {
 
     stage("Rebooting ${target}") {
         debian.osReboot(pepperEnv, target)
+        /*
+            * Kubernetes controller manager will mark kubernetes node as NotReady
+            * only after 40 seconds of it's downtime.
+            * Let's wait for 60 sec to be sure that node will reach it's
+            * correct status.
+        */
+        sleep(60)
         common.retry(times, delay) {
             if(!isNodeReady(pepperEnv, target)) {
                 error("Node still not in Ready state...")
