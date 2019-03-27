@@ -144,7 +144,7 @@ timeout(time: 1, unit: 'HOURS') {
                 }
                 dir(uiProject) {
                     python.runVirtualenvCommand("${env.WORKSPACE}/venv",
-                            "export IMAGE=${uiImage.id}; docker-compose up -d")
+                            "export IMAGE=${uiImage.id}; docker-compose -f docker-compose-test.yml up -d")
                     common.retry(5, 20) {
                         sh 'curl -v http://127.0.0.1:3000 > /dev/null'
                     }
