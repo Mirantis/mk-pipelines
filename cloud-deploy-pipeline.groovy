@@ -342,6 +342,9 @@ timeout(time: 12, unit: 'HOURS') {
             // Install
             //
 
+            // Check if all minions are reachable and ready
+            salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': '*'])
+
             if (common.checkContains('STACK_INSTALL', 'core')) {
                 stage('Install core infrastructure') {
                     def staticMgmtNetwork = false
