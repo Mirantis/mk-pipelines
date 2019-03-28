@@ -60,6 +60,17 @@ if (common.validInputParam('MINIONS_TEST_TIMEOUT') && MINIONS_TEST_TIMEOUT.isInt
     wait = "${MINIONS_TEST_TIMEOUT}".toInteger()
 }
 
+def updateSaltPackage(pepperEnv, target, pkgs, masterUpdate = false) {
+    def salt = new com.mirantis.mk.Salt()
+    salt.cmdRun(pepperEnv, "I@salt:master", "salt -C '${target}' --async pkg.install force_yes=True pkgs='$pkgs'")
+    def minions_reachable = target
+    if (masterUpdate) {
+        // in case of update Salt Master packages - check all minions are good
+        minions_reachable = '*'
+    }
+    salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': target, 'target_reachable': minions_reachable])
+}
+
 def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
@@ -155,12 +166,10 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
         // salt master pkg
         if (targetType == 'cfg') {
             common.warningMsg('salt-master pkg upgrade, rerun the pipeline if disconnected')
-            salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ['salt-master'], null, true, 5)
-            salt.minionsReachable(pepperEnv, 'I@salt:master', '*', null, wait)
+            updateSaltPackage(pepperEnv, target, '["salt-master"]', true)
         }
         // salt minion pkg
-        salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ['salt-minion'], null, true, 5)
-        salt.minionsReachable(pepperEnv, 'I@salt:master', target, null, wait)
+        updateSaltPackage(pepperEnv, target, '["salt-minion"]')
         common.infoMsg('Performing pkg upgrades ... ')
         common.retry(3){
             out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, true, packages, commandKwargs)

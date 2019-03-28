@@ -23,8 +23,15 @@ def result
 def packages
 def command
 def commandKwargs
-def installSaltStack(target, pkgs){
-    salt.runSaltProcessStep(pepperEnv, target, 'pkg.install', ["force_yes=True", "pkgs='$pkgs'"], null, true, 30)
+
+def installSaltStack(target, pkgs, masterUpdate = false){
+    salt.cmdRun(pepperEnv, "I@salt:master", "salt -C '${target}' --async pkg.install force_yes=True pkgs='$pkgs'")
+    def minions_reachable = target
+    if (masterUpdate) {
+        // in case of update Salt Master packages - check all minions are good
+        minions_reachable = '*'
+    }
+    salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': target, 'target_reachable': minions_reachable])
 }
 
 timeout(time: 12, unit: 'HOURS') {
@@ -97,7 +104,7 @@ timeout(time: 12, unit: 'HOURS') {
                         common.infoMsg("During salt-minion upgrade on cfg node, pipeline lose connectivy to salt-master for 2 min. If pipeline ended with error rerun pipeline again.")
                         common.retry(10, 5) {
                             if(salt.minionsReachable(pepperEnv, 'I@salt:master', "I@salt:master and ${saltTargets[i]}")){
-                                installSaltStack("I@salt:master and ${saltTargets[i]}", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+                                installSaltStack("I@salt:master and ${saltTargets[i]}", '["salt-master", "salt-common", "salt-api", "salt-minion"]', true)
                             }
                             if(salt.minionsReachable(pepperEnv, 'I@salt:master', "I@salt:minion and not I@salt:master and ${saltTargets[i]}")){
                                 installSaltStack("I@salt:minion and not I@salt:master and ${saltTargets[i]}", '["salt-minion"]')
@@ -128,7 +135,7 @@ timeout(time: 12, unit: 'HOURS') {
                         common.infoMsg("During salt-minion upgrade on cfg node, pipeline lose connectivy to salt-master for 2 min. If pipeline ended with error rerun pipeline again.")
                         common.retry(10, 5) {
                             if(salt.minionsReachable(pepperEnv, 'I@salt:master', "I@salt:master and ${saltTargets[i]}")){
-                                installSaltStack("I@salt:master and ${saltTargets[i]}", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+                                installSaltStack("I@salt:master and ${saltTargets[i]}", '["salt-master", "salt-common", "salt-api", "salt-minion"]', true)
                             }
                             if(salt.minionsReachable(pepperEnv, 'I@salt:master', "I@salt:minion and not I@salt:master and ${saltTargets[i]}")){
                                 installSaltStack("I@salt:minion and not I@salt:master and ${saltTargets[i]}", '["salt-minion"]')

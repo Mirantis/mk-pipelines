@@ -33,11 +33,9 @@ def triggerMirrorJob(jobName) {
 }
 
 def updateSaltStack(target, pkgs) {
-    // wait 2 mins when salt-* packages are updated which leads to salt-* services restart
-    common.retry(2, 120) {
-        salt.runSaltProcessStep(venvPepper, target, 'pkg.install', ["force_yes=True", "pkgs='$pkgs'"], null, true, 5)
-    }
-
+    salt.cmdRun(venvPepper, "I@salt:master", "salt -C '${target}' --async pkg.install force_yes=True pkgs='$pkgs'")
+    // can't use same function from pipeline lib, as at the moment of running upgrade pipeline Jenkins
+    // still using pipeline lib from current old mcp-version
     common.retry(20, 60) {
         salt.minionsReachable(venvPepper, 'I@salt:master', '*')
         def running = salt.runSaltProcessStep(venvPepper, target, 'saltutil.running', [], null, true, 5)
