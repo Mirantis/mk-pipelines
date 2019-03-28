@@ -352,11 +352,9 @@ def buildImageURL(pepperEnv, target, mcp_repo) {
 }
 
 def executeConformance(pepperEnv, target, k8s_api, mcp_repo) {
-    stage("Running conformance tests") {
-        def image = buildImageURL(pepperEnv, target, mcp_repo)
-        print("Using image: " + image)
-        runConformance(pepperEnv, target, k8s_api, image)
-    }
+    def image = buildImageURL(pepperEnv, target, mcp_repo)
+    print("Using image: " + image)
+    runConformance(pepperEnv, target, k8s_api, image)
 }
 
 def containerDinstalled(pepperEnv, target) {
@@ -676,21 +674,23 @@ timeout(time: 12, unit: 'HOURS') {
             def daemonsetMap = buildDaemonsetMap(pepperEnv, ctl_node)
 
             if (CONFORMANCE_RUN_BEFORE.toBoolean()) {
-                def target = CTL_TARGET
-                def mcp_repo = ARTIFACTORY_URL
-                def k8s_api = TEST_K8S_API_SERVER
-                firstTarget = salt.getFirstMinion(pepperEnv, target)
-                def containerd_enabled = containerDenabled(pepperEnv, firstTarget)
-                def containerd_installed = containerDinstalled(pepperEnv, firstTarget)
-                def conformance_pod_ready = conformancePodDefExists(pepperEnv, firstTarget)
-                if (containerd_enabled && containerd_installed && conformance_pod_ready) {
-                    def config = ['master': pepperEnv,
-                                  'target': firstTarget,
-                                  'junitResults': false,
-                                  'autodetect': true]
-                    test.executeConformance(config)
-                } else {
-                    executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
+                stage("Perform conformance run before upgrade") {
+                    def target = CTL_TARGET
+                    def mcp_repo = ARTIFACTORY_URL
+                    def k8s_api = TEST_K8S_API_SERVER
+                    firstTarget = salt.getFirstMinion(pepperEnv, target)
+                    def containerd_enabled = containerDenabled(pepperEnv, firstTarget)
+                    def containerd_installed = containerDinstalled(pepperEnv, firstTarget)
+                    def conformance_pod_ready = conformancePodDefExists(pepperEnv, firstTarget)
+                    if (containerd_enabled && containerd_installed && conformance_pod_ready) {
+                        def config = ['master': pepperEnv,
+                                      'target': firstTarget,
+                                      'junitResults': false,
+                                      'autodetect': true]
+                        test.executeConformance(config)
+                    } else {
+                        executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
+                    }
                 }
             }
 
@@ -819,21 +819,23 @@ timeout(time: 12, unit: 'HOURS') {
             printVersionInfo(pepperEnv, ctl_node)
 
             if (CONFORMANCE_RUN_AFTER.toBoolean()) {
-                def target = CTL_TARGET
-                def mcp_repo = ARTIFACTORY_URL
-                def k8s_api = TEST_K8S_API_SERVER
-                firstTarget = salt.getFirstMinion(pepperEnv, target)
-                def containerd_enabled = containerDenabled(pepperEnv, firstTarget)
-                def containerd_installed = containerDinstalled(pepperEnv, firstTarget)
-                def conformance_pod_ready = conformancePodDefExists(pepperEnv, firstTarget)
-                if (containerd_enabled && containerd_installed && conformance_pod_ready) {
-                    def config = ['master': pepperEnv,
-                                  'target': firstTarget,
-                                  'junitResults': false,
-                                  'autodetect': true]
-                    test.executeConformance(config)
-                } else {
-                    executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
+                stage("Perform conformance run after upgrade") {
+                    def target = CTL_TARGET
+                    def mcp_repo = ARTIFACTORY_URL
+                    def k8s_api = TEST_K8S_API_SERVER
+                    firstTarget = salt.getFirstMinion(pepperEnv, target)
+                    def containerd_enabled = containerDenabled(pepperEnv, firstTarget)
+                    def containerd_installed = containerDinstalled(pepperEnv, firstTarget)
+                    def conformance_pod_ready = conformancePodDefExists(pepperEnv, firstTarget)
+                    if (containerd_enabled && containerd_installed && conformance_pod_ready) {
+                        def config = ['master': pepperEnv,
+                                      'target': firstTarget,
+                                      'junitResults': false,
+                                      'autodetect': true]
+                        test.executeConformance(config)
+                    } else {
+                        executeConformance(pepperEnv, firstTarget, k8s_api, mcp_repo)
+                    }
                 }
             }
         } catch (Throwable e) {
