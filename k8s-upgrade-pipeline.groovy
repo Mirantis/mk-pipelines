@@ -268,7 +268,7 @@ def isNodeReady(pepperEnv, target) {
    def nodeShortName = target.tokenize(".")[0]
    firstTarget = salt.getFirstMinion(pepperEnv, originalTarget)
 
-   status = salt.cmdRun(pepperEnv, firstTarget, "kubectl get no | grep ${nodeShortName} | awk '{print \$2}'"
+   status = salt.cmdRun(pepperEnv, firstTarget, "kubectl get no ${nodeShortName} | tail -n+2 | awk '{print \$2}'"
    )['return'][0].values()[0].replaceAll('Salt command execution success',''
    ).replaceAll(',SchedulingDisabled','').trim()
 
