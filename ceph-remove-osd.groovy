@@ -119,8 +119,14 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         // wait for healthy cluster
-        if (WAIT_FOR_HEALTHY.toBoolean()) {
-            waitForHealthy(pepperEnv)
+        // if (WAIT_FOR_HEALTHY.toBoolean()) {
+        //     waitForHealthy(pepperEnv)
+        // }
+
+        if ( osd_ids == [] )
+        {
+          currentBuild.result = 'SUCCESS'
+          return
         }
 
         // `ceph osd out <id> <id>`
