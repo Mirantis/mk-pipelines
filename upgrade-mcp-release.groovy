@@ -81,7 +81,7 @@ def validateReclassModel(ArrayList saltMinions, String suffix) {
 }
 
 def archiveReclassModelChanges(ArrayList saltMinions, String oldSuffix, String newSuffix) {
-    def diffDir = 'diff'
+    def diffDir = 'pillarsDiff'
     dir(diffDir) {
         for(String minion in saltMinions) {
             def fileName = "reclass-model-${minion}-diff.out"
@@ -302,14 +302,17 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         archiveArtifacts artifacts: nodesArtifact
                     }]
                     saltModelTesting.setupDockerAndTest(config)
-                    sh "mkdir -p ${pillarsAfterValidation} && tar -xf ${nodesArtifact} --dir ${pillarsAfterValidation}/"
+                    def pillarsValidationDiff = "${pillarsAfterValidation}/diffFromOriginal"
+                    sh "mkdir -p ${pillarsValidationDiff} && tar -xf ${nodesArtifact} --dir ${pillarsAfterValidation}/"
                     def changesFound = false
                     for(String minion in minions) {
                         try {
-                            sh (script:"diff -u -w -I '^Salt command execution success' -I '^  node: ' -I '^  uri: ' -I '^  timestamp: ' ${pillarsBeforeSuffix}/${minion} ${pillarsAfterValidation}/${minion}", returnStdout: true)
+                            sh (script:"diff -u -w -I '^Salt command execution success' -I '^  node: ' -I '^  uri: ' -I '^  timestamp: ' ${pillarsBeforeSuffix}/${minion} ${pillarsAfterValidation}/${minion} > ${pillarsValidationDiff}/${minion}", returnStdout: true)
                         } catch(Exception e) {
                             changesFound = true
-                            common.errorMsg("Found diff changes for ${minion} minion")
+                            archiveArtifacts artifacts: "${pillarsValidationDiff}/${minion}"
+                            def buildUrl = env.BUILD_URL ? env.BUILD_URL : "${env.JENKINS_URL}/job/${env.JOB_NAME}/${env.BUILD_NUMBER}"
+                            common.errorMsg("Found diff changes for ${minion} minion: ${buildUrl}/artifact/${pillarsValidationDiff}/${minion}/*view*/ ")
                         }
                     }
                     if (changesFound) {
