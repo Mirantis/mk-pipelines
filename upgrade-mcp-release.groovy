@@ -129,6 +129,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             def updatePipelines = ''
             def updateLocalRepos = ''
             def reclassSystemBranch = ''
+            def reclassSystemBranchDefault = gitTargetMcpVersion
+            if (gitTargetMcpVersion != 'proposed') {
+                reclassSystemBranchDefault = "origin/${gitTargetMcpVersion}"
+            }
             def driteTrainParamsYaml = env.getProperty('DRIVE_TRAIN_PARAMS')
             if (driteTrainParamsYaml) {
                 def driteTrainParams = readYaml text: driteTrainParamsYaml
@@ -138,7 +142,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 updateClusterModel = driteTrainParams.get('UPDATE_CLUSTER_MODEL', false).toBoolean()
                 updatePipelines = driteTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
                 updateLocalRepos = driteTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
-                reclassSystemBranch = driteTrainParams.get('RECLASS_SYSTEM_BRANCH', gitTargetMcpVersion)
+                reclassSystemBranch = driteTrainParams.get('RECLASS_SYSTEM_BRANCH', reclassSystemBranchDefault)
             } else {
                 // backward compatibility for 2018.11.0
                 saltMastURL = env.getProperty('SALT_MASTER_URL')
@@ -147,7 +151,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 updateClusterModel = env.getProperty('UPDATE_CLUSTER_MODEL').toBoolean()
                 updatePipelines = env.getProperty('UPDATE_PIPELINES').toBoolean()
                 updateLocalRepos = env.getProperty('UPDATE_LOCAL_REPOS').toBoolean()
-                reclassSystemBranch = gitTargetMcpVersion
+                reclassSystemBranch = reclassSystemBranchDefault
             }
 
             python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
