@@ -42,34 +42,28 @@ timeout(time: 12, unit: 'HOURS') {
         }
         stage('Verify status') {
             resultCode = galera.verifyGaleraStatus(pepperEnv, false, checkTimeSync)
-        }
-        if (runBackupDb) {
-            stage('Backup') {
-                deployBuild = build( job: "galera-database-backup-pipeline", parameters: [
-                    [$class: string_value, name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
-                    [$class: string_value, name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
-                    [$class: string_value, name: 'OVERRIDE_BACKUP_NODE', value: "none"],
-                    ]
-                )
-            }
-        }
-        stage('Restore') {
             if (resultCode == 128) {
                 common.errorMsg("Unable to connect to Galera Master. Trying slaves...")
                 resultCode = galera.verifyGaleraStatus(pepperEnv, true, checkTimeSync)
                 if (resultCode == 129) {
-                    common.errorMsg("Unable to obtain Galera slave minions list". "Without fixing this issue, pipeline cannot continue in verification and restoration.")
+                    common.errorMsg("Unable to obtain Galera slave minions list". "Without fixing this issue, pipeline cannot continue in verification, backup and restoration.")
                     currentBuild.result = "FAILURE"
                     return
                 } else if (resultCode == 130) {
-                    common.errorMsg("Neither master or slaves are reachable. Without fixing this issue, pipeline cannot continue in verification and restoration.")
+                    common.errorMsg("Neither master or slaves are reachable. Without fixing this issue, pipeline cannot continue in verification, backup and restoration.")
                     currentBuild.result = "FAILURE"
                     return
                 }
             }
             if (resultCode == 131) {
-                common.errorMsg("Time desynced - Click proceed when the issue is fixed or abort.")
+                common.errorMsg("Time desynced - Please fix this issue and rerun the pipeline.")
                 currentBuild.result = "FAILURE"
+                return
+            }
+            if (resultCode == 140 || resultCode == 141) {
+                common.errorMsg("Disk utilization check failed - Please fix this issue and rerun the pipeline.")
+                currentBuild.result = "FAILURE"
+                return
             }
             if (resultCode == 1) {
                 if(askConfirmation){
@@ -79,17 +73,32 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             } else if (resultCode > 1) {
                 if(askConfirmation){
-                    common.warningMsg("There's something wrong with the cluster, do you want to run a restore?")
+                    common.warningMsg("There's something wrong with the cluster, do you want to continue with backup and/or restore?")
                 } else {
-                    common.warningMsg("There's something wrong with the cluster, try to restore.")
+                    common.warningMsg("There's something wrong with the cluster, try to backup and/or restore.")
                 }
             } else {
                 if(askConfirmation){
-                  common.warningMsg("There seems to be everything alright with the cluster, do you still want to run a restore?")
+                  common.warningMsg("There seems to be everything alright with the cluster, do you still want to continue with backup and/or restore?")
                 } else {
-                  common.warningMsg("There seems to be everything alright with the cluster, do nothing")
+                  common.warningMsg("There seems to be everything alright with the cluster, no backup and no restoration will be done.")
+                  currentBuild.result = "SUCCESS"
+                  return
                 }
             }
+        }
+        if (runBackupDb) {
+            stage('Backup') {
+                common.infoMsg("Running backup job.")
+                deployBuild = build( job: "galera-database-backup-pipeline", parameters: [
+                    [$class: string_value, name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
+                    [$class: string_value, name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
+                    [$class: string_value, name: 'OVERRIDE_BACKUP_NODE', value: "none"],
+                    ]
+                )
+            }
+        }
+        stage('Restore') {
             if(askConfirmation){
               input message: "Are you sure you want to run a restore? Click to confirm"
             }
