@@ -8,6 +8,7 @@
  **/
 import static groovy.json.JsonOutput.toJson
 import static groovy.json.JsonOutput.prettyPrint
+import org.apache.commons.net.util.SubnetUtils
 
 common = new com.mirantis.mk.Common()
 common2 = new com.mirantis.mcp.Common()
@@ -294,6 +295,9 @@ timeout(time: 1, unit: 'HOURS') {
                     sh "sed -i 's,${i[0]}=.*,${i[0]}=${i[1]},' user_data"
                 }
 
+                // calculate netmask
+                def subnet = new SubnetUtils(context['deploy_network_subnet'])
+                def deployNetworkSubnet = subnet.getInfo().getNetmask()
                 // create cfg config-drive
                 if (outdateGeneration) {
                     args += ["--hostname ${context['salt_master_hostname']}", "${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"]
@@ -301,7 +305,7 @@ timeout(time: 1, unit: 'HOURS') {
                 } else {
                     args += [
                         "--name ${context['salt_master_hostname']}", "--hostname ${context['salt_master_hostname']}.${context['cluster_domain']}", "--clean-up",
-                        "--ip ${context['salt_master_management_address']}", "--netmask ${context['deploy_network_netmask']}", "--gateway ${context['deploy_network_gateway']}",
+                        "--ip ${context['salt_master_management_address']}", "--netmask ${deployNetworkSubnet}", "--gateway ${context['deploy_network_gateway']}",
                         "--dns-nameservers ${context['dns_server01']},${context['dns_server02']}"
                     ]
                     sh "python ./create-config-drive.py ${args.join(' ')}"
@@ -332,7 +336,7 @@ timeout(time: 1, unit: 'HOURS') {
                         sh "./create-config-drive --user-data mirror_config --hostname ${aptlyServerHostname} ${aptlyServerHostname}.${context['cluster_domain']}-config.iso"
                     } else {
                         args = [
-                            "--ip ${context['aptly_server_deploy_address']}", "--netmask ${context['deploy_network_netmask']}", "--gateway ${context['deploy_network_gateway']}",
+                            "--ip ${context['aptly_server_deploy_address']}", "--netmask ${deployNetworkSubnet}", "--gateway ${context['deploy_network_gateway']}",
                             "--user-data mirror_config", "--hostname ${aptlyServerHostname}.${context['cluster_domain']}", "--name ${aptlyServerHostname}", "--clean-up",
                             "--dns-nameservers ${context['dns_server01']},${context['dns_server02']}"
                         ]
