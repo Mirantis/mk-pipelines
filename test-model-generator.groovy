@@ -168,6 +168,10 @@ timeout(time: 1, unit: 'HOURS') {
             currentBuild.result = "FAILURE"
             throw e
         } finally {
+            sh (script: """map=\$(docker ps --format '{{.Names}}:{{.ID}}' --filter name=operations);\
+            for cont in \$map ; do NAME="\${cont%%:*}";ID="\${cont##*:}"; docker logs \$ID > \$NAME.log 2>&1  ;  done""")
+            archiveArtifacts "*.log"
+
             if (fileExists(testReportHTMLFile)) {
                 archiveArtifacts artifacts: testReportHTMLFile
             }
@@ -192,7 +196,7 @@ timeout(time: 1, unit: 'HOURS') {
                 }
                 // Remove everything what is owned by root
                 testImage.inside(testImageOptions) {
-                    sh("rm -rf /var/lib/qa_reports/* ${env.WORKSPACE}/${apiProject} ${env.WORKSPACE}/${uiProject}")
+                    sh("rm -rf /var/lib/qa_reports/* ${env.WORKSPACE}/${apiProject} ${env.WORKSPACE}/${uiProject} ${env.WORKSPACE}/*.log")
                 }
             }
         }
