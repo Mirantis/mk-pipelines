@@ -199,6 +199,12 @@ timeout(time: 12, unit: 'HOURS') {
                             common.infoMsg("Property STACK_RECLASS_BRANCH or STACK_RECLASS_ADDRESS not found! Using default values from template.")
                         }
 
+                        // put reclass-system repo to branch/tag/ref. If empty will be used reclass pinned commit in AIO model.
+                        if (common.validInputParam('RECLASS_SYSTEM_BRANCH')) {
+                            common.infoMsg("Setting reclass-system repo to ${RECLASS_SYSTEM_BRANCH} branch/tag/ref")
+                            envParams.put('cfg_reclass_system_branch', RECLASS_SYSTEM_BRANCH)
+                        }
+
                         // put formulas revision - stable, testing or nightly
                         if (common.validInputParam('FORMULA_PKG_REVISION')) {
                             common.infoMsg("Setting formulas revision to ${FORMULA_PKG_REVISION}")
