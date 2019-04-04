@@ -64,15 +64,12 @@ timeout(time: 12, unit: 'HOURS') {
 
         stage ("verify client versions")
         {
-          def nodes = salt.getMinions("pepperEnv", "I@ceph:common and not E@mon*")
-          for ( node in nodes )
+          def admin  = salt.getMinions("pepperEnv", "I@ceph:mon and I@ceph:common:keyring:admin")[0]
+          def versions = salt.cmdRun("pepperEnv", admin, "ceph features", checkResponse=true, batch=null, output=false).values()[0]
+
+          if ( versions[0][admin].contains('jewel') )
           {
-            def versions = salt.cmdRun("pepperEnv", node, "ceph features --format json", checkResponse=true, batch=null, output=false).values()[0]
-            versions = new groovy.json.JsonSlurperClassic().parseText(versions[0][node])
-            if ( versions['client']['group']['release'] != 'luminous' )
-            {
-              throw new Exception("client installed on " + node + " is not luminous. Update all clients to luminous before using this pipeline")
-            }
+            throw new Exception("Update all clients to luminous before using this pipeline")
           }
         }
 
@@ -101,19 +98,26 @@ timeout(time: 12, unit: 'HOURS') {
 
         stage ("update mappings")
         {
-          def pgmap1 = getpgmap(pepperEnv)
-          if ( pgmap1 == '' )
+          def pgmap = getpgmap(pepperEnv)
+          if ( pgmap == '' )
           {
             return 1
           }
           else
           {
-            def pgmap = new groovy.json.JsonSlurperClassic().parseText(pgmap1)
+            pgmap = new groovy.json.JsonSlurperClassic().parseText(pgmap)
             for(int x=1; x<=3; x++){
-              pgmap1 = getpgmap(pepperEnv)
-              generatemapping(pepperEnv,pgmap,mapping)
-              mapping.each(this.&runCephCommand)
-              sleep(30)
+              pgmap = getpgmap(pepperEnv)
+              if ( pgmap == '' )
+              {
+                return 1
+              }
+              else
+              {
+                pgmap = new groovy.json.JsonSlurperClassic().parseText(pgmap)
+                generatemapping(pepperEnv,pgmap,mapping)
+                mapping.each(this.&runCephCommand)
+              }
             }
           }
 
