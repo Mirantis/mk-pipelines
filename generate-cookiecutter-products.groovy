@@ -308,7 +308,7 @@ timeout(time: 1, unit: 'HOURS') {
                         "--ip ${context['salt_master_management_address']}", "--netmask ${deployNetworkSubnet}", "--gateway ${context['deploy_network_gateway']}",
                         "--dns-nameservers ${context['dns_server01']},${context['dns_server02']}"
                     ]
-                    sh "python ./create-config-drive.py ${args.join(' ')}"
+                    sh "chmod 0755 create-config-drive.py ; ./create-config-drive.py ${args.join(' ')}"
                 }
                 sh("mkdir output-${context['cluster_name']} && mv ${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso output-${context['cluster_name']}/")
 
