@@ -296,8 +296,15 @@ timeout(time: 1, unit: 'HOURS') {
                 }
 
                 // calculate netmask
-                def subnet = new SubnetUtils(context['deploy_network_subnet'])
-                def deployNetworkSubnet = subnet.getInfo().getNetmask()
+                def deployNetworkSubnet = ''
+                if (context.get('deploy_network_subnet')) {
+                    def subnet = new SubnetUtils(context['deploy_network_subnet'])
+                    deployNetworkSubnet = subnet.getInfo().getNetmask()
+                } else if (context.get('deploy_network_netmask')) { // case for 2018.4.0
+                    deployNetworkSubnet = context['deploy_network_netmask']
+                } else {
+                    error('Neither context parameter deploy_network_subnet or deploy_network_netmask should be set!')
+                }
                 // create cfg config-drive
                 if (outdateGeneration) {
                     args += ["--hostname ${context['salt_master_hostname']}", "${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"]
