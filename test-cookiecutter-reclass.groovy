@@ -97,7 +97,7 @@ def testModel(modelFile, reclassArtifactName, artifactCopyPath, useExtraRepos = 
                                     'buildId'  : "${chunkJob.number}"])
 }
 
-def StepTestModel(basename, reclassArtifactName, artifactCopyPath, useExtraRepos = false) {
+def StepTestModel(_basename, _reclassArtifactName, _artifactCopyPath, _useExtraRepos = false) {
     // We need to wrap what we return in a Groovy closure, or else it's invoked
     // when this method is called, not when we pass it to parallel.
     // To do this, you need to wrap the code below in { }, and either return
@@ -105,7 +105,7 @@ def StepTestModel(basename, reclassArtifactName, artifactCopyPath, useExtraRepos
     // return node object
     return {
         node(slaveNode) {
-            testModel(basename, reclassArtifactName, artifactCopyPath, useExtraRepos)
+            testModel(_basename, _reclassArtifactName, _artifactCopyPath, _useExtraRepos)
         }
     }
 }
@@ -130,6 +130,12 @@ def StepPrepareGit(templateEnvFolder, gerrit_data) {
 
 def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
     return {
+        if (fileExists(new File(_templateEnvDir, 'tox.ini').toString())) {
+            // Merge contexts for nice base.yml based diff
+            dir(_templateEnvDir) {
+                sh('tox -ve merge_contexts')
+            }
+        }
         for (contextFile in _contextFileList) {
             def basename = common.GetBaseName(contextFile, '.yml')
             def contextYaml = readYaml text: readFile(file: "${_templateEnvDir}/contexts/${contextFile}")
@@ -139,7 +145,8 @@ def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
                 common.warningMsg('Disabling secrets_encryption_enabled for tests!')
                 contextYaml['default_context']['secrets_encryption_enabled'] = 'False'
             }
-            context = mcpCommon.dumpYAML(contextYaml)
+
+            def context = mcpCommon.dumpYAML(contextYaml)
             if (!fileExists(new File(_templateEnvDir, 'tox.ini').toString())) {
                 common.warningMsg('Forming NEW reclass-root structure...')
                 python.generateModel(context, basename, 'cfg01', _virtualenv, "${_templateEnvDir}/model", _templateEnvDir)
@@ -149,10 +156,6 @@ def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
                 // temp dir, and then copy it over initial structure.
                 def reclassTempRootDir = sh(script: "mktemp -d -p ${env.WORKSPACE}", returnStdout: true).trim()
                 python.generateModel(context, basename, 'cfg01', _virtualenv, reclassTempRootDir, _templateEnvDir)
-                // Merge contexts for nice base.yml based diff
-                dir(_templateEnvDir) {
-                    sh('tox -ve merge_contexts')
-                }
                 dir("${_templateEnvDir}/model/${basename}/") {
                     if (fileExists(new File(reclassTempRootDir, 'reclass').toString())) {
                         common.warningMsg('Forming NEW reclass-root structure...')
@@ -261,8 +264,8 @@ def linkReclassModels(contextList, envPath, archiveName) {
     // copy reclass system under envPath with -R and trailing / to support symlinks direct copy
     sh("cp -R ${archiveBaseName}/ ${envPath}/${classesSystemDir}")
     dir(envPath) {
-        for (String context : contextList) {
-            def basename = common.GetBaseName(context, '.yml')
+        for (String _context : contextList) {
+            def basename = common.GetBaseName(_context, '.yml')
             dir("${envPath}/model/${basename}/classes") {
                 sh(script: "ln -sfv ../../../${classesSystemDir} system ")
             }
