@@ -149,6 +149,10 @@ def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
                 // temp dir, and then copy it over initial structure.
                 def reclassTempRootDir = sh(script: "mktemp -d -p ${env.WORKSPACE}", returnStdout: true).trim()
                 python.generateModel(context, basename, 'cfg01', _virtualenv, reclassTempRootDir, _templateEnvDir)
+                // Merge contexts for nice base.yml based diff
+                dir(_templateEnvDir) {
+                    sh('tox -ve merge_contexts')
+                }
                 dir("${_templateEnvDir}/model/${basename}/") {
                     if (fileExists(new File(reclassTempRootDir, 'reclass').toString())) {
                         common.warningMsg('Forming NEW reclass-root structure...')
