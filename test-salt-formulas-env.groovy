@@ -37,6 +37,7 @@ throttle(['test-formula']) {
         stage("checkout") {
           if (defaultGitRef && defaultGitUrl) {
             checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
+            env.GERRIT_BRANCH = GERRIT_BRANCH
           } else {
             throw new Exception("Cannot checkout gerrit patchset, DEFAULT_GIT_REF is null")
           }
