@@ -59,7 +59,7 @@ def triggerTestFormulaJob(testEnv, defaultGitRef, defaultGitUrl) {
     [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: defaultGitRef],
     [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
     [$class: 'StringParameterValue', name: 'SALT_OPTS', value: SALT_OPTS],
-    [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION]
+    [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION],
     [$class: 'StringParameterValue', name: 'GERRIT_BRANCH', value: GERRIT_BRANCH]
   ]
 }
