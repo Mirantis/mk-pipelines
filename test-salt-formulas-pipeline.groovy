@@ -9,14 +9,19 @@
 common = new com.mirantis.mk.Common()
 def gerrit = new com.mirantis.mk.Gerrit()
 def ruby = new com.mirantis.mk.Ruby()
+def dockerLib = new com.mirantis.mk.Docker()
 
 def gerritRef = env.GERRIT_REFSPEC ?: null
 def defaultGitRef = env.DEFAULT_GIT_REF ?: null
 def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
 def slaveNode = env.SLAVE_NODE ?: 'virtual'
 def saltVersion = env.SALT_VERSION ?: ""
-gerritBranch = env.GERRIT_BRANCH
-def dockerLib = new com.mirantis.mk.Docker()
+
+gerritBranch = 'master'
+if (common.validInputParam('GERRIT_BRANCH')) {
+  gerritBranch = env.GERRIT_BRANCH
+}
+
 
 def checkouted = false
 
