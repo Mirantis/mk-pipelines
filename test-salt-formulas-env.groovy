@@ -23,7 +23,7 @@ if (env.OPENSTACK_API_CREDENTIALS) {
 }
 
 env.GERRIT_BRANCH = 'master'
-if (env.GERRIT_PARENT_BRANCH) {
+if (common.validInputParam('GERRIT_PARENT_BRANCH')) {
   env.GERRIT_BRANCH = GERRIT_PARENT_BRANCH
 }
 
