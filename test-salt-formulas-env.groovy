@@ -22,6 +22,11 @@ if (env.OPENSTACK_API_CREDENTIALS) {
   openstack_credentials_id = OPENSTACK_API_CREDENTIALS
 }
 
+env.GERRIT_BRANCH = 'master'
+if (env.GERRIT_PARENT_BRANCH) {
+  env.GERRIT_BRANCH = GERRIT_PARENT_BRANCH
+}
+
 def checkouted = false
 def openstackTest = false
 def travisLess = false      /** TODO: Remove once formulas are witched to new config */
@@ -37,7 +42,6 @@ throttle(['test-formula']) {
         stage("checkout") {
           if (defaultGitRef && defaultGitUrl) {
             checkouted = gerrit.gerritPatchsetCheckout(defaultGitUrl, defaultGitRef, "HEAD", CREDENTIALS_ID)
-//            env.GERRIT_BRANCH = GERRIT_BRANCH
           } else {
             throw new Exception("Cannot checkout gerrit patchset, DEFAULT_GIT_REF is null")
           }

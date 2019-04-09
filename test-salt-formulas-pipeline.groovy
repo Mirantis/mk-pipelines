@@ -15,6 +15,7 @@ def defaultGitRef = env.DEFAULT_GIT_REF ?: null
 def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
 def slaveNode = env.SLAVE_NODE ?: 'virtual'
 def saltVersion = env.SALT_VERSION ?: ""
+gerritBranch = env.GERRIT_BRANCH
 def dockerLib = new com.mirantis.mk.Docker()
 
 def checkouted = false
@@ -60,7 +61,7 @@ def triggerTestFormulaJob(testEnv, defaultGitRef, defaultGitUrl) {
     [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: defaultGitUrl],
     [$class: 'StringParameterValue', name: 'SALT_OPTS', value: SALT_OPTS],
     [$class: 'StringParameterValue', name: 'SALT_VERSION', value: SALT_VERSION],
-    [$class: 'StringParameterValue', name: 'GERRIT_BRANCH', value: GERRIT_BRANCH]
+    [$class: 'StringParameterValue', name: 'GERRIT_PARENT_BRANCH', value: gerritBranch]
   ]
 }
 
