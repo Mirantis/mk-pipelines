@@ -20,7 +20,9 @@ def saltVersion = env.SALT_VERSION ?: ""
 gerritBranch = 'master'
 if (common.validInputParam('GERRIT_BRANCH')) {
   gerritBranch = env.GERRIT_BRANCH
-}
+} else if (common.validInputParam('GATING_GERRIT_BRANCH')) {
+    gerritBranch = env.GATING_GERRIT_BRANCH
+  }
 
 
 def checkouted = false
