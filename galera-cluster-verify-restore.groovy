@@ -91,9 +91,9 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Backup') {
                 common.infoMsg("Running backup job.")
                 deployBuild = build( job: "galera-database-backup-pipeline", parameters: [
-                    [$class: string_value, name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
-                    [$class: string_value, name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
-                    [$class: string_value, name: 'OVERRIDE_BACKUP_NODE', value: "none"],
+                    [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
+                    [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
+                    [$class: 'StringParameterValue', name: 'OVERRIDE_BACKUP_NODE', value: "none"],
                     ]
                 )
             }
