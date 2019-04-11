@@ -206,6 +206,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add kubernetes-extra repo
                     if (salt.testTarget(venvPepper, "I@kubernetes:master")) {
+                        // docker-engine conflicts with the recent containerd versions, so it's removed during upgrade. Thus update source engine
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r -l 'engine: docker_hybrid' kubernetes | xargs --no-run-if-empty sed -i 's/engine: docker_hybrid/engine: archive/g'")
                         common.infoMsg("Add kubernetes-extra repo")
                         salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                             "grep -q system.linux.system.repo.mcp.apt_mirantis.update.kubernetes_extra kubernetes/common.yml || sed -i '/classes:/ a - system.linux.system.repo.mcp.apt_mirantis.update.kubernetes_extra' kubernetes/common.yml")
