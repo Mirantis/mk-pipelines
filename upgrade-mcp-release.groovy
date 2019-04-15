@@ -88,9 +88,9 @@ def archiveReclassModelChanges(ArrayList saltMinions, String oldSuffix, String n
             sh "diff -u ${workspace}/${oldSuffix}/${minion} ${workspace}/${newSuffix}/${minion} > ${fileName} || true"
         }
     }
-    archiveArtifacts artifacts: "${workspace}/${oldSuffix}"
-    archiveArtifacts artifacts: "${workspace}/${newSuffix}"
-    archiveArtifacts artifacts: "${workspace}/${diffDir}"
+    archiveArtifacts artifacts: "${oldSuffix}/*"
+    archiveArtifacts artifacts: "${newSuffix}/*"
+    archiveArtifacts artifacts: "${diffDir}/*"
 }
 
 if (common.validInputParam('PIPELINE_TIMEOUT')) {
