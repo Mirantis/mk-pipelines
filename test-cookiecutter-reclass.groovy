@@ -209,6 +209,12 @@ def globalVariatorsUpdate() {
     gerritDataRSHEAD << gerritDataRS
     gerritDataRSHEAD['gerritRefSpec'] = null
     gerritDataRSHEAD['GERRIT_CHANGE_NUMBER'] = null
+    // check for test XXX vs RELEASE branch, to get correct formulas
+    if (gerritDataCC['gerritBranch'].contains('release/')) {
+        testDistribRevision = gerritDataCC['gerritBranch']
+    } else if (gerritDataRS['gerritBranch'].contains('release')) {
+        testDistribRevision = gerritDataRS['gerritBranch']
+    }
     // 'binary' branch logic w\o 'release/' prefix
     if (testDistribRevision.contains('/')) {
         testDistribRevision = testDistribRevision.split('/')[-1]
@@ -219,8 +225,8 @@ def globalVariatorsUpdate() {
     if (!binTest.linux_system_repo_url || !binTest.linux_system_repo_ubuntu_url) {
         common.errorMsg("Binary release: ${testDistribRevision} not exist or not full. Fallback to 'proposed'! ")
         testDistribRevision = 'proposed'
-        messages.add("DISTRIB_REVISION => ${testDistribRevision}")
     }
+    messages.add("DISTRIB_REVISION => ${testDistribRevision}")
     def message = messages.join(newline) + newline
     currentBuild.description = currentBuild.description ? message + currentBuild.description : message
 }
@@ -390,7 +396,7 @@ timeout(time: 1, unit: 'HOURS') {
                 result = '\n' + common.comparePillars(compareRoot, env.BUILD_URL, "-Ev \'infra/secrets.yml|\\.git\'")
                 currentBuild.description = currentBuild.description ? currentBuild.description + result : result
             }
-            stage("TestContexts Head/Patched") {
+            stage('TestContexts Head/Patched') {
                 def stepsForParallel = [:]
                 stepsForParallel.failFast = true
                 common.infoMsg("Found: ${contextFileListHead.size()} HEAD contexts to test.")
@@ -406,7 +412,7 @@ timeout(time: 1, unit: 'HOURS') {
                 parallel stepsForParallel
                 common.infoMsg('All TestContexts tests done')
             }
-            stage("Compare NodesInfo Head/Patched") {
+            stage('Compare NodesInfo Head/Patched') {
                 // Download all artifacts
                 def stepsForParallel = [:]
                 stepsForParallel.failFast = true
@@ -480,3 +486,4 @@ timeout(time: 1, unit: 'HOURS') {
         }
     }
 }
+

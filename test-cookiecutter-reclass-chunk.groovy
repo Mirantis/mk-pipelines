@@ -15,7 +15,7 @@ timeout(time: 1, unit: 'HOURS') {
             extraVars = readYaml text: EXTRA_VARIABLES_YAML
             try {
                 currentBuild.description = extraVars.modelFile
-                sh(script:  'find . -mindepth 1 -delete || true', returnStatus: true)
+                sh(script: 'find . -mindepth 1 -delete || true', returnStatus: true)
                 sh(script: """
                     wget --progress=dot:mega --auth-no-challenge -O models.tar.gz ${extraVars.MODELS_TARGZ}
                     tar -xzf models.tar.gz
@@ -25,14 +25,14 @@ timeout(time: 1, unit: 'HOURS') {
                 def content = readFile(file: extraVars.modelFile)
                 def templateContext = readYaml text: content
                 def config = [
-                    'dockerHostname': "cfg01",
-                    'domain': "${templateContext.default_context.cluster_domain}",
-                    'clusterName': templateContext.default_context.cluster_name,
-                    'reclassEnv': extraVars.testReclassEnv,
-                    'distribRevision': extraVars.DISTRIB_REVISION,
+                    'dockerHostname'     : "cfg01",
+                    'domain'             : "${templateContext.default_context.cluster_domain}",
+                    'clusterName'        : templateContext.default_context.cluster_name,
+                    'reclassEnv'         : extraVars.testReclassEnv,
+                    'distribRevision'    : extraVars.DISTRIB_REVISION,
                     'dockerContainerName': extraVars.DockerCName,
-                    'testContext': extraVars.modelFile,
-                    'dockerExtraOpts': [ '--memory=3g' ]
+                    'testContext'        : extraVars.modelFile,
+                    'dockerExtraOpts'    : ['--memory=3g']
                 ]
                 if (extraVars.DISTRIB_REVISION == 'nightly') {
                     config['nodegenerator'] = true
@@ -50,9 +50,9 @@ timeout(time: 1, unit: 'HOURS') {
             } finally {
                 stage('Save artifacts to Artifactory') {
                     def artifactory = new com.mirantis.mcp.MCPArtifactory()
-                    def envGerritVars = [ "GERRIT_PROJECT=${extraVars.get('GERRIT_PROJECT', '')}", "GERRIT_CHANGE_NUMBER=${extraVars.get('GERRIT_CHANGE_NUMBER', '')}",
-                                          "GERRIT_PATCHSET_NUMBER=${extraVars.get('GERRIT_PATCHSET_NUMBER', '')}", "GERRIT_CHANGE_ID=${extraVars.get('GERRIT_CHANGE_ID', '')}",
-                                          "GERRIT_PATCHSET_REVISION=${extraVars.get('GERRIT_PATCHSET_REVISION', '')}" ]
+                    def envGerritVars = ["GERRIT_PROJECT=${extraVars.get('GERRIT_PROJECT', '')}", "GERRIT_CHANGE_NUMBER=${extraVars.get('GERRIT_CHANGE_NUMBER', '')}",
+                                         "GERRIT_PATCHSET_NUMBER=${extraVars.get('GERRIT_PATCHSET_NUMBER', '')}", "GERRIT_CHANGE_ID=${extraVars.get('GERRIT_CHANGE_ID', '')}",
+                                         "GERRIT_PATCHSET_REVISION=${extraVars.get('GERRIT_PATCHSET_REVISION', '')}"]
                     withEnv(envGerritVars) {
                         def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory(['artifactory': 'mcp-ci', 'artifactoryRepo': "drivetrain-local/${JOB_NAME}/${BUILD_NUMBER}"])
                         currentBuild.description += "<br/>${artifactoryLink}"
