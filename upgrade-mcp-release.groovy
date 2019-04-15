@@ -215,6 +215,22 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                             "grep -q system.linux.system.repo.mcp.apt_mirantis.kubernetes_extra kubernetes/common.yml || sed -i '/classes:/ a - system.linux.system.repo.mcp.apt_mirantis.kubernetes_extra' kubernetes/common.yml")
                     }
+                    // Add all update repositories
+                    def repoIncludeBase = '- system.linux.system.repo.mcp.apt_mirantis.'
+                    def updateRepoList = [ 'cassandra', 'ceph', 'contrail', 'docker', 'elastic', 'extra', 'openstack', 'percona', 'salt-formulas', 'saltstack', 'ubuntu' ]
+                    updateRepoList.each { repo ->
+                        def repoNameUpdateInclude = "${repoIncludeBase}update.${repo}"
+                        def filesWithInclude = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -Plr '\\${repoIncludeBase}${repo}\$' . || true", false).get('return')[0].values()[0].trim().tokenize('\n')
+                        filesWithInclude.each { file ->
+                            def updateRepoIncludeExist = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -P '\\${repoNameUpdateInclude}\$' ${file} || echo not_found", false, null, true).get('return')[0].values()[0].trim()
+                            if (updateRepoIncludeExist == 'not_found') {
+                                // Include needs to be added
+                                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                                        "sed -i 's/\\( *\\)${repoIncludeBase}${repo}\$/&\\n\\1${repoNameUpdateInclude}/g' ${file}")
+                                common.infoMsg("Update repo for ${repo} is added to ${file}")
+                            }
+                        }
+                    }
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
