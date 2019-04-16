@@ -158,6 +158,7 @@ timeout(time: 1, unit: 'HOURS') {
                         export TEST_PASSWORD=default
                         export TEST_MODELD_URL=127.0.0.1
                         export TEST_MODELD_PORT=3000
+                        export TEST_TIMEOUT=30
                         cd /var/lib/trymcp-tests
                         pytest -m 'not trymcp' ${component}
                     """
@@ -188,11 +189,18 @@ timeout(time: 1, unit: 'HOURS') {
                     }
                     sh "rm -rf ${env.WORKSPACE}/venv/"
                 }
-                if (apiImage && apiImage.id) {
-                    sh "docker rmi ${apiImage.id}"
-                }
-                if (uiImage && uiImage.id) {
-                    sh "docker rmi ${uiImage.id}"
+                try {
+                    // to avoid issue PROD-29393 "pipeline freezes in `docker rmi` action"
+                    timeout(time: 4, unit: 'MINUTES') {
+                        if (apiImage && apiImage.id) {
+                            sh "docker rmi ${apiImage.id}"
+                        }
+                        if (uiImage && uiImage.id) {
+                            sh "docker rmi ${uiImage.id}"
+                        }
+                    }
+                } catch (Exception e) {
+                    echo "Failed while cleaning docker images: ${e.toString()}"
                 }
                 // Remove everything what is owned by root
                 testImage.inside(testImageOptions) {
