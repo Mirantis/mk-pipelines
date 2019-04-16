@@ -467,7 +467,6 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 stage('Install Kubernetes control for kdt') {
-                    salt.enforceStateWithTest([saltId: venvPepper, target: "I@kubernetes:master ${extra_tgt}", state: 'kubernetes.master.kube-addons'])
                     salt.enforceStateWithTest([saltId: venvPepper, target: "I@kubernetes:master ${extra_tgt}", state: 'kubernetes.pool.images'])
                     orchestrate.installKubernetesControl(venvPepper, extra_tgt)
 
@@ -572,7 +571,6 @@ timeout(time: 12, unit: 'HOURS') {
                 stage('Install Cicd on kdt') {
                     extra_tgt_bckp = extra_tgt
                     extra_tgt = 'and kdt* ' + extra_tgt_bckp
-                    orchestrate.installInfra(venvPepper, extra_tgt)
                     orchestrate.installCicd(venvPepper, extra_tgt)
                     extra_tgt = extra_tgt_bckp
                 }
