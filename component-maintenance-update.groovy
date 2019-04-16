@@ -42,6 +42,8 @@ def runShCommand(saltMaster, target, cmd) {
  */
 
 def installPkgUpdate(saltMaster, target, pkgs) {
+    common.infoMsg("Updating apt cache on ${target}")
+    runShCommand(saltMaster, target, 'apt update')
     common.infoMsg("Installing ${pkgs} updates on ${target}")
     runShCommand(saltMaster, target, "apt install --only-upgrade ${pkgs.join(' ')} -y")
 }
