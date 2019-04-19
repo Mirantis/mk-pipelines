@@ -307,6 +307,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             }
             python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
             def minions = salt.getMinions(venvPepper, '*')
+            def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_name").get("return")[0].values()[0]
+            if (cluster_name == '' || cluster_name == 'null' || cluster_name == null) {
+                error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
+            }
 
             stage('Update Reclass and Salt-Formulas') {
                 common.infoMsg('Perform: Full salt sync')
@@ -317,7 +321,6 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 common.infoMsg('Perform: archiveReclassInventory before upgrade')
                 archiveReclassInventory(inventoryBeforeFilename)
 
-                def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', '_param:cluster_name').get('return')[0].values()[0]
                 try {
                     salt.cmdRun(venvPepper, 'I@salt:master', 'cd /srv/salt/reclass/ && git status && git diff-index --quiet HEAD --')
                 }
