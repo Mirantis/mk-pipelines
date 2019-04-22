@@ -369,9 +369,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
                 try {
                     common.infoMsg('Perform: UPDATE Salt Formulas')
+                    salt.fullRefresh(venvPepper, '*')
                     salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo')
                     def saltEnv = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_master_base_environment").get("return")[0].values()[0]
                     salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'state.sls_id', ["salt_master_${saltEnv}_pkg_formulas", 'salt.master.env'])
+                    salt.fullRefresh(venvPepper, '*')
                 } catch (Exception updateErr) {
                     common.warningMsg(updateErr)
                     common.warningMsg('Failed to update Salt Formulas repos/packages. Check current available documentation on https://docs.mirantis.com/mcp/latest/, how to update packages.')
