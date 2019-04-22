@@ -160,7 +160,7 @@ timeout(time: 1, unit: 'HOURS') {
                         export TEST_MODELD_PORT=3000
                         export TEST_TIMEOUT=30
                         cd /var/lib/trymcp-tests
-                        pytest -m 'not trymcp' ${component}
+                        pytest ${component}
                     """
                 }
             }
