@@ -237,6 +237,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         "sed -i 's|^  _param:|  _param:\\n    mcp_version: \"$targetMcpVersion\"|' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^- system.defaults\$' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
                         "sed -i 's|^classes:|classes:\\n- system.defaults|' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r -l 'docker_image_jenkins: .*' cicd | xargs --no-run-if-empty sed -i 's|\\s*docker_image_jenkins: .*||g'")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r -l 'docker_image_jenkins_slave: .*' cicd | xargs --no-run-if-empty sed -i 's|\\s*docker_image_jenkins_slave: .*||g'")
                     common.infoMsg("The following changes were made to the cluster model and will be commited. " +
                         "Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
