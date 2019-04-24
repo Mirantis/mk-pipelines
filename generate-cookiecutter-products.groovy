@@ -357,8 +357,8 @@ timeout(time: 1, unit: 'HOURS') {
             }
 
             stage('Save changes reclass model') {
-                sh(returnStatus: true, script: "tar -czf output-${context['cluster_name']}/${context['cluster_name']}.tar.gz --exclude='*@tmp' -C ${modelEnv} .")
-                archiveArtifacts artifacts: "output-${context['cluster_name']}/${context['cluster_name']}.tar.gz"
+                sh(returnStatus: true, script: "tar -czf ${context['cluster_name']}.tar.gz --exclude='*@tmp' -C ${modelEnv} .")
+                archiveArtifacts artifacts: "${context['cluster_name']}.tar.gz"
 
                 if (RequesterEmail != '' && !RequesterEmail.contains('example')) {
                     emailext(to: RequesterEmail,
