@@ -1,6 +1,7 @@
 def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
+def pepperEnv = "pepperEnv"
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
