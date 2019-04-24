@@ -317,10 +317,9 @@ timeout(time: 1, unit: 'HOURS') {
                     ]
                     sh "chmod 0755 create-config-drive.py ; ./create-config-drive.py ${args.join(' ')}"
                 }
-                sh("mkdir output-${context['cluster_name']} && mv ${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso output-${context['cluster_name']}/")
 
                 // save cfg iso to artifacts
-                archiveArtifacts artifacts: "output-${context['cluster_name']}/${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"
+                archiveArtifacts artifacts: "${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"
 
                 if (context['local_repositories'] == 'True') {
                     def aptlyServerHostname = context.aptly_server_hostname
@@ -349,25 +348,21 @@ timeout(time: 1, unit: 'HOURS') {
                         ]
                         sh "python ./create-config-drive.py ${args.join(' ')}"
                     }
-                    sh("mv ${aptlyServerHostname}.${context['cluster_domain']}-config.iso output-${context['cluster_name']}/")
 
                     // save apt iso to artifacts
-                    archiveArtifacts artifacts: "output-${context['cluster_name']}/${aptlyServerHostname}.${context['cluster_domain']}-config.iso"
+                    archiveArtifacts artifacts: "${aptlyServerHostname}.${context['cluster_domain']}-config.iso"
                 }
             }
 
             stage('Save changes reclass model') {
-                sh(returnStatus: true, script: "tar -czf output-${context['cluster_name']}/${context['cluster_name']}.tar.gz --exclude='*@tmp' -C ${modelEnv} .")
-                archiveArtifacts artifacts: "output-${context['cluster_name']}/${context['cluster_name']}.tar.gz"
+                sh(returnStatus: true, script: "tar -czf ${context['cluster_name']}.tar.gz --exclude='*@tmp' -C ${modelEnv} .")
+                archiveArtifacts artifacts: "${context['cluster_name']}.tar.gz"
 
                 if (RequesterEmail != '' && !RequesterEmail.contains('example')) {
                     emailext(to: RequesterEmail,
-                        attachmentsPattern: "output-${context['cluster_name']}/*",
+                        attachmentsPattern: "*.${context['cluster_domain']}-config.iso",
                         body: "Mirantis Jenkins\n\nRequested reclass model ${context['cluster_name']} has been created and attached to this email.\nEnjoy!\n\nMirantis",
                         subject: "Your Salt model ${context['cluster_name']}")
-                }
-                dir("output-${context['cluster_name']}") {
-                    deleteDir()
                 }
             }
 
