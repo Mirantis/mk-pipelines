@@ -127,9 +127,9 @@ node() {
         }
 
         stage('Run Tempest tests') {
-            // parameters: master, target, dockerImageLink, name, env_var, entrypoint, tempestConfLocalPath
-            validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, 'cvp', [], true,
-                                  '/root/test/tempest_generated.conf')
+            mounts = ['/root/test/tempest_generated.conf': '/etc/tempest/tempest.conf']
+            validate.runContainer(master: saltMaster, target: TARGET_NODE, dockerImageLink: TEST_IMAGE,
+                                  mounts: mounts)
             report_prefix += 'tempest_'
             if (env.concurrency) {
                 args += ' -w ' + env.concurrency
