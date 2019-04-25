@@ -478,6 +478,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     triggerMirrorJob('git-mirror-downstream-pipeline-library', reclassSystemBranch)
                 }
 
+                // update minions certs
+                salt.enforceState(venvPepper, "I@salt:minion", 'salt.minion.cert', true)
+
                 // Retry needed only for rare race-condition in user appearance
                 common.infoMsg('Perform: updating users and keys')
                 salt.enforceState(venvPepper, "I@linux:system", 'linux.system.user', true)
