@@ -450,6 +450,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     triggerMirrorJob("git-mirror-downstream-pipeline-library")
                 }
 
+                // update minions certs
+                salt.enforceState(venvPepper, "I@salt:minion", 'salt.minion.cert', true)
                 // updating users and keys
                 salt.enforceState(venvPepper, "I@linux:system", 'linux.system.user', true)
                 salt.enforceState(venvPepper, "I@linux:system", 'openssh', true)
