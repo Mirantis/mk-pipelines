@@ -279,8 +279,8 @@ timeout(time: 1, unit: 'HOURS') {
                 }
                 sh '[ -f mcp-common-scripts/config-drive/master_config.sh ] && cp mcp-common-scripts/config-drive/master_config.sh user_data || cp mcp-common-scripts/config-drive/master_config.yaml user_data'
 
-                sh "git clone  --depth 10 --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
-                sh "git clone  --depth 10 --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
+                sh "git clone --mirror https://github.com/Mirantis/mk-pipelines.git ${pipelineEnv}/mk-pipelines"
+                sh "git clone --mirror https://github.com/Mirantis/pipeline-library.git ${pipelineEnv}/pipeline-library"
                 args = [
                     "--user-data user_data", "--model ${modelEnv}",
                     "--mk-pipelines ${pipelineEnv}/mk-pipelines/", "--pipeline-library ${pipelineEnv}/pipeline-library/"
