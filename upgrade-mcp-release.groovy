@@ -451,6 +451,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 // update minions certs
+                // call for `salt.minion.ca` state on related nodes to make sure
+                // mine was updated with required data after salt-minion/salt-master restart salt:minion:ca
+                salt.enforceState(venvPepper, "I@salt:minion:ca", 'salt.minion.ca', true)
                 salt.enforceState(venvPepper, "I@salt:minion", 'salt.minion.cert', true)
                 // updating users and keys
                 salt.enforceState(venvPepper, "I@linux:system", 'linux.system.user', true)
