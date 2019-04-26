@@ -479,6 +479,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 // update minions certs
+                // call for `salt.minion.ca` state on related nodes to make sure
+                // mine was updated with required data after salt-minion/salt-master restart salt:minion:ca
+                salt.enforceState(venvPepper, "I@salt:minion:ca", 'salt.minion.ca', true)
                 salt.enforceState(venvPepper, "I@salt:minion", 'salt.minion.cert', true)
 
                 // Retry needed only for rare race-condition in user appearance
