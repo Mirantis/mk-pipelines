@@ -6,7 +6,6 @@
  *   CREDENTIALS_ID                     Credentials id for git
  *   TEST_MODEL                         Run syntax tests for model
  **/
-
 import static groovy.json.JsonOutput.toJson
 import static groovy.json.JsonOutput.prettyPrint
 import org.apache.commons.net.util.SubnetUtils
@@ -22,47 +21,6 @@ gerritCredentials = env.getProperty('CREDENTIALS_ID') ?: 'gerrit'
 runTestModel = (env.getProperty('TEST_MODEL') ?: true).toBoolean()
 distribRevision = 'proposed'
 gitGuessedVersion = false
-
-def GenerateModelToxDocker(Map params) {
-    def ccRoot = params['ccRoot']
-    def context = params['context']
-    def outDir = params['outDir']
-    def envOpts = params['envOpts']
-    if (fileExists(new File(ccRoot, 'tox.ini').toString())) {
-        def tempContextFile = new File(ccRoot, 'tempContext.yaml_' + UUID.randomUUID().toString()).toString()
-        writeFile file: tempContextFile, text: context
-        // Get Jenkins user UID and GID
-        def jenkinsUID = sh(script: 'id -u', returnStdout: true).trim()
-        def jenkinsGID = sh(script: 'id -g', returnStdout: true).trim()
-        /// by default, process in image operates via root user
-        /// Otherwise, gpg key for model and all files managed by jenkins user
-        /// To make it compatible, install rrequirementfrom user, but generate model via jenkins
-        def configRun = ['distribRevision': 'nightly',
-                         'envOpts'        : envOpts + ["CONFIG_FILE=$tempContextFile",
-                                                       "OUTPUT_DIR=${outDir}",
-                                                       "jenkinsUID=${jenkinsUID}",
-                                                       "jenkinsGID=${jenkinsGID}"
-                         ],
-                         'runCommands'    : [
-                             '001_prepare_generate_auto_reqs': {
-                                 sh('''
-                                        groupadd -g ${jenkinsGID} jenkins
-                                        useradd  -u ${jenkinsUID} -g ${jenkinsGID} -m jenkins
-                                        # Install required packages
-                                        apt-get install -y python3-dev python-tox
-                                        ''')
-                             },
-                             '002_run_generate_auto'         : {
-                                 print('[Cookiecutter build] Result:\n' +
-                                     sh(returnStdout: true, script: 'cd ' + ccRoot + '; su jenkins -c "tox -ve generate_auto" '))
-                             }
-                         ]
-        ]
-
-        print(saltModelTesting.setupDockerAndTest(configRun))
-    }
-
-}
 
 
 def globalVariatorsUpdate() {
@@ -125,7 +83,7 @@ def globalVariatorsUpdate() {
     }
     common.warningMsg("Fetching:\n" +
         "DISTRIB_REVISION from ${distribRevision}")
-    common.infoMsg("Using context:\n")
+    common.infoMsg("Using context:\n" + context)
     print prettyPrint(toJson(context))
     return context
 
@@ -178,10 +136,11 @@ timeout(time: 1, unit: 'HOURS') {
             }
 
             stage('Generate model') {
-                def envOpts = ["GNUPGHOME=${env.WORKSPACE}/gpghome"]
-                withEnv(envOpts) {
+                // GNUPGHOME environment variable is required for all gpg commands
+                // and for python.generateModel execution
+                withEnv(["GNUPGHOME=${env.WORKSPACE}/gpghome"]) {
                     if (context['secrets_encryption_enabled'] == 'True') {
-                        sh 'mkdir gpghome; chmod 700 gpghome'
+                        sh "mkdir gpghome; chmod 700 gpghome"
                         def secretKeyID = RequesterEmail ?: "salt@${context['cluster_domain']}".toString()
                         if (!context.get('secrets_encryption_private_key')) {
                             def batchData = """
@@ -217,10 +176,7 @@ timeout(time: 1, unit: 'HOURS') {
                         // still expect only lower lvl of project, aka model/classes/cluster/XXX/. So,lets dump result into
                         // temp dir, and then copy it over initial structure.
                         reclassTempRootDir = sh(script: "mktemp -d -p ${env.WORKSPACE}", returnStdout: true).trim()
-                        GenerateModelToxDocker(['context': common2.dumpYAML(['default_context': context]),
-                                                'ccRoot' : templateEnv,
-                                                'outDir' : reclassTempRootDir,
-                                                'envOpts': envOpts])
+                        python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, reclassTempRootDir, templateEnv, false)
                         dir(modelEnv) {
                             common.warningMsg('Forming reclass-root structure...')
                             sh("cp -ra ${reclassTempRootDir}/reclass/* .")
@@ -230,7 +186,7 @@ timeout(time: 1, unit: 'HOURS') {
                 }
             }
 
-            stage('Test') {
+            stage("Test") {
                 if (runTestModel) {
                     sh("cp -r ${modelEnv} ${testEnv}")
                     if (fileExists('gpgkey.asc')) {
