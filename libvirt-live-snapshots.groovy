@@ -11,7 +11,7 @@
  *   NODE_PROVIDER                      KVM node that hosts the VM (for ex. kvm02)
  *   TARGET                             Unique identification of the VM being snapshoted without domain name (for ex. ctl01)
  *   SNAPSHOT_NAME                      Snapshot name
- *   PATH                               Path where snapshot image and dumpxml are being put
+ *   LIBVIRT_IMAGES_PATH                Path where snapshot image and dumpxml are being put
  *   DISK_NAME                          Disk name of the snapshot
  *
 **/
@@ -31,27 +31,27 @@ timeout(time: 12, unit: 'HOURS') {
 
         if (CREATE_LIVE_SNAPSHOT.toBoolean() == true) {
             stage('Create live snapshot') {
-                virsh.liveSnapshotPresent(pepperEnv, NODE_PROVIDER, TARGET, SNAPSHOT_NAME, PATH, DISK_NAME)
+                virsh.liveSnapshotPresent(pepperEnv, NODE_PROVIDER, TARGET, SNAPSHOT_NAME, LIBVIRT_IMAGES_PATH, DISK_NAME)
             }
         }
 
         if (REMOVE_LIVE_SNAPSHOT.toBoolean() == true) {
             stage('Remove live snapshot') {
-                virsh.liveSnapshotAbsent(pepperEnv, NODE_PROVIDER, TARGET, SNAPSHOT_NAME, PATH)
+                virsh.liveSnapshotAbsent(pepperEnv, NODE_PROVIDER, TARGET, SNAPSHOT_NAME, LIBVIRT_IMAGES_PATH)
             }
         }
 
         if (ROLLBACK_LIVE_SNAPSHOT.toBoolean() == true) {
             stage('Rollback live snapshot') {
                 sleep(30)
-                virsh.liveSnapshotRollback(pepperEnv, NODE_PROVIDER, TARGET, SNAPSHOT_NAME, PATH)
+                virsh.liveSnapshotRollback(pepperEnv, NODE_PROVIDER, TARGET, SNAPSHOT_NAME, LIBVIRT_IMAGES_PATH)
             }
         }
 
         if (MERGE_LIVE_SNAPSHOT.toBoolean() == true) {
             stage('Merge live snapshot') {
                 sleep(30)
-                virsh.liveSnapshotMerge(pepperEnv, NODE_PROVIDER, TARGET, SNAPSHOT_NAME, PATH, DISK_NAME)
+                virsh.liveSnapshotMerge(pepperEnv, NODE_PROVIDER, TARGET, SNAPSHOT_NAME, LIBVIRT_IMAGES_PATH, DISK_NAME)
             }
         }
     }
