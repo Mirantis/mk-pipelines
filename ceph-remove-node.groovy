@@ -90,6 +90,10 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Remove Ceph RGW') {
                 salt.enforceState(pepperEnv, 'I@ceph:radosgw', ['keepalived', 'haproxy'], true)
             }
+
+            stage('Purge Ceph RGW pkgs') {
+                salt.runSaltProcessStep(pepperEnv, HOST, 'pkg.purge', 'ceph-common,libcephfs2,python-cephfs,radosgw,python-rados,python-rbd,python-rgw')
+            }
         }
 
         if (HOST_TYPE.toLowerCase() != 'osd') {
@@ -222,7 +226,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             // purge Ceph pkgs
             stage('Purge Ceph OSD pkgs') {
-                runCephCommand(pepperEnv, HOST, 'apt purge ceph-base ceph-common ceph-fuse ceph-mds ceph-osd python-cephfs librados2 python-rados -y')
+                salt.runSaltProcessStep(pepperEnv, HOST, 'pkg.purge', 'ceph-base,ceph-common,ceph-fuse,ceph-mds,ceph-osd,python-cephfs,librados2,python-rados,python-rbd,python-rgw')
             }
 
             stage('Remove OSD host from crushmap') {
@@ -293,6 +297,10 @@ timeout(time: 12, unit: 'HOURS') {
                 for (tgt in target_hosts) {
                     salt.enforceState(pepperEnv, tgt, 'ceph.common', true)
                 }
+            }
+
+            stage('Purge Ceph MON pkgs') {
+                salt.runSaltProcessStep(pepperEnv, HOST, 'pkg.purge', 'ceph-base,ceph-common,ceph-mgr,ceph-mon,libcephfs2,python-cephfs,python-rbd,python-rgw')
             }
         }
 
