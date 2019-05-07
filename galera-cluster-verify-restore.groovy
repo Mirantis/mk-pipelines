@@ -48,8 +48,14 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
             if (resultCode == 131) {
-                common.errorMsg("Time desynced - Click proceed when the issue is fixed or abort.")
+                common.errorMsg("Time desynced - Please fix this issue and rerun the pipeline.")
                 currentBuild.result = "FAILURE"
+                return
+            }
+            if (resultCode == 140 || resultCode == 141) {
+                common.errorMsg("Disk utilization check failed - Please fix this issue and rerun the pipeline.")
+                currentBuild.result = "FAILURE"
+                return
             }
             if (resultCode == 1) {
                 if(askConfirmation){
