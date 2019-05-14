@@ -42,6 +42,10 @@ timeout(time: 12, unit: 'HOURS') {
                   TEMPEST_TARGET_NODE = "I@gerrit:client"
                 }
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+                os_version=salt.getPillar(saltMaster, 'I@salt:master', '_param:openstack_version')['return'][0].values()[0]
+                if (!os_version) {
+                    throw new Exception("Openstack is not found on this env. Exiting")
+                }
                 salt.cmdRun(saltMaster, TEMPEST_TARGET_NODE, "rm -rf ${remote_artifacts_dir}")
                 salt.cmdRun(saltMaster, TEMPEST_TARGET_NODE, "mkdir -p ${remote_artifacts_dir}")
                 keystone_creds = validate._get_keystone_creds_v3(saltMaster)
