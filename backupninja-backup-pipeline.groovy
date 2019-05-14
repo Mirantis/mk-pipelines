@@ -35,7 +35,7 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.enforceState(['saltId': pepperEnv, 'target': 'I@backupninja:client', 'state': 'backupninja'])
         }
         stage('Backup') {
-            output = salt.getReturnValues(salt.cmdRun(pepperEnv, backupNode, "su root -c 'backupninja --now -d'")).readLines()[-2]
+            def output = salt.getReturnValues(salt.cmdRun(pepperEnv, backupNode, "su root -c 'backupninja --now -d'")).readLines()[-2]
             def outputPattern = java.util.regex.Pattern.compile("\\d+")
             def outputMatcher = outputPattern.matcher(output)
               if (outputMatcher.find()) {
@@ -49,13 +49,13 @@ timeout(time: 12, unit: 'HOURS') {
                     return
                   }
             }
-            if (result[1] == 0 || result == ""){
-                common.errorMsg("Backup failed.")
-                currentBuild.result = "FAILURE"
-                return
+            if (result[1] != null && result[1] instanceof String && result[1].isInteger() && (result[1].toInteger() < 1)){
+              common.successMsg("Backup successfully finished " + result[1] + " fatals, " + result[2] + " errors " + result[3] +" warnings.")
             }
             else {
-              common.successMsg("Backup successfully finished " + result[1] + " fatals, " + result[2] + " errors " + result[3] +" warnings")
+                common.errorMsg("Backup failed. Found " + result[1] + " fatals, " + result[2] + " errors " + result[3] +" warnings.")
+                currentBuild.result = "FAILURE"
+                return
             }
         }
     }
