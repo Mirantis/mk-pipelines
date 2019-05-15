@@ -15,13 +15,13 @@ common2 = new com.mirantis.mcp.Common()
 git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
+updateSaltFormulasDuringTest = true
 
 slaveNode = env.getProperty('SLAVE_NODE') ?: 'virtual'
 gerritCredentials = env.getProperty('CREDENTIALS_ID') ?: 'gerrit'
 runTestModel = (env.getProperty('TEST_MODEL') ?: true).toBoolean()
 distribRevision = 'proposed'
 gitGuessedVersion = false
-
 
 def globalVariatorsUpdate() {
     def templateContext = readYaml text: env.COOKIECUTTER_TEMPLATE_CONTEXT
@@ -81,8 +81,11 @@ def globalVariatorsUpdate() {
         common.warningMsg('Apply WA for PROD-25732')
         context.cookiecutter_template_url = 'ssh://gerrit.mcp.mirantis.com:29418/mk/cookiecutter-templates.git'
     }
-    common.warningMsg("Fetching:\n" +
-        "DISTRIB_REVISION from ${distribRevision}")
+    // check, if we are going to test clear release version, w\o any updates and patches
+    if (!gitGuessedVersion && (distribRevision == context.mcp_version)) {
+        updateSaltFormulasDuringTest = false
+    }
+
     common.infoMsg("Using context:\n" + context)
     print prettyPrint(toJson(context))
     return context
@@ -194,7 +197,9 @@ timeout(time: 1, unit: 'HOURS') {
                         sh("cp -v gpgkey.asc ${testEnv}/salt_master_pillar.asc")
                     }
                     def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
-                    common.infoMsg("Attempt to run test against distribRevision: ${distribRevision}")
+                    common.warningMsg("Attempt to run test against:\n" +
+                        "DISTRIB_REVISION from ${distribRevision}\n" +
+                        "updateSaltFormulasDuringTest = ${updateSaltFormulasDuringTest}")
                     try {
                         def config = [
                             'dockerHostname'     : "${context['salt_master_hostname']}",
@@ -203,7 +208,8 @@ timeout(time: 1, unit: 'HOURS') {
                             'distribRevision'    : distribRevision,
                             'dockerContainerName': DockerCName,
                             'testContext'        : 'salt-model-node',
-                            'dockerExtraOpts'    : ['--memory=3g']
+                            'dockerExtraOpts'    : ['--memory=3g'],
+                            'updateSaltFormulas' : updateSaltFormulasDuringTest
                         ]
                         testResult = saltModelTesting.testNode(config)
                         common.infoMsg("Test finished: SUCCESS")
