@@ -33,9 +33,9 @@ extraYamlContext = env.getProperty('EXTRA_PARAMS')
 if (extraYamlContext) {
     common.mergeEnv(env, extraYamlContext) }
 def SALT_MASTER_CREDENTIALS=(env.SALT_MASTER_CREDENTIALS) ?: 'salt'
-def VERBOSE = (env.VERBOSE) ?: true
+def VERBOSE = (env.VERBOSE) ? env.VERBOSE.toBoolean() : true
 def DEBUG_MODE = (env.DEBUG_MODE) ?: false
-def STOP_ON_ERROR = (env.STOP_ON_ERROR) ?: false
+def STOP_ON_ERROR = (env.STOP_ON_ERROR) ? env.STOP_ON_ERROR.toBoolean() : false
 def GENERATE_CONFIG = (env.GENERATE_CONFIG) ?: true
 def remote_artifacts_dir = (env.remote_artifacts_dir) ?: '/root/test/'
 def report_prefix = (env.report_prefix) ?: ''
@@ -89,7 +89,7 @@ node() {
             }
         }
         stage('Generate config') {
-            if ( GENERATE_CONFIG ) {
+            if ( GENERATE_CONFIG.toBoolean() ) {
                 salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.remove', ["${remote_artifacts_dir}"])
                 salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.mkdir', ["${remote_artifacts_dir}"])
                 fullnodename = salt.getMinions(saltMaster, SERVICE_NODE).get(0)
