@@ -147,11 +147,15 @@ timeout(time: 1, unit: 'HOURS') {
                         def secretKeyID = RequesterEmail ?: "salt@${context['cluster_domain']}".toString()
                         if (!context.get('secrets_encryption_private_key')) {
                             def batchData = """
+                                %echo Generating a basic OpenPGP key for Salt-Master
+                                %no-protection
                                 Key-Type: 1
                                 Key-Length: 4096
                                 Expire-Date: 0
                                 Name-Real: ${context['salt_master_hostname']}.${context['cluster_domain']}
                                 Name-Email: ${secretKeyID}
+                                %commit
+                                %echo done
                             """.stripIndent()
                             writeFile file: 'gpg-batch.txt', text: batchData
                             sh "gpg --gen-key --batch < gpg-batch.txt"
@@ -159,7 +163,7 @@ timeout(time: 1, unit: 'HOURS') {
                         } else {
                             writeFile file: 'gpgkey.asc', text: context['secrets_encryption_private_key']
                             sh "gpg --import gpgkey.asc"
-                            secretKeyID = sh(returnStdout: true, script: 'gpg --list-secret-keys --with-colons | awk -F: -e "/^sec/{print \\$5; exit}"').trim()
+                            secretKeyID = sh(returnStdout: true, script: 'gpg --list-secret-keys --with-colons | grep -E "^sec" | awk -F: \'{print \$5}\'').trim()
                         }
                         context['secrets_encryption_key_id'] = secretKeyID
                     }
