@@ -27,15 +27,14 @@ def runCephCommand(master, target, cmd) {
 def waitForHealthy(master, tgt, attempts=100, timeout=10) {
     // wait for healthy cluster
     common = new com.mirantis.mk.Common()
-    common.retry(attempts, timeout){
-        def health = runCephCommand(master, tgt, 'ceph health')['return'][0].values()[0]
+    while (count<attempts) {
+        def health = runCephCommand(master, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
         if (health.contains('HEALTH_OK') || health.contains('HEALTH_WARN noout flag(s) set\n')) {
             common.infoMsg('Cluster is healthy')
-            return 0
-        } else {
-            common.infoMsg(health)
-            throw new Exception()
+            break;
         }
+        count++
+        sleep(10)
     }
 }
 
