@@ -44,19 +44,15 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage("test") {
                 //check Code-Review
-                if (gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Code-Review", "+")) {
-                    continue
-                } else {
-                    common.errorMsg("Change don't have a CodeReview, skipping gate")
-                    throw new Exception ("Change don't have a CodeReview, skipping gate")
+                if (!gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Code-Review", "+")) {
+                    throw new Exception('Change don\'t have a CodeReview+1, reject gate')
                 }
                 //check Verify
                 if (!gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")) {
-                    common.errorMsg("Change don't have true Verify, skipping gate")
-                    throw new Exception ("Change don't have true Verify, skipping gate")
+                    throw new Exception('Change don\'t have initial Verify+1, reject gate')
                 } else if (gerritChange.status != "MERGED" && !env.SKIP_TEST.toBoolean()) {
                     //Verify-label off
-                    ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review --verified 0", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+                    ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review %s,%s --verified 0", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
                     //Do stage (test)
                     doSubmit = true
                     def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
@@ -79,7 +75,7 @@ timeout(time: 12, unit: 'HOURS') {
                         if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates' || env.GERRIT_PROJECT == 'salt-models/reclass-system') {
                             callJobWithExtraVars('test-salt-model-ci-wrapper')
                         } else {
-                           if (isJobExists(testJob)) {
+                            if (isJobExists(testJob)) {
                                 common.infoMsg("Test job ${testJob} found, running")
                                 def patchsetVerified = gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")
                                 build job: testJob, parameters: [
@@ -88,14 +84,14 @@ timeout(time: 12, unit: 'HOURS') {
                                 ]
                                 giveVerify = true
                             } else {
-                                 common.infoMsg("Test job ${testJob} not found")
+                                common.infoMsg("Test job ${testJob} not found")
+                            }
                         }
                     }
+                } else {
+                    common.infoMsg('Test job skipped')
                 }
-            } else {
-                common.infoMsg("Test job skipped")
             }
-        }
 
             stage("submit review") {
                 if (gerritChange.status == "MERGED") {
