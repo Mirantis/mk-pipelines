@@ -23,6 +23,50 @@ runTestModel = (env.getProperty('TEST_MODEL') ?: true).toBoolean()
 distribRevision = 'proposed'
 gitGuessedVersion = false
 
+def GenerateModelToxDocker(Map params) {
+    def ccRoot = params['ccRoot']
+    def context = params['context']
+    def outDir = params['outDir']
+    def envOpts = params['envOpts']
+    def tempContextFile = new File(ccRoot, 'tempContext.yaml_' + UUID.randomUUID().toString()).toString()
+    writeFile file: tempContextFile, text: context
+    // Get Jenkins user UID and GID
+    def jenkinsUID = sh(script: 'id -u', returnStdout: true).trim()
+    def jenkinsGID = sh(script: 'id -g', returnStdout: true).trim()
+    /*
+        by default, process in image operates via root user
+        Otherwise, gpg key for model and all files managed by jenkins user
+        To make it compatible, install rrequirementfrom user, but generate model via jenkins
+        for build use upstream Ubuntu Bionic image
+    */
+    def configRun = ['distribRevision': 'nightly',
+                     'envOpts'        : envOpts + ["CONFIG_FILE=$tempContextFile",
+                                                   "OUTPUT_DIR=${outDir}"
+                     ],
+                     'image': 'docker-prod-local.artifactory.mirantis.com/mirantis/cicd/jnlp-slave',
+                     'runCommands'    : [
+                         '001_prepare_generate_auto_reqs': {
+                            sh('''
+                                pip install tox
+                                ''')
+                         },
+                         // user & group can be different on host and in docker
+                         '002_set_jenkins_id': {
+                            sh("""
+                                usermod -u ${jenkinsUID} jenkins
+                                groupmod -g ${jenkinsUID} jenkins
+                                """)
+                         },
+                         '003_run_generate_auto': {
+                             print('[Cookiecutter build] Result:\n' +
+                                 sh(returnStdout: true, script: 'cd ' + ccRoot + '; su jenkins -c "tox -ve generate_auto" '))
+                         }
+                     ]
+    ]
+
+    saltModelTesting.setupDockerAndTest(configRun)
+}
+
 def globalVariatorsUpdate() {
     def templateContext = readYaml text: env.COOKIECUTTER_TEMPLATE_CONTEXT
     def context = templateContext['default_context']
@@ -141,7 +185,8 @@ timeout(time: 1, unit: 'HOURS') {
             stage('Generate model') {
                 // GNUPGHOME environment variable is required for all gpg commands
                 // and for python.generateModel execution
-                withEnv(["GNUPGHOME=${env.WORKSPACE}/gpghome"]) {
+                def envOpts = ["GNUPGHOME=${env.WORKSPACE}/gpghome"]
+                withEnv(envOpts) {
                     if (context['secrets_encryption_enabled'] == 'True') {
                         sh "mkdir gpghome; chmod 700 gpghome"
                         def secretKeyID = RequesterEmail ?: "salt@${context['cluster_domain']}".toString()
@@ -183,7 +228,10 @@ timeout(time: 1, unit: 'HOURS') {
                         // still expect only lower lvl of project, aka model/classes/cluster/XXX/. So,lets dump result into
                         // temp dir, and then copy it over initial structure.
                         reclassTempRootDir = sh(script: "mktemp -d -p ${env.WORKSPACE}", returnStdout: true).trim()
-                        python.generateModel(common2.dumpYAML(['default_context': context]), 'default_context', context['salt_master_hostname'], cutterEnv, reclassTempRootDir, templateEnv, false)
+                        GenerateModelToxDocker(['context': common2.dumpYAML(['default_context': context]),
+                                                'ccRoot' : templateEnv,
+                                                'outDir' : reclassTempRootDir,
+                                                'envOpts': envOpts])
                         dir(modelEnv) {
                             common.warningMsg('Forming reclass-root structure...')
                             sh("cp -ra ${reclassTempRootDir}/reclass/* .")
