@@ -43,7 +43,6 @@ timeout(time: 12, unit: 'HOURS') {
             def skipProjectsVerify = ['mk/docker-jnlp-slave']
 
             stage("test") {
-                ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review %s,%s --message \'Build Started %s %s\'", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER, BUILD_URL, STARTED_STATS))
                 //check Code-Review
                 if (!gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Code-Review", "+")) {
                     throw new Exception('Change don\'t have a CodeReview+1, reject gate')
