@@ -129,10 +129,12 @@ def upgrade(master, target) {
 
             stage("Verify services for ${minion}") {
                 sleep(10)
-                runCephCommand(master, ADMIN_HOST, "ceph -s")
+                runCephCommand(master, "${minion}", "systemctl status ceph-${target}.target")
+                waitForHealthy(master)
             }
 
             stage('Ask for manual confirmation') {
+                runCephCommand(master, ADMIN_HOST, "ceph -s")
                 input message: "From the verification command above, please check Ceph ${target} joined the cluster correctly. If so, Do you want to continue to upgrade next node?"
             }
         }
