@@ -60,15 +60,8 @@ node() {
                 SERVICE_NODE = runtest_node.keySet()[0]
             }
             else {
-                common.infoMsg("Service node is not defined in reclass")
-                SERVICE_NODE = (env.SERVICE_NODE) ?: 'I@salt:master'
-                common.infoMsg("${SERVICE_NODE} will be used as Service node")
-                def classes_to_add = ["cluster.${cluster_name}.infra.runtest"]
-                fullnodename = salt.getMinions(saltMaster, SERVICE_NODE).get(0)
-                common.infoMsg("Full service node name ${fullnodename}")
-                result = salt.runSaltCommand(saltMaster, 'local', ['expression': SERVICE_NODE, 'type': 'compound'], 'reclass.node_update',
-                                             null, null, ['name': fullnodename, 'classes': classes_to_add])
-                salt.checkResult(result)
+                throw new Exception("Runtest config is not found in reclass. Please create runtest.yml and include it " +
+                                    "into reclass. Check documentation for more details")
             }
             common.infoMsg('Refreshing pillars on service node')
             salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'saltutil.refresh_pillar', [], null, VERBOSE)
