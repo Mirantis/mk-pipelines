@@ -45,6 +45,7 @@ node() {
         stage('Initialization') {
             deleteDir()
             saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            container_name = "${env.JOB_NAME}"
             cluster_name=salt.getPillar(saltMaster, 'I@salt:master', '_param:cluster_name')['return'][0].values()[0]
             os_version=salt.getPillar(saltMaster, 'I@salt:master', '_param:openstack_version')['return'][0].values()[0]
             if (os_version == '') {
@@ -129,7 +130,7 @@ node() {
         stage('Run Tempest tests') {
             mounts = ['/root/test/tempest_generated.conf': '/etc/tempest/tempest.conf']
             validate.runContainer(master: saltMaster, target: TARGET_NODE, dockerImageLink: TEST_IMAGE,
-                                  mounts: mounts)
+                                  mounts: mounts, name: container_name)
             report_prefix += 'tempest_'
             if (env.concurrency) {
                 args += ' -w ' + env.concurrency
@@ -144,7 +145,7 @@ node() {
                     report_prefix += 'full'
                 }
             }
-            salt.cmdRun(saltMaster, TARGET_NODE, "docker exec -e ARGS=\'${args}\' cvp /bin/bash -c 'run-tempest'")
+            salt.cmdRun(saltMaster, TARGET_NODE, "docker exec -e ARGS=\'${args}\' ${container_name} /bin/bash -c 'run-tempest'")
         }
         stage('Collect results') {
             report_prefix += "_report_${env.BUILD_NUMBER}"
@@ -162,7 +163,7 @@ node() {
         throw e
     } finally {
         if (DEBUG_MODE == 'false') {
-            validate.runCleanup(saltMaster, TARGET_NODE)
+            validate.runCleanup(saltMaster, TARGET_NODE, container_name)
         }
     }
 }
