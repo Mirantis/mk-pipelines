@@ -37,6 +37,10 @@ timeout(time: 12, unit: 'HOURS') {
         try {
             stage('Initialization') {
                 sh "rm -rf ${artifacts_dir}"
+                if (!TEMPEST_TARGET_NODE) {
+                  // This pillar will return us cid01
+                  TEMPEST_TARGET_NODE = "I@gerrit:client"
+                }
                 saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
                 os_version=salt.getPillar(saltMaster, 'I@salt:master', '_param:openstack_version')['return'][0].values()[0]
                 if (!os_version) {
