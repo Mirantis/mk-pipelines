@@ -67,9 +67,18 @@ def verify_es_is_green(master) {
             errorOccured = true
             common.errorMsg('[ERROR] Elasticsearch VIP port could not be retrieved')
         }
+        pillar = salt.getPillar(master, "I@elasticsearch:client ${extra_tgt}", 'elasticsearch:client:server:scheme')
+        def elasticsearch_scheme
+        if(!pillar['return'].isEmpty()) {
+            elasticsearch_scheme = pillar['return'][0].values()[0]
+        } else {
+            common.infoMsg('No pillar with Elasticsearch server scheme, using http')
+            elasticsearch_scheme = "http"
+        }
+
         common.retry(retries,retries_wait) {
             common.infoMsg('Waiting for Elasticsearch to become green..')
-            salt.cmdRun(master, "I@elasticsearch:client", "curl -sf ${elasticsearch_vip}:${elasticsearch_port}/_cat/health | awk '{print \$4}' | grep green")
+            salt.cmdRun(master, "I@elasticsearch:client", "curl -sfk ${elasticsearch_scheme}://${elasticsearch_vip}:${elasticsearch_port}/_cat/health | awk '{print \$4}' | grep green")
         }
     } catch (Exception er) {
         errorOccured = true
