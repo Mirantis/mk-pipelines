@@ -130,6 +130,13 @@ def globalVariatorsUpdate() {
         updateSaltFormulasDuringTest = false
     }
 
+    if (gitGuessedVersion == 'release/proposed/2019.2.0') {
+        // CFG node in 2019.2.X update has to be bootstrapped with update/proposed repository for salt formulas
+        context['cloudinit_master_config'] = context.get('cloudinit_master_config', false) ?: [:]
+        context['cloudinit_master_config']['MCP_SALT_REPO_UPDATES'] = context['cloudinit_master_config'].get('MCP_SALT_REPO_UPDATES', false) ?:
+                'deb [arch=amd64] http://mirror.mirantis.com/update/proposed/salt-formulas/xenial xenial main'
+    }
+
     common.infoMsg("Using context:\n" + context)
     print prettyPrint(toJson(context))
     return context
@@ -316,6 +323,11 @@ timeout(time: 1, unit: 'HOURS') {
                 def smc = [:]
                 smc['SALT_MASTER_MINION_ID'] = "${context['salt_master_hostname']}.${context['cluster_domain']}"
                 smc['SALT_MASTER_DEPLOY_IP'] = context['salt_master_management_address']
+                if (context.get('cloudinit_master_config', false)) {
+                    context['cloudinit_master_config'].each { k, v ->
+                        smc[k] = v
+                    }
+                }
                 if (outdateGeneration) {
                     smc['DEPLOY_NETWORK_GW'] = context['deploy_network_gateway']
                     smc['DEPLOY_NETWORK_NETMASK'] = context['deploy_network_netmask']
