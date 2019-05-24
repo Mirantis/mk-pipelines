@@ -16,6 +16,9 @@
  *  STAGE_UPGRADE_OSD               Set to True if Ceph osd nodes upgrade is desired
  *  STAGE_UPGRADE_RGW               Set to True if Ceph rgw nodes upgrade is desired
  *  STAGE_UPGRADE_CLIENT            Set to True if Ceph client nodes upgrade is desired (includes for example ctl/cmp nodes)
+ *  STAGE_FINALIZE                  Set to True if configs recommended for TARGET_RELEASE should be set after upgrade is done
+ *  BACKUP_ENABLED                  Select to copy the disks of Ceph VMs before upgrade and backup Ceph directories on OSD nodes
+ *  BACKUP_DIR                      Select the target dir to backup to when BACKUP_ENABLED
  *
  */
 
@@ -71,12 +74,12 @@ def backup(master, target) {
 
                 waitForHealthy(master)
                 try {
-                    salt.cmdRun(master, "${minionProvider}", "[ ! -f /root/${minion_name}.${domain}.qcow2.bak ] && virsh destroy ${minion_name}.${domain}")
+                    salt.cmdRun(master, "${minionProvider}", "[ ! -f ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak ] && virsh destroy ${minion_name}.${domain}")
                 } catch (Exception e) {
                     common.warningMsg('Backup already exists')
                 }
                 try {
-                    salt.cmdRun(master, "${minionProvider}", "[ ! -f /root/${minion_name}.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/${minion_name}.${domain}/system.qcow2 /root/${minion_name}.${domain}.qcow2.bak")
+                    salt.cmdRun(master, "${minionProvider}", "[ ! -f ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/${minion_name}.${domain}/system.qcow2 ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak")
                 } catch (Exception e) {
                     common.warningMsg('Backup already exists')
                 }
