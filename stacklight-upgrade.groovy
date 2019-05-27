@@ -54,7 +54,7 @@ def verify_es_is_green(master) {
 
         def elasticsearch_vip
         def pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host'))
-        if(!pillar.isEmpty()) {
+        if(pillar) {
             elasticsearch_vip = pillar
         } else {
             errorOccured = true
@@ -63,7 +63,7 @@ def verify_es_is_green(master) {
 
         pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:port'))
         def elasticsearch_port
-        if(!pillar.isEmpty()) {
+        if(pillar) {
             elasticsearch_port = pillar
         } else {
             errorOccured = true
@@ -72,7 +72,7 @@ def verify_es_is_green(master) {
 
         pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client ${extra_tgt}", 'elasticsearch:client:server:scheme'))
         def elasticsearch_scheme
-        if(!pillar.isEmpty()) {
+        if(pillar) {
             elasticsearch_scheme = pillar
             common.infoMsg("[INFO] Using elasticsearch scheme: ${elasticsearch_scheme}")
         } else {
