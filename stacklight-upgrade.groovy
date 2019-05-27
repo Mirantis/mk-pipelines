@@ -51,22 +51,35 @@ def verify_es_is_green(master) {
     try {
         def retries_wait = 20
         def retries = 15
+
         def elasticsearch_vip
-        def pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host')
-        if(!pillar['return'].isEmpty()) {
-            elasticsearch_vip = pillar['return'][0].values()[0]
+        def pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host'))
+        if(pillar) {
+            elasticsearch_vip = pillar
         } else {
             errorOccured = true
             common.errorMsg('[ERROR] Elasticsearch VIP address could not be retrieved')
         }
-        pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:port')
+
+        pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:port'))
         def elasticsearch_port
-        if(!pillar['return'].isEmpty()) {
-            elasticsearch_port = pillar['return'][0].values()[0]
+        if(pillar) {
+            elasticsearch_port = pillar
         } else {
             errorOccured = true
             common.errorMsg('[ERROR] Elasticsearch VIP port could not be retrieved')
         }
+
+        pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client ${extra_tgt}", 'elasticsearch:client:server:scheme'))
+        def elasticsearch_scheme
+        if(pillar) {
+            elasticsearch_scheme = pillar
+            common.infoMsg("[INFO] Using elasticsearch scheme: ${elasticsearch_scheme}")
+        } else {
+            common.infoMsg('[INFO] No pillar with Elasticsearch server scheme, using scheme: http')
+            elasticsearch_scheme = "http"
+        }
+
         common.retry(retries,retries_wait) {
             common.infoMsg('Waiting for Elasticsearch to become green..')
             salt.cmdRun(master, "I@elasticsearch:client", "curl -sf ${elasticsearch_vip}:${elasticsearch_port}/_cat/health | awk '{print \$4}' | grep green")
