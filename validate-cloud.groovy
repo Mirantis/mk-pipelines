@@ -36,6 +36,9 @@
  *
  *   PARALLEL_PERFORMANCE        If enabled, run Rally tests separately in parallel for each sub directory found
  *                               inside RALLY_SCENARIOS and RALLY_SL_SCENARIOS (if STACKLIGHT_RALLY is enabled)
+ *   GENERATE_REPORT             Set this to false if you are running longevity tests on a cicd node with less than
+ *                               21GB memory. Rally consumes lots of memory when generating reports sourcing week
+ *                               amounts of data (BUG PROD-30433)
  */
 
 common = new com.mirantis.mk.Common()
@@ -56,6 +59,7 @@ def scenariosBranch = rally.get('RALLY_CONFIG_BRANCH') ?: 'master'
 def pluginsRepo = rally.get('RALLY_PLUGINS_REPO') ?: 'https://github.com/Mirantis/rally-plugins'
 def pluginsBranch = rally.get('RALLY_PLUGINS_BRANCH') ?: 'master'
 def tags = rally.get('RALLY_TAGS') ?: []
+def generateReport = rally.get('GENERATE_REPORT', true).toBoolean()
 
 // contrainer working dir vars
 def rallyWorkdir = '/home/rally'
@@ -194,7 +198,7 @@ exec "$@"
                     platform, rally.RALLY_SCENARIOS,
                     rally.RALLY_SL_SCENARIOS, rally.RALLY_TASK_ARGS_FILE,
                     rally.RALLY_DB_CONN_STRING, tags,
-                    rally.RALLY_TRENDS.toBoolean(), rally.SKIP_LIST
+                    rally.RALLY_TRENDS.toBoolean(), rally.SKIP_LIST, generateReport
                 )
                 def commands_list = commands.collectEntries{ [ (it.key) : { sh("${it.value}") } ] }
 
@@ -301,7 +305,8 @@ exec "$@"
                         curPlatform, commonScens,
                         stacklightScens, rally.RALLY_TASK_ARGS_FILE,
                         rally.RALLY_DB_CONN_STRING, tags,
-                        rally.RALLY_TRENDS.toBoolean(), rally.SKIP_LIST
+                        rally.RALLY_TRENDS.toBoolean(), rally.SKIP_LIST,
+                        generateReport
                     )
 
                     // copy required files for the current task
