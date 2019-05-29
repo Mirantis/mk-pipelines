@@ -19,6 +19,8 @@
  *   TEMPEST_ENDPOINT_TYPE       Type of OS endpoint to use during test run (not in use right now)
  *   concurrency                 Number of threads to use for Tempest test run
  *   remote_artifacts_dir        Folder to use for artifacts on remote node
+ *   runtest_tempest_cfg_dir     Folder to use to generate and store tempest.conf
+ *   runtest_tempest_cfg_name    Tempest config name
  *   report_prefix               Some prefix to put to report name
  *
  */
@@ -37,91 +39,109 @@ def VERBOSE = (env.VERBOSE) ? env.VERBOSE.toBoolean() : true
 def DEBUG_MODE = (env.DEBUG_MODE) ?: false
 def STOP_ON_ERROR = (env.STOP_ON_ERROR) ? env.STOP_ON_ERROR.toBoolean() : false
 def GENERATE_CONFIG = (env.GENERATE_CONFIG) ?: true
+// do not change unless you know what you're doing
 def remote_artifacts_dir = (env.remote_artifacts_dir) ?: '/root/test/'
 def report_prefix = (env.report_prefix) ?: ''
 def args = ''
+def mounts = [:]
 node() {
-    try{
-        stage('Initialization') {
-            deleteDir()
-            saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-            container_name = "${env.JOB_NAME}"
-            cluster_name=salt.getPillar(saltMaster, 'I@salt:master', '_param:cluster_name')['return'][0].values()[0]
-            os_version=salt.getPillar(saltMaster, 'I@salt:master', '_param:openstack_version')['return'][0].values()[0]
-            if (os_version == '') {
-                throw new Exception("Openstack is not found on this env. Exiting")
-            }
-            TEST_IMAGE = (env.TEST_IMAGE) ?: "docker-prod-virtual.docker.mirantis.net/mirantis/cicd/ci-tempest:${os_version}"
-            runtest_node = salt.runSaltProcessStep(saltMaster, 'I@runtest:*', 'test.ping')['return'][0]
-            if (runtest_node.values()[0]) {
-                // Let's use Service node that was defined in reclass. If several nodes are defined
-                // we will use the first from salt output
-                common.infoMsg("Service node ${runtest_node.keySet()[0]} is defined in reclass")
-                SERVICE_NODE = runtest_node.keySet()[0]
-            }
-            else {
-                throw new Exception("Runtest config is not found in reclass. Please create runtest.yml and include it " +
-                                    "into reclass. Check documentation for more details")
-            }
-            common.infoMsg('Refreshing pillars on service node')
-            salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'saltutil.refresh_pillar', [], null, VERBOSE)
-            tempest_node=salt.getPillar(saltMaster, SERVICE_NODE, '_param:tempest_test_target')['return'][0].values()[0] ?: 'I@gerrit:client'
+    stage('Initialization') {
+        deleteDir()
+        saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        container_name = "${env.JOB_NAME}"
+        cluster_name=salt.getPillar(saltMaster, 'I@salt:master', '_param:cluster_name')['return'][0].values()[0]
+        os_version=salt.getPillar(saltMaster, 'I@salt:master', '_param:openstack_version')['return'][0].values()[0]
+        if (!os_version) {
+            throw new Exception("Openstack is not found on this env. Exiting")
         }
-        stage('Preparing resources') {
-            if ( PREPARE_RESOURCES.toBoolean() ) {
-                common.infoMsg('Running salt.minion state on service node')
-                salt.enforceState(saltMaster, SERVICE_NODE, ['salt.minion'], VERBOSE, STOP_ON_ERROR, null, false, 300, 2, true, [], 60)
-                common.infoMsg('Running keystone.client on service node')
-                salt.enforceState(saltMaster, SERVICE_NODE, 'keystone.client', VERBOSE, STOP_ON_ERROR)
-                common.infoMsg('Running glance.client on service node')
-                salt.enforceState(saltMaster, SERVICE_NODE, 'glance.client', VERBOSE, STOP_ON_ERROR)
-                common.infoMsg('Running nova.client on service node')
-                salt.enforceState(saltMaster, SERVICE_NODE, 'nova.client', VERBOSE, STOP_ON_ERROR)
-            }
-            else {
-                common.infoMsg('Skipping resources preparation')
-            }
+        TEST_IMAGE = (env.TEST_IMAGE) ?: "docker-prod-virtual.docker.mirantis.net/mirantis/cicd/ci-tempest:${os_version}"
+        runtest_node = salt.runSaltProcessStep(saltMaster, 'I@runtest:*', 'test.ping')['return'][0]
+        if (runtest_node.values()[0]) {
+            // Let's use Service node that was defined in reclass. If several nodes are defined
+            // we will use the first from salt output
+            common.infoMsg("Service node ${runtest_node.keySet()[0]} is defined in reclass")
+            SERVICE_NODE = runtest_node.keySet()[0]
         }
-        stage('Generate config') {
-            if ( GENERATE_CONFIG.toBoolean() ) {
-                salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.remove', ["${remote_artifacts_dir}"])
-                salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.mkdir', ["${remote_artifacts_dir}"])
-                fullnodename = salt.getMinions(saltMaster, SERVICE_NODE).get(0)
-                TARGET_NODE = (env.TARGET_NODE) ?: tempest_node
-                if (TARGET_NODE != tempest_node) {
-                    common.infoMsg("TARGET_NODE is defined in Jenkins")
-                    def params_to_update = ['tempest_test_target': "${TARGET_NODE}"]
-                    common.infoMsg("Overriding default ${tempest_node} value of tempest_test_target parameter")
-                    result = salt.runSaltCommand(saltMaster, 'local', ['expression': SERVICE_NODE, 'type': 'compound'], 'reclass.node_update',
-                                                 null, null, ['name': fullnodename, 'parameters': ['tempest_test_target': "${TARGET_NODE}"]])
-                    salt.checkResult(result)
-                }
-                common.infoMsg("TARGET_NODE is ${TARGET_NODE}")
-                salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'file.remove', ["${remote_artifacts_dir}"])
-                salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'file.mkdir', ["${remote_artifacts_dir}"])
+        else {
+            throw new Exception("Runtest config is not found in reclass. Please create runtest.yml and include it " +
+                                "into reclass. Check documentation for more details")
+        }
+        common.infoMsg('Refreshing pillars on service node')
+        salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'saltutil.refresh_pillar', [], null, VERBOSE)
+        // default node is cid01 (preferably) or cfg01
+        default_node=salt.getPillar(saltMaster, 'I@salt:master', '_param:cicd_control_node01_hostname')['return'][0].values()[0] ?: 'cfg01'
+        // fetch tempest_test_target from runtest.yaml, otherwise fallback to default_node
+        tempest_node=salt.getPillar(saltMaster, SERVICE_NODE, '_param:tempest_test_target')['return'][0].values()[0] ?: default_node+'*'
+        // TARGET_NODE will always override any settings above
+        TARGET_NODE = (env.TARGET_NODE) ?: tempest_node
+    }
+    stage('Preparing resources') {
+        if ( PREPARE_RESOURCES.toBoolean() ) {
+            common.infoMsg('Running salt.minion state on service node')
+            salt.enforceState(saltMaster, SERVICE_NODE, ['salt.minion'], VERBOSE, STOP_ON_ERROR, null, false, 300, 2, true, [], 60)
+            common.infoMsg('Running keystone.client on service node')
+            salt.enforceState(saltMaster, SERVICE_NODE, 'keystone.client', VERBOSE, STOP_ON_ERROR)
+            common.infoMsg('Running glance.client on service node')
+            salt.enforceState(saltMaster, SERVICE_NODE, 'glance.client', VERBOSE, STOP_ON_ERROR)
+            common.infoMsg('Running nova.client on service node')
+            salt.enforceState(saltMaster, SERVICE_NODE, 'nova.client', VERBOSE, STOP_ON_ERROR)
+        }
+        else {
+            common.infoMsg('Skipping resources preparation')
+        }
+    }
+    stage('Generate config') {
+        if ( GENERATE_CONFIG.toBoolean() ) {
+            // default is /root/test/
+            runtest_tempest_cfg_dir = (env.runtest_tempest_cfg_dir) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_dir')['return'][0].values()[0]
+            // default is tempest_generated.conf
+            runtest_tempest_cfg_name = (env.runtest_tempest_cfg_name) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_name')['return'][0].values()[0]
+            common.infoMsg("runtest_tempest_cfg is ${runtest_tempest_cfg_dir}/${runtest_tempest_cfg_name}")
+            salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.remove', ["${runtest_tempest_cfg_dir}"])
+            salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.mkdir', ["${runtest_tempest_cfg_dir}"])
+            fullnodename = salt.getMinions(saltMaster, SERVICE_NODE).get(0)
+            if (TARGET_NODE != tempest_node) {
+                common.infoMsg("TARGET_NODE is defined in Jenkins")
+                def params_to_update = ['tempest_test_target': "${TARGET_NODE}"]
+                common.infoMsg("Overriding default ${tempest_node} value of tempest_test_target parameter")
+                result = salt.runSaltCommand(saltMaster, 'local', ['expression': SERVICE_NODE, 'type': 'compound'], 'reclass.node_update',
+                                             null, null, ['name': fullnodename, 'parameters': ['tempest_test_target': "${TARGET_NODE}"]])
+                salt.checkResult(result)
+            }
+            common.infoMsg("TARGET_NODE is ${TARGET_NODE}")
+            salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'file.remove', ["${remote_artifacts_dir}"])
+            salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'file.mkdir', ["${remote_artifacts_dir}"])
+            // runtest state hangs if tempest_test_target is cfg01*
+            // let's run runtest.generate_tempest_config only for this case
+            if (TARGET_NODE == 'cfg01*') {
+                common.warningMsg("It is not recommended to run Tempest container on cfg node, but.. proceeding")
+                salt.enforceState(saltMaster, SERVICE_NODE, 'runtest.generate_tempest_config', VERBOSE, STOP_ON_ERROR)
+            } else {
                 salt.enforceState(saltMaster, SERVICE_NODE, 'runtest', VERBOSE, STOP_ON_ERROR)
-                // we need to refresh pillars on target node after runtest state
-                salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'saltutil.refresh_pillar', [], null, VERBOSE)
-                if (TARGET_NODE != tempest_node) {
-                    common.infoMsg("Reverting tempest_test_target parameter")
-                    result = salt.runSaltCommand(saltMaster, 'local', ['expression': SERVICE_NODE, 'type': 'compound'], 'reclass.node_update',
-                                                 null, null, ['name': fullnodename, 'parameters': ['tempest_test_target': "${tempest_node}"]])
-                }
-                SKIP_LIST_PATH = (env.SKIP_LIST_PATH) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:tempest_skip_list_path')['return'][0].values()[0]
-                runtest_tempest_cfg_dir = salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_dir')['return'][0].values()[0] ?: '/root/test/'
-                if (SKIP_LIST_PATH) {
-                    salt.cmdRun(saltMaster, SERVICE_NODE, "salt-cp ${TARGET_NODE} ${SKIP_LIST_PATH} ${runtest_tempest_cfg_dir}/skip.list")
-                    args += ' --blacklist-file /root/tempest/skip.list '
-                }
             }
-            else {
-                common.infoMsg('Skipping Tempest config generation')
-                salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_artifacts_dir}/reports")
+            // we need to refresh pillars on target node after runtest state
+            salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'saltutil.refresh_pillar', [], null, VERBOSE)
+            if (TARGET_NODE != tempest_node) {
+                common.infoMsg("Reverting tempest_test_target parameter")
+                result = salt.runSaltCommand(saltMaster, 'local', ['expression': SERVICE_NODE, 'type': 'compound'], 'reclass.node_update',
+                                             null, null, ['name': fullnodename, 'parameters': ['tempest_test_target': "${tempest_node}"]])
+            }
+            SKIP_LIST_PATH = (env.SKIP_LIST_PATH) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:tempest_skip_list_path')['return'][0].values()[0]
+            if (SKIP_LIST_PATH) {
+                mounts = ["${runtest_tempest_cfg_dir}/skip.list": "/root/tempest/skip.list"]
+                salt.cmdRun(saltMaster, SERVICE_NODE, "salt-cp ${TARGET_NODE} ${SKIP_LIST_PATH} ${runtest_tempest_cfg_dir}/skip.list")
+                args += ' --blacklist-file /root/tempest/skip.list '
             }
         }
+        else {
+            common.infoMsg('Skipping Tempest config generation')
+            salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_artifacts_dir}/reports")
+        }
+    }
 
+    try{
         stage('Run Tempest tests') {
-            mounts = ['/root/test/tempest_generated.conf': '/etc/tempest/tempest.conf']
+            mounts = mounts + ["${runtest_tempest_cfg_dir}/${runtest_tempest_cfg_name}": "/etc/tempest/tempest.conf"]
             validate.runContainer(master: saltMaster, target: TARGET_NODE, dockerImageLink: TEST_IMAGE,
                                   mounts: mounts, name: container_name)
             report_prefix += 'tempest_'
@@ -135,7 +155,7 @@ node() {
             else {
                 if (TEMPEST_TEST_PATTERN != 'set=full') {
                     args += " -r ${TEMPEST_TEST_PATTERN} "
-                    report_prefix += 'full'
+                    report_prefix += 'custom'
                 }
             }
             salt.cmdRun(saltMaster, TARGET_NODE, "docker exec -e ARGS=\'${args}\' ${container_name} /bin/bash -c 'run-tempest'")
@@ -150,10 +170,6 @@ node() {
             archiveArtifacts artifacts: "${report_prefix}.*"
             junit "${report_prefix}.xml"
         }
-    } catch (Throwable e) {
-        // If there was an error or exception thrown, the build failed
-        currentBuild.result = "FAILURE"
-        throw e
     } finally {
         if (DEBUG_MODE == 'false') {
             validate.runCleanup(saltMaster, TARGET_NODE, container_name)
