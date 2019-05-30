@@ -154,9 +154,11 @@ node (SLAVE_NODE) {
     }
 
     stage('Run Shaker tests') {
-        if (! salt_testing.setupDockerAndTest(configRun)) {
-            common.warningMsg('Docker contrainer failed to run Shaker')
-            currentBuild.result = 'FAILURE'
+        timeout(time: 10, unit: 'HOURS') {
+            if (! salt_testing.setupDockerAndTest(configRun)) {
+                common.warningMsg('Docker contrainer failed to run Shaker')
+                currentBuild.result = 'FAILURE'
+            }
         }
     }
 
