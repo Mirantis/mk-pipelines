@@ -456,7 +456,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 salt.enforceState(venvPepper, "I@salt:minion:ca", 'salt.minion.ca', true)
                 salt.enforceState(venvPepper, "I@salt:minion", 'salt.minion.cert', true)
                 // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
-                salt.enforceState([saltId: venvPepper, target: "I@salt:minion ${extra_tgt}", state: ['salt.minion'], read_timeout: 60, retries: 2])
+                salt.enforceState([saltId: venvPepper, target: "I@salt:minion", state: ['salt.minion'], read_timeout: 60, retries: 2])
                 // updating users and keys
                 salt.enforceState(venvPepper, "I@linux:system", 'linux.system.user', true)
                 salt.enforceState(venvPepper, "I@linux:system", 'openssh', true)
