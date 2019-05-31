@@ -19,6 +19,8 @@
  *   TEMPEST_ENDPOINT_TYPE       Type of OS endpoint to use during test run (not in use right now)
  *   concurrency                 Number of threads to use for Tempest test run
  *   remote_artifacts_dir        Folder to use for artifacts on remote node
+ *   runtest_tempest_cfg_dir     Folder to use to generate and store tempest.conf
+ *   runtest_tempest_cfg_name    Tempest config name
  *   report_prefix               Some prefix to put to report name
  *
  */
@@ -37,9 +39,11 @@ def VERBOSE = (env.VERBOSE) ? env.VERBOSE.toBoolean() : true
 def DEBUG_MODE = (env.DEBUG_MODE) ?: false
 def STOP_ON_ERROR = (env.STOP_ON_ERROR) ? env.STOP_ON_ERROR.toBoolean() : false
 def GENERATE_CONFIG = (env.GENERATE_CONFIG) ?: true
+// do not change unless you know what you're doing
 def remote_artifacts_dir = (env.remote_artifacts_dir) ?: '/root/test/'
 def report_prefix = (env.report_prefix) ?: ''
 def args = ''
+def mounts = [:]
 node() {
     try{
         stage('Initialization') {
@@ -84,8 +88,13 @@ node() {
         }
         stage('Generate config') {
             if ( GENERATE_CONFIG.toBoolean() ) {
-                salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.remove', ["${remote_artifacts_dir}"])
-                salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.mkdir', ["${remote_artifacts_dir}"])
+                // default is /root/test/
+                runtest_tempest_cfg_dir = (env.runtest_tempest_cfg_dir) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_dir')['return'][0].values()[0]
+                // default is tempest_generated.conf
+                runtest_tempest_cfg_name = (env.runtest_tempest_cfg_name) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_name')['return'][0].values()[0]
+                common.infoMsg("runtest_tempest_cfg is ${runtest_tempest_cfg_dir}/${runtest_tempest_cfg_name}")
+                salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.remove', ["${runtest_tempest_cfg_dir}"])
+                salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.mkdir', ["${runtest_tempest_cfg_dir}"])
                 fullnodename = salt.getMinions(saltMaster, SERVICE_NODE).get(0)
                 TARGET_NODE = (env.TARGET_NODE) ?: tempest_node
                 if (TARGET_NODE != tempest_node) {
@@ -99,7 +108,14 @@ node() {
                 common.infoMsg("TARGET_NODE is ${TARGET_NODE}")
                 salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'file.remove', ["${remote_artifacts_dir}"])
                 salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'file.mkdir', ["${remote_artifacts_dir}"])
-                salt.enforceState(saltMaster, SERVICE_NODE, 'runtest', VERBOSE, STOP_ON_ERROR)
+                // runtest state hangs if tempest_test_target is cfg01*
+                // let's run runtest.generate_tempest_config only for this case
+                if (TARGET_NODE == 'cfg01*') {
+                    common.warningMsg("It is not recommended to run Tempest container on cfg node, but.. proceeding")
+                    salt.enforceState(saltMaster, SERVICE_NODE, 'runtest.generate_tempest_config', VERBOSE, STOP_ON_ERROR)
+                } else {
+                    salt.enforceState(saltMaster, SERVICE_NODE, 'runtest', VERBOSE, STOP_ON_ERROR)
+                }
                 // we need to refresh pillars on target node after runtest state
                 salt.runSaltProcessStep(saltMaster, TARGET_NODE, 'saltutil.refresh_pillar', [], null, VERBOSE)
                 if (TARGET_NODE != tempest_node) {
@@ -108,8 +124,8 @@ node() {
                                                  null, null, ['name': fullnodename, 'parameters': ['tempest_test_target': "${tempest_node}"]])
                 }
                 SKIP_LIST_PATH = (env.SKIP_LIST_PATH) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:tempest_skip_list_path')['return'][0].values()[0]
-                runtest_tempest_cfg_dir = salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_dir')['return'][0].values()[0] ?: '/root/test/'
                 if (SKIP_LIST_PATH) {
+                    mounts = ["${runtest_tempest_cfg_dir}/skip.list": "/root/tempest/skip.list"]
                     salt.cmdRun(saltMaster, SERVICE_NODE, "salt-cp ${TARGET_NODE} ${SKIP_LIST_PATH} ${runtest_tempest_cfg_dir}/skip.list")
                     args += ' --blacklist-file /root/tempest/skip.list '
                 }
@@ -121,7 +137,7 @@ node() {
         }
 
         stage('Run Tempest tests') {
-            mounts = ['/root/test/tempest_generated.conf': '/etc/tempest/tempest.conf']
+            mounts = mounts + ["${runtest_tempest_cfg_dir}/${runtest_tempest_cfg_name}": "/etc/tempest/tempest.conf"]
             validate.runContainer(master: saltMaster, target: TARGET_NODE, dockerImageLink: TEST_IMAGE,
                                   mounts: mounts, name: container_name)
             report_prefix += 'tempest_'
@@ -135,7 +151,7 @@ node() {
             else {
                 if (TEMPEST_TEST_PATTERN != 'set=full') {
                     args += " -r ${TEMPEST_TEST_PATTERN} "
-                    report_prefix += 'full'
+                    report_prefix += 'custom'
                 }
             }
             salt.cmdRun(saltMaster, TARGET_NODE, "docker exec -e ARGS=\'${args}\' ${container_name} /bin/bash -c 'run-tempest'")
