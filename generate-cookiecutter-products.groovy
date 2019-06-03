@@ -75,34 +75,19 @@ def globalVariatorsUpdate() {
     // because each of them, might be 'refs/' variable, we need to add  some tricky trigger of using
     // 'release/XXX' logic. This is totall guess - so,if even those one failed, to definitely must pass
     // correct variable finally!
-    [context.get('cookiecutter_template_branch'), context.get('shared_reclass_branch'), context.get('mcp_common_scripts_branch')].any { branch ->
+    [ context.get('cookiecutter_template_branch'), context.get('shared_reclass_branch'), context.get('mcp_common_scripts_branch') ].any { branch ->
         if (branch.toString().startsWith('release/')) {
             gitGuessedVersion = branch
             return true
         }
     }
-    // Use mcpVersion git tag if not specified branch for cookiecutter-templates
-    if (!context.get('cookiecutter_template_branch')) {
-        context['cookiecutter_template_branch'] = gitGuessedVersion ?: "release/${context['mcp_version']}".toString()
-    }
-    // Don't have n/t/s for cookiecutter-templates repo, therefore use master
-    if (["nightly", "testing", "stable"].contains(context['cookiecutter_template_branch'])) {
-        context['cookiecutter_template_branch'] = 'master'
-    }
-    if (!context.get('shared_reclass_branch')) {
-        context['shared_reclass_branch'] = gitGuessedVersion ?: "release/${context['mcp_version']}".toString()
-    }
-    // Don't have nightly/testing for reclass-system repo, therefore use master
-    if (["nightly", "testing", "stable"].contains(context['shared_reclass_branch'])) {
-        context['shared_reclass_branch'] = 'master'
-    }
-    if (!context.get('mcp_common_scripts_branch')) {
-        // Pin exactly to CC branch, since it might use 'release/XXX' format
-        context['mcp_common_scripts_branch'] = gitGuessedVersion ?: "release/${context['mcp_version']}".toString()
-    }
-    // Don't have n/t/s for mcp-common-scripts repo, therefore use master
-    if (["nightly", "testing", "stable"].contains(context['mcp_common_scripts_branch'])) {
-        context['mcp_common_scripts_branch'] = 'master'
+
+    [ 'cookiecutter_template_branch', 'shared_reclass_branch', 'mcp_common_scripts_branch' ].each { repoName ->
+        if (context['mcp_version'] in [ "nightly", "testing", "stable" ]) {
+            context[repoName] = 'master'
+        } else if (! context.get(repoName)) {
+            context[repoName] = gitGuessedVersion ?: "release/${context['mcp_version']}".toString()
+        }
     }
     //
     distribRevision = context['mcp_version']
