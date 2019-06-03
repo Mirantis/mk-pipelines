@@ -83,14 +83,14 @@ def globalVariatorsUpdate() {
     }
     // Use mcpVersion git tag if not specified branch for cookiecutter-templates
     if (!context.get('cookiecutter_template_branch')) {
-        context['cookiecutter_template_branch'] = gitGuessedVersion ?: context['mcp_version']
+        context['cookiecutter_template_branch'] = gitGuessedVersion ?: "release/${context['mcp_version']}".toString()
     }
     // Don't have n/t/s for cookiecutter-templates repo, therefore use master
     if (["nightly", "testing", "stable"].contains(context['cookiecutter_template_branch'])) {
         context['cookiecutter_template_branch'] = 'master'
     }
     if (!context.get('shared_reclass_branch')) {
-        context['shared_reclass_branch'] = gitGuessedVersion ?: context['mcp_version']
+        context['shared_reclass_branch'] = gitGuessedVersion ?: "release/${context['mcp_version']}".toString()
     }
     // Don't have nightly/testing for reclass-system repo, therefore use master
     if (["nightly", "testing", "stable"].contains(context['shared_reclass_branch'])) {
@@ -98,7 +98,7 @@ def globalVariatorsUpdate() {
     }
     if (!context.get('mcp_common_scripts_branch')) {
         // Pin exactly to CC branch, since it might use 'release/XXX' format
-        context['mcp_common_scripts_branch'] = gitGuessedVersion ?: context['mcp_version']
+        context['mcp_common_scripts_branch'] = gitGuessedVersion ?: "release/${context['mcp_version']}".toString()
     }
     // Don't have n/t/s for mcp-common-scripts repo, therefore use master
     if (["nightly", "testing", "stable"].contains(context['mcp_common_scripts_branch'])) {
