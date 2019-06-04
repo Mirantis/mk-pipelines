@@ -62,7 +62,8 @@ node (SLAVE_NODE) {
                 def env_vars_list  =  [
                     "SALT_USERNAME=${creds.username}",
                     "SALT_PASSWORD=${creds.password}",
-                    "SALT_URL=${SALT_MASTER_URL}"
+                    "SALT_URL=${SALT_MASTER_URL}",
+                    "REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt"
                     ] + env_vars
 
                 // Generating final config
@@ -73,6 +74,7 @@ node (SLAVE_NODE) {
                     'dockerExtraOpts' : [
                         "--network=host",
                         "-v /root/qa_results/:/root/qa_results/",
+                        "-v /etc/ssl/certs/:/etc/ssl/certs/:ro",
                         "-v ${env.WORKSPACE}/${artifacts_dir}/:${container_workdir}/${artifacts_dir}/",
                     ],
                     'envOpts'         : env_vars_list,
