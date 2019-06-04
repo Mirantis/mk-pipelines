@@ -27,6 +27,9 @@ def version = env.MCP_VERSION ?: 'nightly'
 def dockerRegistry = env.DOCKER_REGISTRY ?: 'docker-prod-local.docker.mirantis.net'
 def dockerReviewRegistry = env.DOCKER_REVIEW_REGISTRY ?: 'docker-dev-local.docker.mirantis.net'
 def cvpImageName = env.CVP_DOCKER_IMG ? "${dockerRegistry}/${env.CVP_DOCKER_IMG}:${version}" : "${dockerRegistry}/mirantis/cvp/cvp-trymcp-tests:${version}"
+if (env.CVP_DEV_TAG && env.CVP_DOCKER_IMG) {
+    cvpImageName = "${dockerReviewRegistry}/${env.CVP_DOCKER_IMG}:${env.CVP_DEV_TAG}"
+}
 
 def checkouted = false
 def testReportHTMLFile = 'reports/report.html'
