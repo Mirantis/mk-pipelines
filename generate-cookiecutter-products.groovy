@@ -83,7 +83,7 @@ def globalVariatorsUpdate() {
     }
 
     [ 'cookiecutter_template_branch', 'shared_reclass_branch', 'mcp_common_scripts_branch' ].each { repoName ->
-        if (context['mcp_version'] in [ "nightly", "testing", "stable" ]) {
+        if (context['mcp_version'] in [ "nightly", "testing", "stable" ] && ! context.get(repoName)) {
             context[repoName] = 'master'
         } else if (! context.get(repoName)) {
             context[repoName] = gitGuessedVersion ?: "release/${context['mcp_version']}".toString()
