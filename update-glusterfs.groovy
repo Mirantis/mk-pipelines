@@ -64,29 +64,6 @@ def waitGerrit(salt_target, wait_timeout) {
   }
 }
 
-def waitJenkins(salt_target, wait_timeout) {
-  def salt = new com.mirantis.mk.Salt()
-  def common = new com.mirantis.mk.Common()
-  def python = new com.mirantis.mk.Python()
-  def pEnv = "pepperEnv"
-  python.setupPepperVirtualenv(pEnv, env.SALT_MASTER_URL, env.SALT_MASTER_CREDENTIALS)
-
-  salt.fullRefresh(pEnv, salt_target)
-
-  // Jenkins
-  def jenkins_master_host = salt.getReturnValues(salt.getPillar(pEnv, salt_target, '_param:jenkins_master_host'))
-  def jenkins_master_port = salt.getReturnValues(salt.getPillar(pEnv, salt_target, '_param:jenkins_master_port'))
-  def jenkins_master_protocol = salt.getReturnValues(salt.getPillar(pEnv, salt_target, '_param:jenkins_master_protocol'))
-  def jenkins_master_url_prefix = salt.getReturnValues(salt.getPillar(pEnv, salt_target, '_param:jenkins_master_url_prefix'))
-  jenkins_master_url = "${jenkins_master_protocol}://${jenkins_master_host}:${jenkins_master_port}${jenkins_master_url_prefix}"
-
-  timeout(wait_timeout) {
-    common.infoMsg('Waiting for Jenkins to come up..')
-    def check_jenkins_cmd = 'while true; do curl -sI -m 3 -o /dev/null -w' + " '" + '%{http_code}' + "' " + jenkins_master_url + '/whoAmI/ | grep 200 && break || sleep 1; done'
-    salt.cmdRun(pEnv, salt_target, 'timeout ' + (wait_timeout*60+3) + ' /bin/sh -c -- ' + '"' + check_jenkins_cmd + '"')
-  }
-}
-
 node() {
   stage('Update glusterfs servers') {
     build(job: 'update-glusterfs-servers')
@@ -95,7 +72,8 @@ node() {
   stage('Update glusterfs clients') {
     build(job: 'update-glusterfs-clients')
   }
-  waitJenkins('I@jenkins:client', 300)
+}
+node() {
   waitGerrit('I@gerrit:client', 300)
   stage('Update glusterfs cluster.op-version') {
     build(job: 'update-glusterfs-cluster-op-version')
