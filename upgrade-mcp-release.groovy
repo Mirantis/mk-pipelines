@@ -22,14 +22,25 @@ def pipelineTimeout = 12
 venvPepper = "venvPepper"
 workspace = ""
 
-def triggerMirrorJob(jobName) {
+def triggerMirrorJob(String jobName, String reclassSystemBranch) {
     params = jenkinsUtils.getJobParameters(jobName)
-    build job: jobName, parameters: [
-        [$class: 'StringParameterValue', name: 'BRANCHES', value: params.get("BRANCHES")],
-        [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: params.get("CREDENTIALS_ID")],
-        [$class: 'StringParameterValue', name: 'SOURCE_URL', value: params.get("SOURCE_URL")],
-        [$class: 'StringParameterValue', name: 'TARGET_URL', value: params.get("TARGET_URL")]
-    ]
+    try {
+        build job: jobName, parameters: [
+            [$class: 'StringParameterValue', name: 'BRANCHES', value: params.get('BRANCHES')],
+            [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: params.get('CREDENTIALS_ID')],
+            [$class: 'StringParameterValue', name: 'SOURCE_URL', value: params.get('SOURCE_URL')],
+            [$class: 'StringParameterValue', name: 'TARGET_URL', value: params.get('TARGET_URL')]
+        ]
+    } catch (Exception updateErr) {
+        common.warningMsg(updateErr)
+        common.warningMsg('Attempt to update git repo in failsafe manner')
+        build job: jobName, parameters: [
+            [$class: 'StringParameterValue', name: 'BRANCHES', value: reclassSystemBranch.replace('origin/', '')],
+            [$class: 'StringParameterValue', name: 'CREDENTIALS_ID', value: params.get('CREDENTIALS_ID')],
+            [$class: 'StringParameterValue', name: 'SOURCE_URL', value: params.get('SOURCE_URL')],
+            [$class: 'StringParameterValue', name: 'TARGET_URL', value: params.get('TARGET_URL')]
+        ]
+    }
 }
 
 def updateSaltStack(target, pkgs) {
@@ -58,64 +69,179 @@ def updateSaltStack(target, pkgs) {
     }
 }
 
+def wa29352(ArrayList saltMinions, String cname) {
+    // WA for PROD-29352. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/12/openssh/client/root.yml
+    // Default soft-param has been removed, what now makes not possible to render some old env's.
+    // Like fix, we found copy-paste already generated key from backups, to secrets.yml with correct key name
+    def wa29352ClassName = 'cluster.' + cname + '.infra.secrets_root_wa29352'
+    def wa29352File = "/srv/salt/reclass/classes/cluster/${cname}/infra/secrets_root_wa29352.yml"
+    def wa29352SecretsFile = "/srv/salt/reclass/classes/cluster/${cname}/infra/secrets.yml"
+    def _tempFile = '/tmp/wa29352_' + UUID.randomUUID().toString().take(8)
+    try {
+        salt.cmdRun(venvPepper, 'I@salt:master', "grep -qiv root_private_key ${wa29352SecretsFile}", true, null, false)
+        salt.cmdRun(venvPepper, 'I@salt:master', "test ! -f ${wa29352File}", true, null, false)
+    }
+    catch (Exception ex) {
+        common.infoMsg('Work-around for PROD-29352 already apply, nothing todo')
+        return
+    }
+    def rKeysDict = [
+        'parameters': [
+            '_param': [
+                'root_private_key': salt.getPillar(venvPepper, 'I@salt:master', '_param:root_private_key').get('return')[0].values()[0].trim(),
+                'root_public_key' : '',
+            ]
+        ]
+    ]
+    // save root key,and generate public one from it
+    writeFile file: _tempFile, text: rKeysDict['parameters']['_param']['root_private_key'].toString().trim()
+    sh('chmod 0600 ' + _tempFile)
+    rKeysDict['parameters']['_param']['root_public_key'] = sh(script: "ssh-keygen -q -y -f ${_tempFile}", returnStdout: true).trim()
+    sh('rm -fv ' + _tempFile)
+    writeYaml file: _tempFile, data: rKeysDict
+    def yamlData = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+    salt.cmdRun(venvPepper, 'I@salt:master', "echo '${yamlData}' | base64 -d  > ${wa29352File}", false, null, false)
+    common.infoMsg("Add $wa29352ClassName class into secrets.yml")
+
+    // Add 'classes:' directive
+    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
+        "grep -q 'classes:' infra/secrets.yml || sed -i '1iclasses:' infra/secrets.yml")
+
+    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
+        "grep -q '${wa29352ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29352ClassName' infra/secrets.yml")
+    salt.fullRefresh(venvPepper, '*')
+    sh('rm -fv ' + _tempFile)
+}
+
+def wa29155(ArrayList saltMinions, String cname) {
+    // WA for PROD-29155. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/
+    // CHeck for existence cmp nodes, and try to render it. Is failed, apply ssh-key wa
+    def ret = ''
+    def patched = false
+    def wa29155ClassName = 'cluster.' + cname + '.infra.secrets_nova_wa29155'
+    def wa29155File = "/srv/salt/reclass/classes/cluster/${cname}/infra/secrets_nova_wa29155.yml"
+
+    try {
+        salt.cmdRun(venvPepper, 'I@salt:master', "test ! -f ${wa29155File}", true, null, false)
+    }
+    catch (Exception ex) {
+        common.infoMsg('Work-around for PROD-29155 already apply, nothing todo')
+        return
+    }
+    salt.fullRefresh(venvPepper, 'cfg*')
+    salt.fullRefresh(venvPepper, 'cmp*')
+    for (String minion in saltMinions) {
+        if (!minion.startsWith('cmp')) {
+            continue
+        }
+        // First attempt, second will be performed in next validateReclassModel() stages
+        try {
+            salt.cmdRun(venvPepper, 'I@salt:master', "reclass -n ${minion}", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+        } catch (Exception e) {
+            common.errorMsg(e.toString())
+            if (patched) {
+                error("Node: ${minion} failed to render after reclass-system upgrade!WA29155 probably didn't help.")
+            }
+            // check, that failed exactly by our case,  by key-length check.
+            def missed_key = salt.getPillar(venvPepper, minion, '_param:nova_compute_ssh_private').get("return")[0].values()[0]
+            if (missed_key != '') {
+                error("Node: ${minion} failed to render after reclass-system upgrade!")
+            }
+            common.warningMsg('Perform: Attempt to apply WA for PROD-29155\n' +
+                'See https://gerrit.mcp.mirantis.com/#/c/37932/ for more info')
+            common.warningMsg('WA-PROD-29155 Generating new ssh key at master node')
+            def _tempFile = "/tmp/nova_wa29155_" + UUID.randomUUID().toString().take(8)
+            common.infoMsg('Perform: generation NEW ssh-private key for nova-compute')
+            salt.cmdRun(venvPepper, 'I@salt:master', "ssh-keygen -f ${_tempFile} -N '' -q")
+            def _pub_k = salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'cmd.run', "cat ${_tempFile}.pub").get('return')[0].values()[0].trim()
+            def _priv_k = salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'cmd.run', "cat ${_tempFile}").get('return')[0].values()[0].trim()
+            salt.cmdRun(venvPepper, 'I@salt:master', "rm -fv ${_tempFile}", false, null, false)
+            def novaKeysDict = [
+                "parameters": [
+                    "_param": [
+                        "nova_compute_ssh_private": _priv_k,
+                        "nova_compute_ssh_public" : _pub_k
+                    ]
+                ]
+            ]
+            writeYaml file: _tempFile, data: novaKeysDict
+            def yamlData = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+            salt.cmdRun(venvPepper, 'I@salt:master', "echo '${yamlData}' | base64 -d  > ${wa29155File}", false, null, false)
+            common.infoMsg("Add $wa29155ClassName class into secrets.yml")
+
+            // Add 'classes:' directive
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
+                "grep -q 'classes:' infra/secrets.yml || sed -i '1iclasses:' infra/secrets.yml")
+
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
+                "grep -q '${wa29155ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29155ClassName' infra/secrets.yml")
+            salt.fullRefresh(venvPepper, 'cfg*')
+            salt.fullRefresh(venvPepper, 'cmp*')
+            patched = true
+        }
+    }
+    if (patched) {
+        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && git status && " +
+            "git add ${wa29155File} && git add -u && git commit --allow-empty -m 'Cluster model updated with WA for PROD-29155. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/ at ${common.getDatetime()}' ")
+        common.infoMsg('Work-around for PROD-29155 successfully applied')
+    }
+
+}
+
 def archiveReclassInventory(filename) {
-    def ret = salt.cmdRun(venvPepper, 'I@salt:master', "reclass -i", true, null, false)
-    def reclassInv = ret.values()[0]
-    writeFile file: filename, text: reclassInv.toString()
-    archiveArtifacts artifacts: "$filename"
+    def _tmp_file = '/tmp/' + filename + UUID.randomUUID().toString().take(8)
+    // jenkins may fail at overheap. Compress data with gzip like WA
+    def ret = salt.cmdRun(venvPepper, 'I@salt:master', 'reclass -i  2>/dev/null | gzip -9 -c | base64', true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+    def _tmp = sh(script: "echo '$ret'  > ${_tmp_file}", returnStdout: false)
+    sh(script: "cat ${_tmp_file} | base64 -d | gzip -d > $filename", returnStdout: false)
+    archiveArtifacts artifacts: filename
+    sh(script: "rm -v ${_tmp_file}|| true")
 }
 
 def validateReclassModel(ArrayList saltMinions, String suffix) {
     try {
-        dir(suffix) {
-            for(String minion in saltMinions) {
-                common.infoMsg("Reclass model validation for minion ${minion}...")
-                def ret = salt.cmdRun("${workspace}/${venvPepper}", 'I@salt:master', "reclass -n ${minion}", true, null, false).get('return')[0].values()[0]
-                writeFile file: minion, text: ret.toString()
-            }
+        for (String minion in saltMinions) {
+            common.infoMsg("Reclass model validation for minion ${minion}...")
+            def reclassInv = salt.cmdRun(venvPepper, 'I@salt:master', "reclass -n ${minion}", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+            writeFile file: "inventory-${minion}-${suffix}.out", text: reclassInv.toString()
         }
     } catch (Exception e) {
         common.errorMsg('Can not validate current Reclass model. Inspect failed minion manually.')
-        error(e)
+        error(e.toString())
     }
 }
 
-def archiveReclassModelChanges(ArrayList saltMinions, String oldSuffix, String newSuffix) {
-    def diffDir = 'pillarsDiff'
-    dir(diffDir) {
-        for(String minion in saltMinions) {
-            def fileName = "reclass-model-${minion}-diff.out"
-            sh "diff -u ${workspace}/${oldSuffix}/${minion} ${workspace}/${newSuffix}/${minion} > ${fileName} || true"
-        }
+def archiveReclassModelChanges(ArrayList saltMinions, String oldSuffix = 'before', String newSuffix = 'after') {
+    for (String minion in saltMinions) {
+        def fileName = "reclass-model-${minion}-diff.out"
+        sh "diff -u inventory-${minion}-${oldSuffix}.out inventory-${minion}-${newSuffix}.out > ${fileName} || true"
+        archiveArtifacts artifacts: "${fileName}"
     }
-    archiveArtifacts artifacts: "${oldSuffix}/*"
-    archiveArtifacts artifacts: "${newSuffix}/*"
-    archiveArtifacts artifacts: "${diffDir}/*"
 }
 
 if (common.validInputParam('PIPELINE_TIMEOUT')) {
     try {
         pipelineTimeout = env.PIPELINE_TIMEOUT.toInteger()
-    } catch(Exception e) {
+    } catch (Exception e) {
         common.warningMsg("Provided PIPELINE_TIMEOUT parameter has invalid value: ${env.PIPELINE_TIMEOUT} - should be interger")
     }
 }
 
 timeout(time: pipelineTimeout, unit: 'HOURS') {
-    node("python && docker") {
+    node("python") {
         try {
+            def inventoryBeforeFilename = "reclass-inventory-before.out"
+            def inventoryAfterFilename = "reclass-inventory-after.out"
             workspace = common.getWorkspace()
-            deleteDir()
             targetMcpVersion = null
             if (!common.validInputParam('TARGET_MCP_VERSION') && !common.validInputParam('MCP_VERSION')) {
                 error('You must specify MCP version in TARGET_MCP_VERSION|MCP_VERSION variable')
             }
             // bw comp. for 2018.X => 2018.11 release
-            if (common.validInputParam('MCP_VERSION')){
+            if (common.validInputParam('MCP_VERSION')) {
                 targetMcpVersion = env.MCP_VERSION
                 common.warningMsg("targetMcpVersion has been changed to:${targetMcpVersion}, which was taken from deprecated pipeline viriable:MCP_VERSION")
-            }
-            else {
+            } else {
                 targetMcpVersion = env.TARGET_MCP_VERSION
             }
             // end bw comp. for 2018.X => 2018.11 release
@@ -160,26 +286,24 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 updateLocalRepos = env.getProperty('UPDATE_LOCAL_REPOS').toBoolean()
                 reclassSystemBranch = reclassSystemBranchDefault
             }
-
             python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
-
-            def pillarsBeforeSuffix = 'pillarsBefore'
-            def pillarsAfterSuffix = 'pillarsAfter'
-            def inventoryBeforeFilename = "reclass-inventory-before.out"
-            def inventoryAfterFilename = "reclass-inventory-after.out"
-
             def minions = salt.getMinions(venvPepper, '*')
-            def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_name").get("return")[0].values()[0]
 
-            stage("Update Reclass and Salt-Formulas ") {
-                validateReclassModel(minions, pillarsBeforeSuffix)
+            stage('Update Reclass and Salt-Formulas') {
+                common.infoMsg('Perform: Full salt sync')
+                salt.fullRefresh(venvPepper, '*')
+                common.infoMsg('Perform: Validate reclass medata before processing')
+                validateReclassModel(minions, 'before')
+
+                common.infoMsg('Perform: archiveReclassInventory before upgrade')
                 archiveReclassInventory(inventoryBeforeFilename)
 
+                def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', '_param:cluster_name').get('return')[0].values()[0]
                 try {
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/ && git diff-index --quiet HEAD --")
+                    salt.cmdRun(venvPepper, 'I@salt:master', 'cd /srv/salt/reclass/ && git status && git diff-index --quiet HEAD --')
                 }
                 catch (Exception ex) {
-                    error("You have uncommited changes in your Reclass cluster model repository. Please commit or reset them and rerun the pipeline.")
+                    error('You have uncommitted changes in your Reclass cluster model repository. Please commit or reset them and rerun the pipeline.')
                 }
                 if (updateClusterModel) {
                     common.infoMsg('Perform: UPDATE_CLUSTER_MODEL')
@@ -202,7 +326,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.updates' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.updates/system.linux.system.repo.mcp.apt_mirantis.update/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                            "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.extra' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.extra/system.linux.system.repo.mcp.apt_mirantis.extra/g'")
+                        "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.extra' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.extra/system.linux.system.repo.mcp.apt_mirantis.extra/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add kubernetes-extra repo
                     if (salt.testTarget(venvPepper, "I@kubernetes:master")) {
@@ -217,7 +341,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     }
                     // Add all update repositories
                     def repoIncludeBase = '- system.linux.system.repo.mcp.apt_mirantis.'
-                    def updateRepoList = [ 'cassandra', 'ceph', 'contrail', 'docker', 'elastic', 'extra', 'openstack', 'percona', 'salt-formulas', 'saltstack', 'ubuntu' ]
+                    def updateRepoList = ['cassandra', 'ceph', 'contrail', 'docker', 'elastic', 'extra', 'openstack', 'percona', 'salt-formulas', 'saltstack', 'ubuntu']
                     updateRepoList.each { repo ->
                         def repoNameUpdateInclude = "${repoIncludeBase}update.${repo}"
                         def filesWithInclude = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -Plr '\\${repoIncludeBase}${repo}\$' . || true", false).get('return')[0].values()[0].trim().tokenize('\n')
@@ -226,7 +350,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                             if (updateRepoIncludeExist == 'not_found') {
                                 // Include needs to be added
                                 salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                                        "sed -i 's/\\( *\\)${repoIncludeBase}${repo}\$/&\\n\\1${repoNameUpdateInclude}/g' ${file}")
+                                    "sed -i 's/\\( *\\)${repoIncludeBase}${repo}\$/&\\n\\1${repoNameUpdateInclude}/g' ${file}")
                                 common.infoMsg("Update repo for ${repo} is added to ${file}")
                             }
                         }
@@ -247,120 +371,21 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git status && " +
                         "git add -u && git commit --allow-empty -m 'Cluster model update to the release $targetMcpVersion on $dateTime'")
                 }
-
-                salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'saltutil.refresh_pillar')
-                try {
-                    salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo')
-                } catch (Exception e) {
-                    common.errorMsg("Something wrong with model after UPDATE_CLUSTER_MODEL step. Please check model.")
-                    throw e
-                }
-
-                common.infoMsg('Running a check for compatibility with new Reclass/Salt-Formulas packages')
-                def saltModelDir = 'salt-model'
-                def nodesArtifact = 'pillarsFromValidation.tar.gz'
-                def reclassModel = 'reclassModel.tar.gz'
-                def pillarsAfterValidation = 'pillarsFromValidation'
-                try {
-                    def repos = salt.getPillar(venvPepper, 'I@salt:master', "linux:system:repo").get("return")[0].values()[0]
-                    def cfgInfo = salt.getPillar(venvPepper, 'I@salt:master', "reclass:storage:node:infra_cfg01_node").get("return")[0].values()[0]
-                    def docker_image_for_test = salt.getPillar(venvPepper, 'I@salt:master', "_param:docker_image_cvp_sanity_checks").get("return")[0].values()[0]
-                    def saltModelTesting = new com.mirantis.mk.SaltModelTesting()
-                    def config = [
-                        'dockerHostname': "cfg01",
-                        'distribRevision': "${targetMcpVersion}",
-                        'baseRepoPreConfig': true,
-                        'extraRepoMergeStrategy': 'override',
-                        'dockerContainerName': 'new-reclass-package-check',
-                        'dockerMaxCpus': 1,
-                        'image': docker_image_for_test,
-                        'dockerExtraOpts': [
-                            "-v ${env.WORKSPACE}/${saltModelDir}:/srv/salt/reclass",
-                            "--entrypoint ''",
-                        ],
-                        'extraRepos': ['repo': repos, 'aprConfD': "APT::Get::AllowUnauthenticated 'true';" ],
-                        'envOpts': [ "CLUSTER_NAME=${cluster_name}", "NODES_ARTIFACT_NAME=${nodesArtifact}" ]
-                    ]
-                    def tarName = '/tmp/currentModel.tar.gz'
-                    salt.cmdRun(venvPepper, 'I@salt:master', "tar -cf ${tarName} --mode='a+rwX' --directory=/srv/salt/reclass classes")
-                    if (cfgInfo == '') {
-                        // case for old setups when cfg01 node model was static
-                        def node_name = salt.getPillar(venvPepper, 'I@salt:master', "linux:system:name").get("return")[0].values()[0]
-                        def node_domain = salt.getPillar(venvPepper, 'I@salt:master', "linux:system:domain").get("return")[0].values()[0]
-                        salt.cmdRun(venvPepper, 'I@salt:master', "tar -rf ${tarName} --mode='a+rwX' --directory=/srv/salt/reclass nodes/${node_name}.${node_domain}.yml")
-                        config['envOpts'].add("CFG_NODE_NAME=${node_name}.${node_domain}")
-                    }
-                    def modelHash = salt.cmdRun(venvPepper, 'I@salt:master', "cat ${tarName} | gzip -9 -c | base64", false, null, false).get('return')[0].values()[0]
-                    writeFile file: 'modelHash', text: modelHash
-                    sh "cat modelHash | base64 -d | gzip -d > ${reclassModel}"
-                    sh "mkdir ${saltModelDir} && tar -xf ${reclassModel} -C ${saltModelDir}"
-
-                    config['runCommands'] = [
-                        '001_Install_Salt_Reclass_Packages': { sh('apt-get install -y reclass salt-formula-*') },
-                        '002_Get_new_nodes': {
-                            try {
-                                sh('''#!/bin/bash
-                                new_generated_dir=/srv/salt/_new_nodes
-                                new_pillar_dir=/srv/salt/_new_pillar
-                                reclass_classes=/srv/salt/reclass/classes/
-                                mkdir -p ${new_generated_dir} ${new_pillar_dir}
-                                nodegenerator -b ${reclass_classes} -o ${new_generated_dir} ${CLUSTER_NAME}
-                                for node in $(ls ${new_generated_dir}); do
-                                    nodeName=$(basename -s .yml ${node})
-                                    reclass -n ${nodeName} -c ${reclass_classes} -u ${new_generated_dir} > ${new_pillar_dir}/${nodeName}
-                                done
-                                if [[ -n "${CFG_NODE_NAME}" ]]; then
-                                    reclass -n ${CFG_NODE_NAME} -c ${reclass_classes} -u /srv/salt/reclass/nodes > ${new_pillar_dir}/${CFG_NODE_NAME}
-                                fi
-                                tar -czf /tmp/${NODES_ARTIFACT_NAME} -C ${new_pillar_dir}/ .
-                                ''')
-                            } catch (Exception e) {
-                                print "Test new nodegenerator tool is failed: ${e}"
-                                throw e
-                            }
-                        },
-                    ]
-                    config['runFinally'] = [ '001_Archive_nodegenerator_artefact': {
-                        sh(script: "mv /tmp/${nodesArtifact} ${env.WORKSPACE}/${nodesArtifact}")
-                        archiveArtifacts artifacts: nodesArtifact
-                    }]
-                    saltModelTesting.setupDockerAndTest(config)
-                    def pillarsValidationDiff = "${pillarsAfterValidation}/diffFromOriginal"
-                    sh "mkdir -p ${pillarsValidationDiff} && tar -xf ${nodesArtifact} --dir ${pillarsAfterValidation}/"
-                    def changesFound = false
-                    for(String minion in minions) {
-                        try {
-                            sh (script:"diff -u -w -I '^Salt command execution success' -I '^  node: ' -I '^  uri: ' -I '^  timestamp: ' ${pillarsBeforeSuffix}/${minion} ${pillarsAfterValidation}/${minion} > ${pillarsValidationDiff}/${minion}", returnStdout: true)
-                        } catch(Exception e) {
-                            changesFound = true
-                            archiveArtifacts artifacts: "${pillarsValidationDiff}/${minion}"
-                            def buildUrl = env.BUILD_URL ? env.BUILD_URL : "${env.JENKINS_URL}/job/${env.JOB_NAME}/${env.BUILD_NUMBER}"
-                            common.errorMsg("Found diff changes for ${minion} minion: ${buildUrl}/artifact/${pillarsValidationDiff}/${minion}/*view*/ ")
-                        }
-                    }
-                    if (changesFound) {
-                        common.warningMsg('Found diff changes between current pillar data and updated. Inspect logs above.')
-                        input message: 'Continue anyway?'
-                    } else {
-                        common.infoMsg('Diff between current pillar data and updated one - not found.')
-                    }
-                }  catch (Exception updateErr) {
-                    common.warningMsg(updateErr)
-                    common.warningMsg('Failed to validate update Salt Formulas repos/packages.')
-                    input message: 'Continue anyway?'
-                } finally {
-                    sh "rm -rf ${saltModelDir} ${nodesArtifact} ${pillarsAfterValidation} ${reclassModel}"
-                }
-
                 try {
                     common.infoMsg('Perform: UPDATE Salt Formulas')
+                    salt.fullRefresh(venvPepper, '*')
+                    salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo')
                     def saltEnv = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_master_base_environment").get("return")[0].values()[0]
-                    salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'state.sls_id', ["salt_master_${saltEnv}_pkg_formulas",'salt.master.env'])
+                    salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'state.sls_id', ["salt_master_${saltEnv}_pkg_formulas", 'salt.master.env'])
+                    salt.fullRefresh(venvPepper, '*')
                 } catch (Exception updateErr) {
                     common.warningMsg(updateErr)
                     common.warningMsg('Failed to update Salt Formulas repos/packages. Check current available documentation on https://docs.mirantis.com/mcp/latest/, how to update packages.')
                     input message: 'Continue anyway?'
                 }
+
+                wa29352(minions, cluster_name)
+                wa29155(minions, cluster_name)
 
                 try {
                     common.infoMsg('Perform: UPDATE Reclass package')
@@ -381,21 +406,23 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 salt.fullRefresh(venvPepper, '*')
-
                 try {
                     salt.cmdRun(venvPepper, 'I@salt:master', "reclass-salt --top")
                 }
                 catch (Exception ex) {
-                    error("Reclass fails rendering. Pay attention to your cluster model.")
+
+                    error('Reclass fails rendering. Pay attention to your cluster model.' +
+                        'ErrorMessage:' + ex.toString())
                 }
 
+                common.infoMsg('Perform: archiveReclassInventory AFTER upgrade')
                 archiveReclassInventory(inventoryAfterFilename)
 
                 sh "diff -u $inventoryBeforeFilename $inventoryAfterFilename > reclass-inventory-diff.out || true"
                 archiveArtifacts artifacts: "reclass-inventory-diff.out"
 
-                validateReclassModel(minions, pillarsAfterSuffix)
-                archiveReclassModelChanges(minions, pillarsBeforeSuffix, pillarsAfterSuffix)
+                validateReclassModel(minions, 'after')
+                archiveReclassModelChanges(minions)
             }
 
             if (updateLocalRepos) {
@@ -437,7 +464,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
             }
 
-            stage("Update Drivetrain") {
+            stage('Update Drivetrain') {
                 if (upgradeSaltStack) {
                     updateSaltStack("I@salt:master", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
 
@@ -446,28 +473,26 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 if (updatePipelines) {
-                    triggerMirrorJob("git-mirror-downstream-mk-pipelines")
-                    triggerMirrorJob("git-mirror-downstream-pipeline-library")
+                    common.infoMsg('Perform: UPDATE git repos')
+                    triggerMirrorJob('git-mirror-downstream-mk-pipelines', reclassSystemBranch)
+                    triggerMirrorJob('git-mirror-downstream-pipeline-library', reclassSystemBranch)
                 }
 
                 // update minions certs
-                // call for `salt.minion.ca` state on related nodes to make sure
-                // mine was updated with required data after salt-minion/salt-master restart salt:minion:ca
-                salt.enforceState(venvPepper, "I@salt:minion:ca", 'salt.minion.ca', true)
                 salt.enforceState(venvPepper, "I@salt:minion", 'salt.minion.cert', true)
-                // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
-                salt.enforceState([saltId: venvPepper, target: "I@salt:minion", state: ['salt.minion'], read_timeout: 60, retries: 2])
-                // updating users and keys
+
+                // Retry needed only for rare race-condition in user appearance
+                common.infoMsg('Perform: updating users and keys')
                 salt.enforceState(venvPepper, "I@linux:system", 'linux.system.user', true)
+                common.infoMsg('Perform: updating openssh')
                 salt.enforceState(venvPepper, "I@linux:system", 'openssh', true)
 
-                salt.enforceState(venvPepper, "I@jenkins:client", 'jenkins.client', true)
-
-                salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client' state.sls docker.client --async")
+                salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true)
+                salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
 
                 sleep(180)
 
-                common.infoMsg("Checking if Docker containers are up")
+                common.infoMsg('Perform: Checking if Docker containers are up')
 
                 try {
                     common.retry(10, 30) {
