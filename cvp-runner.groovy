@@ -38,14 +38,15 @@ envs:
 
 node (SLAVE_NODE) {
     def artifacts_dir = 'validation_artifacts'
+    def test_suite_name = "${env.JOB_NAME}"
+    def xml_file = "${test_suite_name}_report.xml"
+
     def configRun = [:]
     try {
         withEnv(env_vars) {
             stage('Initialization') {
                 def container_workdir = '/var/lib'
-                def test_suite_name = "${env.JOB_NAME}"
                 def workdir = "${container_workdir}/${test_suite_name}"
-                def xml_file = "${test_suite_name}_report.xml"
                 def tests_set = (env.getProperty('tests_set')) ?: ''
                 def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} --tb=short -vv ${tests_set}"
 
@@ -93,28 +94,28 @@ node (SLAVE_NODE) {
                         style: 'line',
                         title: 'SPT Glance results',
                         xmlSeries: [[
-                        file: "${env.JOB_NAME}_report.xml",
+                        file: "${artifacts_dir}/${xml_file}",
                         nodeType: 'NODESET',
                         url: '',
-                        xpath: '/testsuite/testcase[@name="test_speed_glance"]/properties/property']]
+                        xpath: '/testsuite/testcase[@classname="tests.test_glance"]/properties/property']]
                     plot csvFileName: 'plot-hw2hw.csv',
                         group: 'SPT',
                         style: 'line',
                         title: 'SPT HW2HW results',
                         xmlSeries: [[
-                        file: "${env.JOB_NAME}_report.xml",
+                        file: "${artifacts_dir}/${xml_file}",
                         nodeType: 'NODESET',
                         url: '',
-                        xpath: '/testsuite/testcase[@classname="cvp_spt.tests.test_hw2hw"]/properties/property']]
+                        xpath: '/testsuite/testcase[@classname="tests.test_hw2hw"]/properties/property']]
                     plot csvFileName: 'plot-vm2vm.csv',
                         group: 'SPT',
                         style: 'line',
                         title: 'SPT VM2VM results',
                         xmlSeries: [[
-                        file: "${env.JOB_NAME}_report.xml",
+                        file: "${artifacts_dir}/${xml_file}",
                         nodeType: 'NODESET',
                         url: '',
-                        xpath: '/testsuite/testcase[@classname="cvp_spt.tests.test_vm2vm"]/properties/property']]
+                        xpath: '/testsuite/testcase[@classname="tests.test_vm2vm"]/properties/property']]
                 }
             }
         }
