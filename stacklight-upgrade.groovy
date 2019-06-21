@@ -217,8 +217,11 @@ timeout(time: 12, unit: 'HOURS') {
                     common.infoMsg('Start the monitoring services')
                     salt.enforceState([saltId: pepperEnv, target: 'I@docker:swarm:role:master and I@prometheus:server', state: 'docker'])
                     salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.sync_all', [], null, true)
+                    common.infoMsg("Waiting grafana service to start")
+                    sleep(120)
+
                     common.infoMsg('Refresh the Grafana dashboards')
-                    salt.enforceState([saltId: pepperEnv, target: 'I@grafana:client', state: 'grafana.client'])
+                    salt.enforceState([saltId: pepperEnv, target: 'I@grafana:client', state: 'grafana.client', retries: 10, retries_wait: 30])
                 } catch (Exception er) {
                     errorOccured = true
                     common.errorMsg("[ERROR] Upgrade of docker components failed. Please fix it manually.")
