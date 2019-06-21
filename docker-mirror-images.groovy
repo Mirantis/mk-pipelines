@@ -71,7 +71,7 @@ timeout(time: 4, unit: 'HOURS') {
         try {
             allowedGroups = ['release-engineering']
             releaseTags = ['proposed', 'release',  '2018', '2019', '2020']
-            tags = [env.SOURCE_IMAGE_TAG, env.IMAGE_TAG]
+            tags = [env.IMAGE_TAG]
             tagInRelease = tags.any { tag -> releaseTags.any { tag.contains(it) } }
             if (tagInRelease) {
                 if (!jenkinsUtils.currentUserInGroups(allowedGroups)) {
