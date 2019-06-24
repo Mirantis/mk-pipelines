@@ -173,6 +173,9 @@ timeout(time: 12, unit: 'HOURS') {
         if (OS_DIST_UPGRADE.toBoolean() == true || OS_UPGRADE.toBoolean() == true) {
           debian.osUpgradeNode(env, target, upgrade_mode, false)
         }
+        // Workaround for PROD-31413, install python-tornado from latest release if available and
+        // restart minion to apply new code.
+        salt.upgradePackageAndRestartSaltMinion(env, target, 'python-tornado')
       }
 
       common.stageWrapper(upgradeStageMap, "Upgrade OpenStack", target, interactive) {
