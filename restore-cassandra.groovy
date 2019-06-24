@@ -37,10 +37,6 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
 
-        stage('Backup') {
-            salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', 'bash /usr/local/bin/cassandra-backup-runner-call.sh')
-        }
-
         stage('Restore') {
             // get opencontrail version
             def contrailVersion = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "_param:opencontrail_version")
@@ -67,13 +63,13 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg('An error has been occurred during cassandra db startup: ' + err.getMessage())
                     throw err
                 }
-                // remove restore-already-happenned file if any is present
+                // remove restore-already-happened file if any is present
                 try {
                     salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', 'rm /var/backups/cassandra/dbrestored')
                 } catch (Exception err) {
                     common.warningMsg('/var/backups/cassandra/dbrestored not present? ' + err.getMessage())
                 }
-                // perform actual backup
+                // perform restore steps
                 salt.enforceState(pepperEnv, 'I@cassandra:backup:client', "cassandra")
                 salt.runSaltProcessStep(pepperEnv, 'I@cassandra:backup:client', 'system.reboot', null, [], true, 5)
                 sleep(5)
