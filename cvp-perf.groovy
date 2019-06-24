@@ -32,19 +32,24 @@ node() {
               TARGET_NODE = "I@gerrit:client"
             }
             saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+            os_version=salt.getPillar(saltMaster, 'I@salt:master', '_param:openstack_version')['return'][0].values()[0]
+            if (!os_version) {
+                throw new Exception("Openstack is not found on this env. Exiting")
+            }
+            container_name = "${env.JOB_NAME}"
             salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_artifacts_dir}")
             salt.cmdRun(saltMaster, TARGET_NODE, "mkdir -p ${remote_artifacts_dir}")
             keystone_creds = validate._get_keystone_creds_v3(saltMaster)
             if (!keystone_creds) {
                 keystone_creds = validate._get_keystone_creds_v2(saltMaster)
             }
-            validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, 'cvp', keystone_creds)
-            validate.configureContainer(saltMaster, TARGET_NODE, PROXY, TOOLS_REPO, "")
+            validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, container_name, keystone_creds)
+            validate.configureContainer(saltMaster, TARGET_NODE, PROXY, TOOLS_REPO, "", "internalURL", "", "", [], container_name)
         }
 
         stage('Run Rally tests') {
             sh "mkdir -p ${artifacts_dir}"
-            validate.runCVPrally(saltMaster, TARGET_NODE, RALLY_SCENARIO_FILE, remote_artifacts_dir)
+            validate.runCVPrally(saltMaster, TARGET_NODE, RALLY_SCENARIO_FILE, remote_artifacts_dir, "docker-rally", container_name)
         }
 
         stage('Collect results') {
@@ -59,7 +64,8 @@ node() {
         throw e
     } finally {
         if (DEBUG_MODE == 'false') {
-            validate.runCleanup(saltMaster, TARGET_NODE)
+            validate.openstack_cleanup(saltMaster, TARGET_NODE, container_name)
+            validate.runCleanup(saltMaster, TARGET_NODE, container_name)
             salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_artifacts_dir}")
         }
     }

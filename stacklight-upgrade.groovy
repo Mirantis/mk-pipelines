@@ -51,22 +51,35 @@ def verify_es_is_green(master) {
     try {
         def retries_wait = 20
         def retries = 15
+
         def elasticsearch_vip
-        def pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host')
-        if(!pillar['return'].isEmpty()) {
-            elasticsearch_vip = pillar['return'][0].values()[0]
+        def pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host'))
+        if(pillar) {
+            elasticsearch_vip = pillar
         } else {
             errorOccured = true
             common.errorMsg('[ERROR] Elasticsearch VIP address could not be retrieved')
         }
-        pillar = salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:port')
+
+        pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:port'))
         def elasticsearch_port
-        if(!pillar['return'].isEmpty()) {
-            elasticsearch_port = pillar['return'][0].values()[0]
+        if(pillar) {
+            elasticsearch_port = pillar
         } else {
             errorOccured = true
             common.errorMsg('[ERROR] Elasticsearch VIP port could not be retrieved')
         }
+
+        pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:scheme'))
+        def elasticsearch_scheme
+        if(pillar) {
+            elasticsearch_scheme = pillar
+            common.infoMsg("[INFO] Using elasticsearch scheme: ${elasticsearch_scheme}")
+        } else {
+            common.infoMsg('[INFO] No pillar with Elasticsearch server scheme, using scheme: http')
+            elasticsearch_scheme = "http"
+        }
+
         common.retry(retries,retries_wait) {
             common.infoMsg('Waiting for Elasticsearch to become green..')
             salt.cmdRun(master, "I@elasticsearch:client", "curl -sf ${elasticsearch_vip}:${elasticsearch_port}/_cat/health | awk '{print \$4}' | grep green")
@@ -204,8 +217,11 @@ timeout(time: 12, unit: 'HOURS') {
                     common.infoMsg('Start the monitoring services')
                     salt.enforceState([saltId: pepperEnv, target: 'I@docker:swarm:role:master and I@prometheus:server', state: 'docker'])
                     salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.sync_all', [], null, true)
+                    common.infoMsg("Waiting grafana service to start")
+                    sleep(120)
+
                     common.infoMsg('Refresh the Grafana dashboards')
-                    salt.enforceState([saltId: pepperEnv, target: 'I@grafana:client', state: 'grafana.client'])
+                    salt.enforceState([saltId: pepperEnv, target: 'I@grafana:client', state: 'grafana.client', retries: 10, retries_wait: 30])
                 } catch (Exception er) {
                     errorOccured = true
                     common.errorMsg("[ERROR] Upgrade of docker components failed. Please fix it manually.")

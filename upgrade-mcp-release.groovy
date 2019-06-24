@@ -44,7 +44,7 @@ def triggerMirrorJob(String jobName, String reclassSystemBranch) {
 }
 
 def updateSaltStack(target, pkgs) {
-    salt.cmdRun(venvPepper, "I@salt:master", "salt -C '${target}' --async pkg.install force_yes=True pkgs='$pkgs'")
+    salt.cmdRun(venvPepper, 'I@salt:master', "salt -C '${target}' --async pkg.install force_yes=True pkgs='$pkgs'")
     // can't use same function from pipeline lib, as at the moment of running upgrade pipeline Jenkins
     // still using pipeline lib from current old mcp-version
     common.retry(20, 60) {
@@ -219,6 +219,25 @@ def archiveReclassModelChanges(ArrayList saltMinions, String oldSuffix = 'before
     }
 }
 
+def checkDebsums() {
+    // check for salt-formulas consistency
+    try {
+        try {
+            salt.cmdRun(venvPepper, 'I@salt:master', "salt -C 'I@salt:master' pkg.install force_yes=True pkgs=[debsums]")
+        }
+        catch (Exception ex) {
+            common.warningMsg('Unable to install package "debsums" at cfg01. Salt-formulas integrity check skipped')
+        }
+        salt.cmdRun(venvPepper, 'I@salt:master', '> /root/debdsums_report; for i in $(dpkg-query -W -f=\'${Package}\\n\' | sed "s/ //g" |grep \'salt-formula-\'); do debsums -s ${i} 2>> /root/debdsums_report; done')
+        salt.cmdRun(venvPepper, 'I@salt:master', 'if [ -s "/root/debdsums_report" ]; then exit 1 ; fi')
+    }
+    catch (Exception ex) {
+        common.errorMsg(salt.cmdRun(venvPepper, 'I@salt:master', 'cat /root/debdsums_report ', true, null, false).get('return')[0].values()[0].trim())
+        common.errorMsg(ex.toString())
+        error('You have unexpected changes in formulas. All of them will be overwrited by update. Unable to continue in automatic way')
+    }
+}
+
 if (common.validInputParam('PIPELINE_TIMEOUT')) {
     try {
         pipelineTimeout = env.PIPELINE_TIMEOUT.toInteger()
@@ -228,7 +247,7 @@ if (common.validInputParam('PIPELINE_TIMEOUT')) {
 }
 
 timeout(time: pipelineTimeout, unit: 'HOURS') {
-    node("python") {
+    node('python') {
         try {
             def inventoryBeforeFilename = "reclass-inventory-before.out"
             def inventoryAfterFilename = "reclass-inventory-after.out"
@@ -305,6 +324,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 catch (Exception ex) {
                     error('You have uncommitted changes in your Reclass cluster model repository. Please commit or reset them and rerun the pipeline.')
                 }
+                checkDebsums()
                 if (updateClusterModel) {
                     common.infoMsg('Perform: UPDATE_CLUSTER_MODEL')
                     def dateTime = common.getDatetime()
@@ -362,9 +382,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^- system.defaults\$' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
                         "sed -i 's|^classes:|classes:\\n- system.defaults|' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                            "grep -r -l 'docker_image_jenkins: .*' cicd | xargs --no-run-if-empty sed -i 's|\\s*docker_image_jenkins: .*||g'")
+                        "grep -r -l 'docker_image_jenkins: .*' cicd | xargs --no-run-if-empty sed -i 's|\\s*docker_image_jenkins: .*||g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                            "grep -r -l 'docker_image_jenkins_slave: .*' cicd | xargs --no-run-if-empty sed -i 's|\\s*docker_image_jenkins_slave: .*||g'")
+                        "grep -r -l 'docker_image_jenkins_slave: .*' cicd | xargs --no-run-if-empty sed -i 's|\\s*docker_image_jenkins_slave: .*||g'")
                     common.infoMsg("The following changes were made to the cluster model and will be commited. " +
                         "Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
@@ -374,7 +394,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 try {
                     common.infoMsg('Perform: UPDATE Salt Formulas')
                     salt.fullRefresh(venvPepper, '*')
-                    salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo')
+                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['linux.system.repo'], read_timeout: 60, retries: 2])
                     def saltEnv = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_master_base_environment").get("return")[0].values()[0]
                     salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'state.sls_id', ["salt_master_${saltEnv}_pkg_formulas", 'salt.master.env'])
                     salt.fullRefresh(venvPepper, '*')
@@ -397,12 +417,13 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 salt.fullRefresh(venvPepper, 'I@salt:master')
-                salt.enforceState(venvPepper, 'I@salt:master', 'reclass.storage', true)
+                salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['reclass.storage'], read_timeout: 60, retries: 2])
                 try {
-                    salt.enforceState(venvPepper, "I@salt:master", 'reclass', true)
+                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['reclass'], read_timeout: 60, retries: 2])
                 }
                 catch (Exception ex) {
-                    error("Reclass fails rendering. Pay attention to your cluster model.")
+                    common.errorMsg(ex.toString())
+                    error('Reclass fails rendering. Pay attention to your cluster model.')
                 }
 
                 salt.fullRefresh(venvPepper, '*')
@@ -466,10 +487,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
 
             stage('Update Drivetrain') {
                 if (upgradeSaltStack) {
-                    updateSaltStack("I@salt:master", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
+                    updateSaltStack('I@salt:master', '["salt-master", "salt-common", "salt-api", "salt-minion"]')
 
-                    salt.enforceState(venvPepper, "I@linux:system", 'linux.system.repo', true)
-                    updateSaltStack("I@salt:minion and not I@salt:master", '["salt-minion"]')
+                    salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['linux.system.repo'], read_timeout: 60, retries: 2])
+                    updateSaltStack('I@salt:minion and not I@salt:master', '["salt-minion"]')
                 }
 
                 if (updatePipelines) {
@@ -479,23 +500,34 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 // update minions certs
-                salt.enforceState(venvPepper, "I@salt:minion", 'salt.minion.cert', true)
+                // call for `salt.minion.ca` state on related nodes to make sure
+                // mine was updated with required data after salt-minion/salt-master restart salt:minion:ca
+                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion:ca', state: ['salt.minion.ca'], read_timeout: 60, retries: 2])
+                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion', state: ['salt.minion.cert'], read_timeout: 60, retries: 2])
 
+                // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
+                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion', state: ['salt.minion'], read_timeout: 60, retries: 2])
                 // Retry needed only for rare race-condition in user appearance
                 common.infoMsg('Perform: updating users and keys')
-                salt.enforceState(venvPepper, "I@linux:system", 'linux.system.user', true)
+                salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['linux.system.user'], read_timeout: 60, retries: 2])
                 common.infoMsg('Perform: updating openssh')
-                salt.enforceState(venvPepper, "I@linux:system", 'openssh', true)
+                salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['openssh'], read_timeout: 60, retries: 2])
 
-                salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true)
-                salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
+                // apply salt API TLS if needed
+                def nginxAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]
+                if (nginxAtMaster.toString().toLowerCase() == 'true') {
+                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['nginx'], read_timeout: 60, retries: 2])
+                }
+
+                salt.enforceState([saltId: venvPepper, target: 'I@jenkins:client and not I@salt:master', state: ['jenkins.client'], read_timeout: 60, retries: 2])
+                salt.cmdRun(venvPepper, 'I@salt:master', "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
 
                 sleep(180)
 
                 common.infoMsg('Perform: Checking if Docker containers are up')
 
                 try {
-                    common.retry(10, 30) {
+                    common.retry(20, 30) {
                         salt.cmdRun(venvPepper, 'I@jenkins:client and I@docker:client', "! docker service ls | tail -n +2 | grep -v -E '\\s([0-9])/\\1\\s'")
                     }
                 }

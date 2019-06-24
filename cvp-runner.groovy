@@ -5,148 +5,126 @@
  * Expected parameters:
  *   SALT_MASTER_URL                 URL of Salt master
  *   SALT_MASTER_CREDENTIALS         Credentials to the Salt API
+ *   IMAGE                           Docker image link to use for running container with test framework.
+ *   EXTRA_PARAMS                    Yaml context which contains additional setting for job
  *
- *   TESTS_SET                       Leave empty for full run or choose a file (test)
- *   TESTS_REPO                      Repo to clone
- *   TESTS_SETTINGS                  Additional environment varibales to apply
- *   PROXY                           Proxy to use for cloning repo or for pip
- *   IMAGE                           Docker image to use for running container with test framework.
- *   DEBUG_MODE                      If you need to debug (keep container after test), please enabled this
- *  To launch tests from docker images need to set IMAGE and left TESTS_REPO empty
  */
 
 common = new com.mirantis.mk.Common()
 validate = new com.mirantis.mcp.Validate()
-salt = new com.mirantis.mk.Salt()
 salt_testing = new com.mirantis.mk.SaltModelTesting()
-def artifacts_dir = "validation_artifacts"
-def remote_dir = '/root/qa_results'
-def container_workdir = '/var/lib'
-def container_name = "${env.JOB_NAME}"
-def xml_file = "${container_name}_report.xml"
-def TARGET_NODE = "I@gerrit:client"
-def reinstall_env = false
 
-def saltMaster
-def settings
+def EXTRA_PARAMS = readYaml(text: env.getProperty('EXTRA_PARAMS')) ?: [:]
+def env_vars = EXTRA_PARAMS.get("envs") ?: []
 
-slaveNode = (env.getProperty('SLAVE_NODE')) ?: 'docker'
-imageName = (env.getProperty('IMAGE')) ?: 'docker-prod-local.docker.mirantis.net/mirantis/cvp/cvp-spt:stable'
+def IMAGE = (env.getProperty('IMAGE')) ?: 'docker-prod-local.docker.mirantis.net/mirantis/cvp/cvp-sanity-checks:stable'
+def SLAVE_NODE = (env.getProperty('SLAVE_NODE')) ?: 'docker'
 
-node(slaveNode) {
-    try{
-        stage('Initialization') {
-            sh "rm -rf ${artifacts_dir}"
-            // TODO collaps TESTS_SETTINGS flow into EXTRA variables map
-            if ( TESTS_SETTINGS != "" ) {
-                for (var in TESTS_SETTINGS.tokenize(";")) {
-                    key = var.tokenize("=")[0].trim()
-                    value = var.tokenize("=")[1].trim()
-                    if (key == 'TARGET_NODE') {
-                        TARGET_NODE = value
-                        common.infoMsg("Node for container is set to ${TARGET_NODE}")
-                    }
-                    if (key == 'REINSTALL_ENV') {
-                        reinstall_env = value.toBoolean()
-                    }
-                }
-            }
-            if ( IMAGE == "" ) {
-                common.infoMsg("Env for tests will be built on Jenkins slave")
-                TARGET_NODE = ""
-                validate.prepareVenv(TESTS_REPO, PROXY)
-            } else {
-                saltMaster = salt.connection(SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-                salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_dir}/")
-                salt.cmdRun(saltMaster, TARGET_NODE, "mkdir -p ${remote_dir}/")
-                validate.runContainer(saltMaster, TARGET_NODE, IMAGE, container_name)
-                if ( TESTS_REPO != "") {
-                    salt.cmdRun(saltMaster, TARGET_NODE, "docker exec ${container_name} rm -rf ${container_workdir}/${container_name}")
-                    salt.cmdRun(saltMaster, TARGET_NODE, "docker exec ${container_name} git clone ${TESTS_REPO} ${container_workdir}/${container_name}")
-                    TESTS_SET = container_workdir + '/' + container_name + '/' + TESTS_SET
-                    if ( reinstall_env ) {
-                        common.infoMsg("Pip packages in container will be reinstalled based on requirements.txt from ${TESTS_REPO}")
-                        salt.cmdRun(saltMaster, TARGET_NODE, "docker exec ${container_name} pip install --force-reinstall -r ${container_workdir}/${container_name}/requirements.txt")
-                    }
-                }
-            }
-        }
+/*
+YAML example
+=====
+# commands is a map of commands which looks like step_name: shell_command
+commands:
+  001_prepare: rm /var/lib/g.txt
+  002_prepare: git clone http://repo_with_tests.git
+  003_test: cd repo_with_tests && pytest /var/lib/ --collect-only
+  004_collect: cp cvp-spt /var/lib/validation_artifacts/
+# envs is a list of new environment variables
+envs:
+  - SALT_USERNAME=admin
+  - SALT_PASSWORD=password
+  - drivetrain_version=testing
+*/
 
-        stage('Run Tests') {
-            def creds = common.getCredentials(SALT_MASTER_CREDENTIALS)
-            def username = creds.username
-            def password = creds.password
-            def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} --tb=short -sv ${container_workdir}/${TESTS_SET} -vv"
+node (SLAVE_NODE) {
+    def artifacts_dir = 'validation_artifacts'
+    def test_suite_name = "${env.JOB_NAME}"
+    def xml_file = "${test_suite_name}_report.xml"
 
-            sh "mkdir -p ${artifacts_dir}"
+    def configRun = [:]
+    try {
+        withEnv(env_vars) {
+            stage('Initialization') {
+                def container_workdir = '/var/lib'
+                def workdir = "${container_workdir}/${test_suite_name}"
+                def tests_set = (env.getProperty('tests_set')) ?: ''
+                def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} --tb=short -vv ${tests_set}"
 
-            def configRun = [
-                'image': imageName,
-                'baseRepoPreConfig': false,
-                'dockerMaxCpus': 2,
-                'dockerExtraOpts' : [
-                    "--network=host",
-                    "-v /root/qa_results/:/root/qa_results/",
-                    "-v ${env.WORKSPACE}/${artifacts_dir}/:${container_workdir}/${artifacts_dir}/",
-                    // TODO remove if all docker images with tests (like cvp-spt) will be transferred into new architucture (like cvp-sanity)
-                    "--entrypoint=''",  // to override ENTRYPOINT=/bin/bash in Dockerfile of image
-                ],
+                sh "mkdir -p ${artifacts_dir}"
 
-                'envOpts'         : [
-                    "SALT_USERNAME=${username}",
-                    "SALT_PASSWORD=${password}",
-                    "SALT_URL=${SALT_MASTER_URL}"
-                ] + TESTS_SETTINGS.replaceAll('\\"', '').tokenize(";"),
-                'runCommands'     : [
-                      '010_start_tests'    : {
-                          sh("cd ${container_workdir} && ${script}")
-                      }
-                  ]
+                // Enrichment for docker commands
+                def commands = EXTRA_PARAMS.get("commands") ?: ['010_start_tests': "cd ${workdir} && with_venv.sh ${script}"]
+                def commands_list = commands.collectEntries{ [ (it.key) : { sh("${it.value}") } ] }
+
+                // Enrichment for env variables
+                def creds = common.getCredentials(SALT_MASTER_CREDENTIALS)
+                def env_vars_list  =  [
+                    "SALT_USERNAME=${creds.username}",
+                    "SALT_PASSWORD=${creds.password}",
+                    "SALT_URL=${SALT_MASTER_URL}",
+                    "REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt"
+                    ] + env_vars
+
+                // Generating final config
+                configRun = [
+                    'image': IMAGE,
+                    'baseRepoPreConfig': false,
+                    'dockerMaxCpus': 2,
+                    'dockerExtraOpts' : [
+                        "--network=host",
+                        "-v /root/qa_results/:/root/qa_results/",
+                        "-v /etc/ssl/certs/:/etc/ssl/certs/:ro",
+                        "-v ${env.WORKSPACE}/${artifacts_dir}/:${container_workdir}/${artifacts_dir}/",
+                    ],
+                    'envOpts'         : env_vars_list,
+                    'runCommands'     : commands_list
                 ]
-            salt_testing.setupDockerAndTest(configRun)
-        }
+            }
 
-        stage ('Publish results') {
-            archiveArtifacts artifacts: "${artifacts_dir}/*"
-            junit "${artifacts_dir}/*.xml"
-            if (env.JOB_NAME.contains("cvp-spt")) {
-                plot csvFileName: 'plot-8634d2fe-dc48-4713-99f9-b69a381483aa.csv',
-                     group: 'SPT',
-                     style: 'line',
-                     title: 'SPT Glance results',
-                     xmlSeries: [[
-                     file: "${env.JOB_NAME}_report.xml",
-                     nodeType: 'NODESET',
-                     url: '',
-                     xpath: '/testsuite/testcase[@name="test_speed_glance"]/properties/property']]
-                plot csvFileName: 'plot-8634d2fe-dc48-4713-99f9-b69a381483bb.csv',
-                     group: 'SPT',
-                     style: 'line',
-                     title: 'SPT HW2HW results',
-                     xmlSeries: [[
-                     file: "${env.JOB_NAME}_report.xml",
-                     nodeType: 'NODESET',
-                     url: '',
-                     xpath: '/testsuite/testcase[@classname="cvp_spt.tests.test_hw2hw"]/properties/property']]
-                plot csvFileName: 'plot-8634d2fe-dc48-4713-99f9-b69a381483bc.csv',
-                     group: 'SPT',
-                     style: 'line',
-                     title: 'SPT VM2VM results',
-                     xmlSeries: [[
-                     file: "${env.JOB_NAME}_report.xml",
-                     nodeType: 'NODESET',
-                     url: '',
-                     xpath: '/testsuite/testcase[@classname="cvp_spt.tests.test_vm2vm"]/properties/property']]
+            stage('Run Tests') {
+                salt_testing.setupDockerAndTest(configRun)
+            }
+
+            stage ('Publish results') {
+                archiveArtifacts artifacts: "${artifacts_dir}/*"
+                junit "${artifacts_dir}/*.xml"
+                if (env.JOB_NAME.contains("cvp-spt")) {
+                    plot csvFileName: 'plot-glance.csv',
+                        group: 'SPT',
+                        style: 'line',
+                        title: 'SPT Glance results',
+                        xmlSeries: [[
+                        file: "${artifacts_dir}/${xml_file}",
+                        nodeType: 'NODESET',
+                        url: '',
+                        xpath: '/testsuite/testcase[@classname="tests.test_glance"]/properties/property']]
+                    plot csvFileName: 'plot-hw2hw.csv',
+                        group: 'SPT',
+                        style: 'line',
+                        title: 'SPT HW2HW results',
+                        xmlSeries: [[
+                        file: "${artifacts_dir}/${xml_file}",
+                        nodeType: 'NODESET',
+                        url: '',
+                        xpath: '/testsuite/testcase[@classname="tests.test_hw2hw"]/properties/property']]
+                    plot csvFileName: 'plot-vm2vm.csv',
+                        group: 'SPT',
+                        style: 'line',
+                        title: 'SPT VM2VM results',
+                        xmlSeries: [[
+                        file: "${artifacts_dir}/${xml_file}",
+                        nodeType: 'NODESET',
+                        url: '',
+                        xpath: '/testsuite/testcase[@classname="tests.test_vm2vm"]/properties/property']]
+                }
             }
         }
-    } catch (Throwable e) {
-        // If there was an error or exception thrown, the build failed
+    }
+    catch (Throwable e) {
         currentBuild.result = "FAILURE"
         throw e
-    } finally {
-        if (DEBUG_MODE == 'false') {
-            validate.runCleanup(saltMaster, TARGET_NODE, container_name)
-            salt.cmdRun(saltMaster, TARGET_NODE, "rm -rf ${remote_dir}")
-        }
+    }
+    finally {
+        sh "rm -rf ${artifacts_dir}"
     }
 }
