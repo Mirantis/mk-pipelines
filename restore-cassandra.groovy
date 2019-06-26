@@ -38,30 +38,46 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         stage('Restore') {
+            // stop neutron-server to prevent CRUD api calls to contrail-api service
+            try {
+                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'], null, true)
+            } catch (Exception er) {
+                common.warningMsg('neutron-server service already stopped')
+            }
             // get opencontrail version
             def contrailVersion = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "_param:opencontrail_version")
+            def configDbIp = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "opencontrail:database:bind:host")
+            def configDbPort = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "opencontrail:database:bind:port_configdb")
             common.infoMsg("OpenContrail version is ${contrailVersion}")
             if (contrailVersion.startsWith('4')) {
                 controllerImage = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary",
                         "docker:client:compose:opencontrail:service:controller:container_name")
                 common.infoMsg("Applying db restore procedure for OpenContrail 4.X version")
                 try {
-                    salt.cmdRun(pepperEnv, 'I@opencontrail:control', 'doctrail controller systemctl stop contrail-database' )
+                    common.infoMsg("Stop contrail control plane containers")
+                    salt.cmdRun(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'cd /etc/docker/compose/opencontrail/; docker-compose down')
                 } catch (Exception err) {
-                    common.errorMsg('An error has been occurred during cassandra db shutdown: ' + err.getMessage())
+                    common.errorMsg('An error has been occurred during contrail containers shutdown: ' + err.getMessage())
                     throw err
                 }
                 try {
-                    salt.cmdRun(pepperEnv, 'I@opencontrail:control', "docker exec ${controllerImage} bash -c 'for f in \$(ls /var/lib/cassandra/); do rm -r /var/lib/cassandra/\$f; done'")
+                    common.infoMsg("Cleanup cassandra data")
+                    salt.cmdRun(pepperEnv, 'I@opencontrail:control', 'for f in $(ls /var/lib/configdb/); do rm -r /var/lib/configdb/$f; done')
                 } catch (Exception err) {
-                    common.errorMsg('Cannot cleanup cassandra data: ' + err.getMessage())
+                    common.errorMsg('Cannot cleanup cassandra data on control nodes: ' + err.getMessage())
                     throw err
                 }
                 try {
-                    salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', 'doctrail controller systemctl start contrail-database' )
+                    common.infoMsg("Start cassandra db on I@cassandra:backup:client node")
+                    salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', 'cd /etc/docker/compose/opencontrail/; docker-compose up -d')
                 } catch (Exception err) {
-                    common.errorMsg('An error has been occurred during cassandra db startup: ' + err.getMessage())
+                    common.errorMsg('An error has been occurred during cassandra db startup on I@cassandra:backup:client node: ' + err.getMessage())
                     throw err
+                }
+                // wait for cassandra to be online
+                common.retry(6, 20){
+                    common.infoMsg("Trying to connect to casandra db on I@cassandra:backup:client node ...")
+                    salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', "nc -v -z -w2 ${configDbIp} ${configDbPort}")
                 }
                 // remove restore-already-happened file if any is present
                 try {
@@ -69,22 +85,23 @@ timeout(time: 12, unit: 'HOURS') {
                 } catch (Exception err) {
                     common.warningMsg('/var/backups/cassandra/dbrestored not present? ' + err.getMessage())
                 }
-                // perform restore steps
                 salt.enforceState(pepperEnv, 'I@cassandra:backup:client', "cassandra")
-                salt.runSaltProcessStep(pepperEnv, 'I@cassandra:backup:client', 'system.reboot', null, [], true, 5)
-                sleep(5)
-                salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and not I@cassandra:backup:client', 'system.reboot', null, [], true, 5)
-                // the lovely wait-60-seconds mantra before restarting supervisor-database service
-                sleep(60)
-                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "doctrail controller systemctl restart contrail-database")
+                try {
+                    salt.cmdRun(pepperEnv, 'I@opencontrail:control and not I@cassandra:backup:client', 'cd /etc/docker/compose/opencontrail/; docker-compose up -d')
+                } catch (Exception err) {
+                    common.errorMsg('An error has been occurred during cassandra db startup on I@opencontrail:control and not I@cassandra:backup:client nodes: ' + err.getMessage())
+                    throw err
+                }
                 // another mantra, wait till all services are up
                 sleep(60)
-            } else {
                 try {
-                    salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.stop', ['neutron-server'], null, true)
-                } catch (Exception er) {
-                    common.warningMsg('neutron-server service already stopped')
+                    common.infoMsg("Start analytics containers node")
+                    salt.cmdRun(pepperEnv, 'I@opencontrail:collector', 'cd /etc/docker/compose/opencontrail/; docker-compose up -d')
+                } catch (Exception err) {
+                    common.errorMsg('An error has been occurred during analytics containers startup: ' + err.getMessage())
+                    throw err
                 }
+            } else {
                 try {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['supervisor-config'], null, true)
                 } catch (Exception er) {
@@ -135,7 +152,6 @@ timeout(time: 12, unit: 'HOURS') {
                 sleep(5)
 
                 salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.restart', ['supervisor-database'], null, true)
-                salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'], null, true)
 
                 // wait until contrail-status is up
                 salt.commandStatus(pepperEnv, 'I@opencontrail:control', "contrail-status | grep -v == | grep -v \'disabled on boot\' | grep -v nodemgr | grep -v active | grep -v backup", null, false)
@@ -143,10 +159,12 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "nodetool status")
                 salt.cmdRun(pepperEnv, 'I@opencontrail:control', "contrail-status")
             }
+
+            salt.runSaltProcessStep(pepperEnv, 'I@neutron:server', 'service.start', ['neutron-server'], null, true)
         }
 
         stage('Opencontrail controllers health check') {
-            common.retry(3, 20){
+            common.retry(9, 20){
                 salt.enforceState(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'opencontrail.upgrade.verify', true, true)
             }
         }
