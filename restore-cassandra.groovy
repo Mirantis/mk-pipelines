@@ -7,11 +7,20 @@
  *
 **/
 
-def common = new com.mirantis.mk.Common()
-def salt = new com.mirantis.mk.Salt()
-def python = new com.mirantis.mk.Python()
+common = new com.mirantis.mk.Common()
+salt = new com.mirantis.mk.Salt()
+python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
+
+def getValueForPillarKey(pepperEnv, target, pillarKey) {
+    def out = salt.getReturnValues(salt.getPillar(pepperEnv, target, pillarKey))
+    if (out == '') {
+        throw new Exception("Cannot get value for ${pillarKey} key on ${target} target")
+    }
+    return out.toString()
+}
+
 timeout(time: 12, unit: 'HOURS') {
     node() {
 
@@ -34,29 +43,33 @@ timeout(time: 12, unit: 'HOURS') {
 
         stage('Restore') {
             // get opencontrail version
-            def _pillar = salt.getPillar(pepperEnv, "I@opencontrail:control", '_param:opencontrail_version')
-            def contrailVersion = _pillar['return'][0].values()[0]
-            common.infoMsg("Contrail version is ${contrailVersion}")
-            if (contrailVersion >= 4) {
-                common.infoMsg("There will be steps for OC4.0 restore")
+            def contrailVersion = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "_param:opencontrail_version")
+            common.infoMsg("OpenContrail version is ${contrailVersion}")
+            if (contrailVersion.startsWith('4')) {
+                controllerImage = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary",
+                        "docker:client:compose:opencontrail:service:controller:container_name")
+                common.infoMsg("Applying db restore procedure for OpenContrail 4.X version")
                 try {
                     salt.cmdRun(pepperEnv, 'I@opencontrail:control', 'doctrail controller systemctl stop contrail-database' )
                 } catch (Exception err) {
-                    common.warningMsg('contrail-database already stopped? ' + err.getMessage())
+                    common.errorMsg('An error has been occurred during cassandra db shutdown: ' + err.getMessage())
+                    throw err
                 }
                 try {
-                    salt.cmdRun(pepperEnv, 'I@opencontrail:control', 'doctrail controller bash -c "for f in $(ls /var/lib/cassandra/); do rm -r /var/lib/cassandra/$f; done"')
+                    salt.cmdRun(pepperEnv, 'I@opencontrail:control', "docker exec ${controllerImage} bash -c 'for f in \$(ls /var/lib/cassandra/); do rm -r /var/lib/cassandra/\$f; done'")
                 } catch (Exception err) {
-                    common.warningMsg('cassandra data already removed? ' + err.getMessage())
+                    common.errorMsg('Cannot cleanup cassandra data: ' + err.getMessage())
+                    throw err
                 }
                 try {
                     salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', 'doctrail controller systemctl start contrail-database' )
                 } catch (Exception err) {
-                    common.warningMsg('contrail-database already started? ' + err.getMessage())
+                    common.errorMsg('An error has been occurred during cassandra db startup: ' + err.getMessage())
+                    throw err
                 }
                 // remove restore-already-happenned file if any is present
                 try {
-                    salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', 'rm  /var/backups/cassandra/dbrestored')
+                    salt.cmdRun(pepperEnv, 'I@cassandra:backup:client', 'rm /var/backups/cassandra/dbrestored')
                 } catch (Exception err) {
                     common.warningMsg('/var/backups/cassandra/dbrestored not present? ' + err.getMessage())
                 }
@@ -104,8 +117,7 @@ timeout(time: 12, unit: 'HOURS') {
                     common.warningMsg('Directory already empty')
                 }
 
-                _pillar = salt.getPillar(pepperEnv, "I@cassandra:backup:client", 'cassandra:backup:backup_dir')
-                def backupDir = _pillar['return'][0].values()[0] ?: '/var/backups/cassandra'
+                def backupDir = getValueForPillarKey(pepperEnv, "I@cassandra:backup:client", "cassandra:backup:backup_dir")
                 common.infoMsg("Backup directory is ${backupDir}")
                 salt.runSaltProcessStep(pepperEnv, 'I@cassandra:backup:client', 'file.remove', ["${backupDir}/dbrestored"], null, true)
 
@@ -139,7 +151,6 @@ timeout(time: 12, unit: 'HOURS') {
 
         stage('Opencontrail controllers health check') {
             common.retry(3, 20){
-                salt.cmdRun(pepperEnv, 'I@opencontrail:control', "doctrail controller contrail-status")
                 salt.enforceState(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'opencontrail.upgrade.verify', true, true)
             }
         }
