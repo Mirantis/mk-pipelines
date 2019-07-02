@@ -49,8 +49,8 @@ def upgrade(master, target, service, pckg, state) {
 def verify_es_is_green(master) {
     common.infoMsg('Verify that the Elasticsearch cluster status is green')
     try {
-        def retries_wait = 20
-        def retries = 15
+        def retries_wait = 120
+        def retries = 60
 
         def elasticsearch_vip
         def pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:host'))
