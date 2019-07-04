@@ -394,7 +394,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 try {
                     common.infoMsg('Perform: UPDATE Salt Formulas')
                     salt.fullRefresh(venvPepper, '*')
-                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['linux.system.repo'], read_timeout: 60, retries: 2])
+                    salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo', true, true, null, false, 60, 2)
                     def saltEnv = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_master_base_environment").get("return")[0].values()[0]
                     salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'state.sls_id', ["salt_master_${saltEnv}_pkg_formulas", 'salt.master.env'])
                     salt.fullRefresh(venvPepper, '*')
@@ -417,9 +417,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 salt.fullRefresh(venvPepper, 'I@salt:master')
-                salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['reclass.storage'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@salt:master', 'reclass.storage', true, true, null, false, 60, 2)
                 try {
-                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['reclass'], read_timeout: 60, retries: 2])
+                    salt.enforceState(venvPepper, 'I@salt:master', 'reclass', true, true, null, false, 60, 2)
                 }
                 catch (Exception ex) {
                     common.errorMsg(ex.toString())
@@ -489,7 +489,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 if (upgradeSaltStack) {
                     updateSaltStack('I@salt:master', '["salt-master", "salt-common", "salt-api", "salt-minion"]')
 
-                    salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['linux.system.repo'], read_timeout: 60, retries: 2])
+                    salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.repo', true, true, null, false, 60, 2)
                     updateSaltStack('I@salt:minion and not I@salt:master', '["salt-minion"]')
                 }
 
@@ -502,24 +502,24 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // update minions certs
                 // call for `salt.minion.ca` state on related nodes to make sure
                 // mine was updated with required data after salt-minion/salt-master restart salt:minion:ca
-                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion:ca', state: ['salt.minion.ca'], read_timeout: 60, retries: 2])
-                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion', state: ['salt.minion.cert'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@salt:minion:ca', 'salt.minion.ca', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion.cert', true, true, null, false, 60, 2)
 
                 // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
-                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion', state: ['salt.minion'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion', true, true, null, false, 60, 2)
                 // Retry needed only for rare race-condition in user appearance
                 common.infoMsg('Perform: updating users and keys')
-                salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['linux.system.user'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.user', true, true, null, false, 60, 2)
                 common.infoMsg('Perform: updating openssh')
-                salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['openssh'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@linux:system', 'openssh', true, true, null, false, 60, 2)
 
                 // apply salt API TLS if needed
                 def nginxAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]
                 if (nginxAtMaster.toString().toLowerCase() == 'true') {
-                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['nginx'], read_timeout: 60, retries: 2])
+                    salt.enforceState(venvPepper, 'I@salt:master', 'nginx', true, true, null, false, 60, 2)
                 }
 
-                salt.enforceState([saltId: venvPepper, target: 'I@jenkins:client and not I@salt:master', state: ['jenkins.client'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true, true, null, false, 60, 2)
                 salt.cmdRun(venvPepper, 'I@salt:master', "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
 
                 sleep(180)
