@@ -416,10 +416,31 @@ timeout(time: 1, unit: 'HOURS') {
                 archiveArtifacts artifacts: "${context['cluster_name']}.tar.gz"
 
                 if (RequesterEmail != '' && !RequesterEmail.contains('example')) {
-                    emailext(to: RequesterEmail,
-                        attachmentsPattern: "output-${context['cluster_name']}/*",
-                        body: "Mirantis Jenkins\n\nRequested reclass model ${context['cluster_name']} has been created and attached to this email.\nEnjoy!\n\nMirantis",
-                        subject: "Your Salt model ${context['cluster_name']}")
+                    def mailSubject = "Your Salt model ${context['cluster_name']}"
+                    if (context.get('send_method') == 'gcs') {
+                        def gcs = new com.mirantis.mk.GoogleCloudStorage()
+                        def uploadIsos = [ "output-${context['cluster_name']}/${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso" ]
+                        if (context['local_repositories'] == 'True') {
+                            uploadIsos << "output-${context['cluster_name']}/${aptlyServerHostname}.${context['cluster_domain']}-config.iso"
+                        }
+                        // generate random hash to have uniq and unpredictable link to file
+                        def randHash = common.generateRandomHashString(64)
+                        def config = [
+                            'creds': context['gcs_creds'],
+                            'project': context['gcs_project'],
+                            'dest': "gs://${context['gcs_bucket']}/${randHash}",
+                            'sources': uploadIsos
+                        ]
+                        def fileURLs = gcs.uploadArtifactToGoogleStorageBucket(config).join(' ').replace('gs://', 'https://storage.googleapis.com/')
+                        emailext(to: RequesterEmail,
+                            body: "Mirantis Jenkins\n\nRequested reclass model ${context['cluster_name']} has been created and available to download via next URL: ${fileURLs} within 7 days.\nEnjoy!\n\nMirantis",
+                            subject: mailSubject)
+                    } else {
+                        emailext(to: RequesterEmail,
+                            attachmentsPattern: "output-${context['cluster_name']}/*",
+                            body: "Mirantis Jenkins\n\nRequested reclass model ${context['cluster_name']} has been created and attached to this email.\nEnjoy!\n\nMirantis",
+                            subject: mailSubject)
+                    }
                 }
                 dir("output-${context['cluster_name']}") {
                     deleteDir()
