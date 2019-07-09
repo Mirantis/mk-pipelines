@@ -47,6 +47,15 @@ timeout(time: 1, unit: 'HOURS') {
         sh "mkdir -p reports ${apiProject} ${uiProject}"
         def testImage = docker.image(cvpImageName)
         def testImageOptions = "-u root:root --network=host -v ${env.WORKSPACE}/reports:/var/lib/qa_reports --entrypoint=''"
+        withCredentials([
+          [$class          : 'UsernamePasswordMultiBinding',
+          credentialsId   : 'scale-ci',
+          passwordVariable: 'JENKINS_PASSWORD',
+          usernameVariable: 'JENKINS_USER']
+          ]) {
+            env.JENKINS_USER = JENKINS_USER
+            env.JENKINS_PASSWORD = JENKINS_PASSWORD
+        }
         try {
             stage("checkout") {
                 if (event) {
@@ -140,7 +149,7 @@ timeout(time: 1, unit: 'HOURS') {
 
                 dir(apiProject) {
                     python.runVirtualenvCommand("${env.WORKSPACE}/venv",
-                            "export IMAGE=${apiImage.id}; ./bootstrap_env.sh up")
+                            "export IMAGE=${apiImage.id}; export DOCKER_COMPOSE=docker-compose-test.yml; ./bootstrap_env.sh up")
                     common.retry(5, 20) {
                         sh 'curl -v http://127.0.0.1:8001/api/v1 > /dev/null'
                     }
@@ -161,7 +170,7 @@ timeout(time: 1, unit: 'HOURS') {
                         export TEST_PASSWORD=default
                         export TEST_MODELD_URL=127.0.0.1
                         export TEST_MODELD_PORT=3000
-                        export TEST_TIMEOUT=30
+                        export TEST_TIMEOUT=15
                         cd /var/lib/trymcp-tests
                         pytest ${component}
                     """
