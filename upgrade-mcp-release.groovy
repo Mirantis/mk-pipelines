@@ -522,6 +522,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.enforceState(venvPepper, 'I@salt:master', 'nginx', true, true, null, false, 60, 2)
                 }
 
+                // Apply changes for HaProxy on CI/CD nodes
+                salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
+
                 salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true, true, null, false, 60, 2)
                 salt.cmdRun(venvPepper, 'I@salt:master', "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
 
