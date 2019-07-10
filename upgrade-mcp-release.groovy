@@ -330,6 +330,27 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.updates' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.updates/system.linux.system.repo.mcp.apt_mirantis.update/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.extra' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.extra/system.linux.system.repo.mcp.apt_mirantis.extra/g'")
+
+                    // Switch Jenkins/Gerrit to use LDAP SSL/TLS
+                    def gerritldapURI = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                        "grep -r --exclude-dir=aptly 'gerrit_ldap_server: .*' * | grep -Po 'gerrit_ldap_server: \\K.*' | tr -d '\"'", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                    if (gerritldapURI.startsWith('ldap://')) {
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r --exclude-dir=aptly -l 'gerrit_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|ldap://|ldaps://|g'")
+                    } else if (! gerritldapURI.startsWith('ldaps://')) {
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r --exclude-dir=aptly -l 'gerrit_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|gerrit_ldap_server: .*|gerrit_ldap_server: \"ldaps://${gerritldapURI}\"|g'")
+                    }
+                    def jenkinsldapURI = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                        "grep -r --exclude-dir=aptly 'jenkins_security_ldap_server: .*' * | grep -Po 'jenkins_security_ldap_server: \\K.*' | tr -d '\"'", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                    if (jenkinsldapURI.startsWith('ldap://')) {
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r --exclude-dir=aptly -l 'jenkins_security_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|ldap://|ldaps://|g'")
+                    } else if (! jenkinsldapURI.startsWith('ldaps://')) {
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r --exclude-dir=aptly -l 'jenkins_security_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|jenkins_security_ldap_server: .*|jenkins_security_ldap_server: \"ldaps://${jenkinsldapURI}\"|g'")
+                    }
+
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add kubernetes-extra repo
                     if (salt.testTarget(venvPepper, "I@kubernetes:master")) {
@@ -493,7 +514,6 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // Apply changes for HaProxy on CI/CD nodes
                 salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
 
-                salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true)
                 salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
 
                 sleep(180)
@@ -508,6 +528,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 catch (Exception ex) {
                     error("Docker containers for CI/CD services are having troubles with starting.")
                 }
+
+                salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true)
             }
         }
         catch (Throwable e) {
