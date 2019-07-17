@@ -171,7 +171,7 @@ node() {
             junit "${report_prefix}.xml"
         }
     } finally {
-        if (DEBUG_MODE == 'false') {
+        if ( ! DEBUG_MODE.toBoolean() ) {
             validate.runCleanup(saltMaster, TARGET_NODE, container_name)
         }
     }
