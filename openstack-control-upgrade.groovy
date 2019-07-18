@@ -32,6 +32,8 @@ upgradeStageMap.put('Pre upgrade',
  * No service downtime
  * No workload downtime''',
     'Launched actions': '''
+ * Refresh pillars on the target nodes.
+ * Apply the 'linux.system.repo' state on the target nodes.
  * Verify API, perform basic CRUD operations for services.
  * Verify that compute/neutron agents on hosts are up.
  * Run some service built in checkers like keystone-manage doctor or nova-status upgrade.''',
@@ -153,6 +155,8 @@ timeout(time: 12, unit: 'HOURS') {
     for (target in upgradeTargets){
       common.stageWrapper(upgradeStageMap, "Pre upgrade", target, interactive) {
         openstack.runOpenStackUpgradePhase(env, target, 'pre')
+        salt.runSaltProcessStep(env, target, 'saltutil.refresh_pillar', [], null, true)
+        salt.enforceState(env, target, 'linux.system.repo')
         openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
     }
