@@ -68,6 +68,7 @@ node (SLAVE_NODE) {
                 // Generating final config
                 configRun = [
                     'image': IMAGE,
+                    'dockerPull': false,
                     'baseRepoPreConfig': false,
                     'dockerMaxCpus': 2,
                     'dockerExtraOpts' : [
