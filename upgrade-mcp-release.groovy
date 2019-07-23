@@ -530,6 +530,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true)
+
+                // update Nginx proxy settings for Jenkins/Gerrit if needed
+                if (salt.testTarget(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit')) {
+                    salt.enforceState(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit', 'nginx.server', true, true, null, false, 60, 2)
+                }
             }
         }
         catch (Throwable e) {
