@@ -41,6 +41,21 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
         stage('Verify status') {
+            def sysstatTargets = 'I@xtrabackup:client or I@xtrabackup:server'
+            def sysstatTargetsNodes = salt.getMinions(pepperEnv, sysstatTargets)
+            try {
+                if (!salt.isPackageInstalled(['saltId': pepperEnv, 'target': sysstatTargets, 'packageName': 'sysstat', 'output': false])) {
+                    if (askConfirmation) {
+                        input message: "Do you want to install 'sysstat' package on targeted nodes: ${sysstatTargetsNodes}? Click to confirm"
+                    }
+                    salt.runSaltProcessStep(pepperEnv, sysstatTargets, 'pkg.install', ['sysstat'])
+                }
+            } catch (Exception e) {
+                common.errorMsg("Unable to determine status of sysstat package on target nodes: ${sysstatTargetsNodes}.")
+                if (askConfirmation) {
+                    input message: "Do you want to continue? Click to confirm"
+                }
+            }
             resultCode = galera.verifyGaleraStatus(pepperEnv, false, checkTimeSync)
             if (resultCode == 128) {
                 common.errorMsg("Unable to connect to Galera Master. Trying slaves...")
