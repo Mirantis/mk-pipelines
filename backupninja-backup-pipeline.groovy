@@ -5,6 +5,8 @@ def pepperEnv = "pepperEnv"
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
+        def backupNode = ''
+        def backupServer = ''
         stage('Setup virtualenv for Pepper') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
@@ -36,6 +38,28 @@ timeout(time: 12, unit: 'HOURS') {
                 currentBuild.result = "FAILURE"
                 return
             }
+
+            def postgresqlMajorVersion = salt.getPillar(venvPepper, 'I@salt:master', '_param:postgresql_major_version').get('return')[0].values()[0]
+            if (! postgresqlMajorVersion) {
+                input message: "Can't get _param:postgresql_major_version parameter, which is required to determine postgresql-client version. Is it defined in pillar? Confirm to proceed anyway."
+            } else {
+                def postgresqlClientPackage = "postgresql-client-${postgresqlMajorVersion}"
+                try {
+                    if (!salt.isPackageInstalled(['saltId': pepperEnv, 'target': backupNode, 'packageName': postgresqlClientPackage, 'output': false])) {
+                        if (askConfirmation) {
+                            input message: "Do you want to install ${postgresqlClientPackages} package on targeted nodes: ${backupNode}? It's required to make backup. Click to confirm"
+                        }
+                        // update also common fake package
+                        salt.runSaltProcessStep(pepperEnv, backupNode, 'pkg.install', ["postgresql-client,${postgresqlClientPackage}"])
+                    }
+                } catch (Exception e) {
+                    common.errorMsg("Unable to determine status of ${postgresqlClientPackages} packages on target nodes: ${backupNode}.")
+                    if (askConfirmation) {
+                        input message: "Do you want to continue? Click to confirm"
+                    }
+                }
+            }
+
             try {
                 backupServer = salt.getMinions(pepperEnv, "I@backupninja:server")[0]
                 salt.minionsReachable(pepperEnv, "I@salt:master", backupServer)
