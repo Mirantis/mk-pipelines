@@ -2,6 +2,7 @@ def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 def pepperEnv = "pepperEnv"
+def askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -39,7 +40,7 @@ timeout(time: 12, unit: 'HOURS') {
                 return
             }
 
-            def postgresqlMajorVersion = salt.getPillar(venvPepper, 'I@salt:master', '_param:postgresql_major_version').get('return')[0].values()[0]
+            def postgresqlMajorVersion = salt.getPillar(pepperEnv, 'I@salt:master', '_param:postgresql_major_version').get('return')[0].values()[0]
             if (! postgresqlMajorVersion) {
                 input message: "Can't get _param:postgresql_major_version parameter, which is required to determine postgresql-client version. Is it defined in pillar? Confirm to proceed anyway."
             } else {
@@ -47,13 +48,13 @@ timeout(time: 12, unit: 'HOURS') {
                 try {
                     if (!salt.isPackageInstalled(['saltId': pepperEnv, 'target': backupNode, 'packageName': postgresqlClientPackage, 'output': false])) {
                         if (askConfirmation) {
-                            input message: "Do you want to install ${postgresqlClientPackages} package on targeted nodes: ${backupNode}? It's required to make backup. Click to confirm"
+                            input message: "Do you want to install ${postgresqlClientPackage} package on targeted nodes: ${backupNode}? It's required to make backup. Click to confirm"
                         }
                         // update also common fake package
                         salt.runSaltProcessStep(pepperEnv, backupNode, 'pkg.install', ["postgresql-client,${postgresqlClientPackage}"])
                     }
                 } catch (Exception e) {
-                    common.errorMsg("Unable to determine status of ${postgresqlClientPackages} packages on target nodes: ${backupNode}.")
+                    common.errorMsg("Unable to determine status of ${postgresqlClientPackage} packages on target nodes: ${backupNode}.")
                     if (askConfirmation) {
                         input message: "Do you want to continue? Click to confirm"
                     }
