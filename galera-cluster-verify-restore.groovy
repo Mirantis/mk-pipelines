@@ -47,7 +47,7 @@ timeout(time: 12, unit: 'HOURS') {
                 common.errorMsg("Unable to connect to Galera Master. Trying slaves...")
                 resultCode = galera.verifyGaleraStatus(pepperEnv, true, checkTimeSync)
                 if (resultCode == 129) {
-                    common.errorMsg("Unable to obtain Galera slave minions list". "Without fixing this issue, pipeline cannot continue in verification, backup and restoration.")
+                    common.errorMsg("Unable to obtain Galera slave minions list. Without fixing this issue, pipeline cannot continue in verification, backup and restoration.")
                     currentBuild.result = "FAILURE"
                     return
                 } else if (resultCode == 130) {
@@ -67,57 +67,62 @@ timeout(time: 12, unit: 'HOURS') {
                 return
             }
             if (resultCode == 1) {
-                if(askConfirmation){
-                    common.warningMsg("There was a problem with parsing the status output or with determining it. Do you want to run a restore?")
+                if (askConfirmation) {
+                    input message: "There was a problem with parsing the status output or with determining it. Do you want to run a restore?"
                 } else {
                     common.warningMsg("There was a problem with parsing the status output or with determining it. Try to restore.")
                 }
             } else if (resultCode > 1) {
-                if(askConfirmation){
-                    common.warningMsg("There's something wrong with the cluster, do you want to continue with backup and/or restore?")
+                if (askConfirmation) {
+                    input message: "There's something wrong with the cluster, do you want to continue with backup and/or restore?"
                 } else {
                     common.warningMsg("There's something wrong with the cluster, try to backup and/or restore.")
                 }
             } else {
-                if(askConfirmation){
-                  common.warningMsg("There seems to be everything alright with the cluster, do you still want to continue with backup and/or restore?")
+                if (askConfirmation) {
+                    input message: "There seems to be everything alright with the cluster, do you still want to continue with backup and/or restore?"
                 } else {
-                  common.warningMsg("There seems to be everything alright with the cluster, no backup and no restoration will be done.")
-                  currentBuild.result = "SUCCESS"
-                  return
+                    common.warningMsg("There seems to be everything alright with the cluster, no backup and no restoration will be done.")
+                    currentBuild.result = "SUCCESS"
+                    return
                 }
             }
         }
         if (runBackupDb) {
+            if (askConfirmation) {
+                input message: "Are you sure you want to run a backup? Click to confirm"
+            }
             stage('Backup') {
-                deployBuild = build( job: 'galera_backup_database', parameters: [
-                    [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
-                    [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
-                    [$class: 'StringParameterValue', name: 'OVERRIDE_BACKUP_NODE', value: "none"],
-                    ]
+                deployBuild = build(job: 'galera_backup_database', parameters: [
+                        [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
+                        [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
+                        [$class: 'StringParameterValue', name: 'OVERRIDE_BACKUP_NODE', value: "none"],
+                ]
                 )
             }
         }
-        stage('Restore') {
-            if(askConfirmation){
-              input message: "Are you sure you want to run a restore? Click to confirm"
-            }
-            try {
-                if((!askConfirmation && resultCode > 0) || askConfirmation){
-                  galera.restoreGaleraCluster(pepperEnv, runRestoreDb)
+        if (runRestoreDb) {
+            stage('Restore') {
+                if (askConfirmation) {
+                    input message: "Are you sure you want to run a restore? Click to confirm"
                 }
-            } catch (Exception e) {
-                common.errorMsg("Restoration process has failed.")
+                try {
+                    if ((!askConfirmation && resultCode > 0) || askConfirmation) {
+                        galera.restoreGaleraCluster(pepperEnv, runRestoreDb)
+                    }
+                } catch (Exception e) {
+                    common.errorMsg("Restoration process has failed.")
+                }
             }
-        }
-        stage('Verify restoration result') {
-            common.retry(verificationRetries, 15) {
-                exitCode = galera.verifyGaleraStatus(pepperEnv, false, false)
-                if (exitCode >= 1) {
-                    error("Verification attempt finished with an error. This may be caused by cluster not having enough time to come up or to sync. Next verification attempt in 5 seconds.")
-                } else {
-                    common.infoMsg("Restoration procedure seems to be successful. See verification report to be sure.")
-                    currentBuild.result = "SUCCESS"
+            stage('Verify restoration result') {
+                common.retry(verificationRetries, 15) {
+                    exitCode = galera.verifyGaleraStatus(pepperEnv, false, false)
+                    if (exitCode >= 1) {
+                        error("Verification attempt finished with an error. This may be caused by cluster not having enough time to come up or to sync. Next verification attempt in 5 seconds.")
+                    } else {
+                        common.infoMsg("Restoration procedure seems to be successful. See verification report to be sure.")
+                        currentBuild.result = "SUCCESS"
+                    }
                 }
             }
         }
