@@ -188,6 +188,26 @@ def wa29155(ArrayList saltMinions, String cname) {
 
 }
 
+def wa32284(String clusterName) {
+    def clientGluster = salt.getPillar(venvPepper, 'I@salt:master', "glusterfs:client:enabled").get("return")[0].values()[0]
+    def pkiGluster = salt.getPillar(venvPepper, 'I@salt:master', "glusterfs:client:volumes:salt_pki").get("return")[0].values()[0]
+    def nginxEnabledAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]
+    if (nginxEnabledAtMaster.toString().toLowerCase() == 'true' && clientGluster.toString().toLowerCase() == 'true' && pkiGluster) {
+        def nginxRequires = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:wait_for_service').get('return')[0].values()[0]
+        if (nginxRequires.isEmpty()) {
+            def nginxRequiresClassName = "cluster.${clusterName}.infra.config.nginx_requires_wa32284"
+            def nginxRequiresClassFile = "/srv/salt/reclass/classes/cluster/${clusterName}/infra/config/nginx_requires_wa32284.yml"
+            def nginxRequiresBlock = ['parameters': ['nginx': ['server': ['wait_for_service': ['srv-salt-pki.mount'] ] ] ] ]
+            def _tempFile = '/tmp/wa32284_' + UUID.randomUUID().toString().take(8)
+            writeYaml file: _tempFile , data: nginxRequiresBlock
+            def nginxRequiresBlockString = sh(script: "cat ${_tempFile}", returnStdout: true).trim()
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${clusterName} && " +
+                "sed -i '/^parameters:/i - ${nginxRequiresClassName}' infra/config/init.yml")
+            salt.cmdRun(venvPepper, 'I@salt:master', "echo '${nginxRequiresBlockString}' > ${nginxRequiresClassFile}", false, null, false)
+        }
+    }
+}
+
 def archiveReclassInventory(filename) {
     def _tmp_file = '/tmp/' + filename + UUID.randomUUID().toString().take(8)
     // jenkins may fail at overheap. Compress data with gzip like WA
@@ -350,6 +370,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                             "grep -r --exclude-dir=aptly -l 'jenkins_security_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|jenkins_security_ldap_server: .*|jenkins_security_ldap_server: \"ldaps://${jenkinsldapURI}\"|g'")
                     }
+
+                    wa32284(cluster_name)
 
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add kubernetes-extra repo
