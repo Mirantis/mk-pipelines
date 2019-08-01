@@ -508,7 +508,7 @@ timeout(time: 12, unit: 'HOURS') {
 
                 // Workaround for PROD-17765 issue to prevent crashes of keystone.role_present state.
                 // More details: https://mirantis.jira.com/browse/PROD-17765
-                salt.runSaltProcessStep(venvPepper, "I@keystone:client ${extra_tgt}", 'service.restart', ['salt-minion'])
+                salt.restartSaltMinion(venvPepper, "I@keystone:client ${extra_tgt}")
                 salt.minionsReachable(venvPepper, "I@salt:master and *01* ${extra_tgt}", 'I@keystone:client', null, 10, 6)
 
                 stage('Install OpenStack network') {
