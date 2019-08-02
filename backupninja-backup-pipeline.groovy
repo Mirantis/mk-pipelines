@@ -40,23 +40,31 @@ timeout(time: 12, unit: 'HOURS') {
                 return
             }
 
-            def postgresqlMajorVersion = salt.getPillar(pepperEnv, 'I@salt:master', '_param:postgresql_major_version').get('return')[0].values()[0]
-            if (! postgresqlMajorVersion) {
-                input message: "Can't get _param:postgresql_major_version parameter, which is required to determine postgresql-client version. Is it defined in pillar? Confirm to proceed anyway."
-            } else {
-                def postgresqlClientPackage = "postgresql-client-${postgresqlMajorVersion}"
-                try {
-                    if (!salt.isPackageInstalled(['saltId': pepperEnv, 'target': backupNode, 'packageName': postgresqlClientPackage, 'output': false])) {
+            def maasNodes = salt.getMinions(pepperEnv, 'I@maas:server')
+            if (!maasNodes.isEmpty()) {
+                def postgresqlMajorVersion = salt.getPillar(pepperEnv, 'I@salt:master', '_param:postgresql_major_version').get('return')[0].values()[0]
+                if (! postgresqlMajorVersion) {
+                        common.errorMsg("Can't get _param:postgresql_major_version parameter, which is required to determine postgresql-client version. Is it defined in pillar?")
                         if (askConfirmation) {
-                            input message: "Do you want to install ${postgresqlClientPackage} package on targeted nodes: ${backupNode}? It's required to make backup. Click to confirm"
+                            input message: "Confirm to proceed anyway."
                         }
-                        // update also common fake package
-                        salt.runSaltProcessStep(pepperEnv, backupNode, 'pkg.install', ["postgresql-client,${postgresqlClientPackage}"])
-                    }
-                } catch (Exception e) {
-                    common.errorMsg("Unable to determine status of ${postgresqlClientPackage} packages on target nodes: ${backupNode}.")
-                    if (askConfirmation) {
-                        input message: "Do you want to continue? Click to confirm"
+                } else {
+                    def postgresqlClientPackage = "postgresql-client-${postgresqlMajorVersion}"
+                    try {
+                        if (!salt.isPackageInstalled(['saltId': pepperEnv, 'target': backupNode, 'packageName': postgresqlClientPackage, 'output': false])) {
+                            if (askConfirmation) {
+                                input message: "Do you want to install ${postgresqlClientPackages} package on targeted nodes: ${backupNode}? It's required to make backup. Click to confirm."
+                            } else {
+                                common.infoMsg("Package ${postgresqlClientPackages} will be installed. It's required to make backup.")
+                            }
+                            // update also common fake package
+                            salt.runSaltProcessStep(pepperEnv, backupNode, 'pkg.install', ["postgresql-client,${postgresqlClientPackage}"])
+                        }
+                    } catch (Exception e) {
+                        common.errorMsg("Unable to determine status of ${postgresqlClientPackages} packages on target nodes: ${backupNode}.")
+                        if (askConfirmation) {
+                            input message: "Do you want to continue? Click to confirm"
+                        }
                     }
                 }
             }
