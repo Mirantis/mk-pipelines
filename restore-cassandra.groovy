@@ -32,8 +32,7 @@ timeout(time: 12, unit: 'HOURS') {
             try {
                 salt.enforceState(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'opencontrail.upgrade.verify', true, true)
             } catch (Exception er) {
-                common.errorMsg("Opencontrail controllers health check stage found issues with services. Please take a look at the logs above.")
-                throw er
+                common.errorMsg("Opencontrail controllers health check stage found issues with currently running services.")
             }
         }
 
