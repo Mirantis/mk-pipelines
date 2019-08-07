@@ -53,6 +53,7 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             } catch (Exception e) {
                 common.errorMsg("Unable to determine status of sysstat package on target nodes: ${sysstatTargetsNodes}.")
+                common.errorMsg(e.getMessage())
                 if (askConfirmation) {
                     input message: "Do you want to continue? Click to confirm"
                 }
@@ -62,11 +63,11 @@ timeout(time: 12, unit: 'HOURS') {
                 common.errorMsg("Unable to connect to Galera Master. Trying slaves...")
                 resultCode = galera.verifyGaleraStatus(pepperEnv, true, checkTimeSync)
                 if (resultCode == 129) {
-                    common.errorMsg("Unable to obtain Galera slave minions list. Without fixing this issue, pipeline cannot continue in verification, backup and restoration.")
+                    common.errorMsg("Unable to obtain Galera slave minions list. Without fixing this issue, pipeline cannot continue in verification, backup and restoration. This may be caused by wrong Galera configuration or corrupted pillar data.")
                     currentBuild.result = "FAILURE"
                     return
                 } else if (resultCode == 130) {
-                    common.errorMsg("Neither master or slaves are reachable. Without fixing this issue, pipeline cannot continue in verification, backup and restoration.")
+                    common.errorMsg("Neither master or slaves are reachable. Without fixing this issue, pipeline cannot continue in verification, backup and restoration. Is at least one member of the Galera cluster up and running?")
                     currentBuild.result = "FAILURE"
                     return
                 }
@@ -127,6 +128,7 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                 } catch (Exception e) {
                     common.errorMsg("Restoration process has failed.")
+                    common.errorMsg(e.getMessage())
                 }
             }
             stage('Verify restoration result') {
