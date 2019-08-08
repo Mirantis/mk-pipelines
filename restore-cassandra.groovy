@@ -100,6 +100,14 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg('An error has been occurred during analytics containers startup: ' + err.getMessage())
                     throw err
                 }
+                // contrail-control service needs to be restart after db sync to re-initialize with recovered data
+                try {
+                    common.infoMsg("Restart contrail-control services on control nodes")
+                    salt.cmdRun(pepperEnv, 'I@opencontrail:control', 'doctrail controller service contrail-control restart')
+                } catch (Exception err) {
+                    common.errorMsg('An error has been occurred during contrail-control services restart: ' + err.getMessage())
+                    throw err
+                }
             } else {
                 try {
                     salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control', 'service.stop', ['supervisor-config'], null, true)
