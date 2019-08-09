@@ -26,7 +26,7 @@ timeout(time: 12, unit: 'HOURS') {
                 common.errorMsg('Please fix your pillar. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/salt-master/salt-master-restore.html')
                 return
             }
-            maasNodes = salt.getMinions(pepperEnv, 'I@maas:server')
+            maasNodes = salt.getMinions(pepperEnv, 'I@maas:region')
             common.infoMsg('Performing restore')
             salt.enforceState(['saltId': pepperEnv, 'target': 'I@salt:master', 'state': 'salt.master.restore'])
             salt.enforceState(['saltId': pepperEnv, 'target': 'I@salt:master', 'state': 'salt.minion.restore'])
@@ -42,7 +42,7 @@ timeout(time: 12, unit: 'HOURS') {
             stage('MAAS Restore') {
                 common.infoMsg('Verify pillar for MaaS backup')
                 try {
-                    def maaSPillar = salt.getPillar(pepperEnv, "I@maas:server", 'maas:region:database:initial_data')
+                    def maaSPillar = salt.getPillar(pepperEnv, "I@maas:region", 'maas:region:database:initial_data')
                     if (maaSPillar['return'].isEmpty()) {
                         throw new Exception('Problem with MaaS pillar.')
                     }
