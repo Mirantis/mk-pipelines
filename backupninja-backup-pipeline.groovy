@@ -88,6 +88,11 @@ timeout(time: 12, unit: 'HOURS') {
             [backupServer, backupMasterSource, backupMinionSource].unique().each {
                 salt.cmdRun(pepperEnv, backupNode, "ssh-keygen -F ${it} || ssh-keyscan -H ${it} >> /root/.ssh/known_hosts")
             }
+            def maasNodes = salt.getMinions(pepperEnv, 'I@maas:region')
+            if (!maasNodes.isEmpty()) {
+                common.infoMsg("Trying to save maas file permissions on ${maasNodes} if possible")
+                salt.cmdRun(pepperEnv, 'I@maas:region', 'which getfacl && getfacl -pR /var/lib/maas/ > /var/lib/maas/file_permissions.txt || true')
+            }
         }
         stage('Backup') {
             def output = salt.getReturnValues(salt.cmdRun(pepperEnv, backupNode, "su root -c 'backupninja --now -d'")).readLines()[-2]
