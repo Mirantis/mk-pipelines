@@ -20,6 +20,7 @@ def resultCode = 99
 def restoreType = env.RESTORE_TYPE
 def runRestoreDb = false
 def runBackupDb = false
+def restartCluster = false
 
 askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 checkTimeSync = (env.getProperty('CHECK_TIME_SYNC') ?: true).toBoolean()
@@ -35,12 +36,17 @@ if (restoreType.equals("BACKUP_AND_RESTORE") || restoreType.equals("ONLY_RESTORE
 if (restoreType.equals("BACKUP_AND_RESTORE")) {
     runBackupDb = true
 }
+if (restoreType.equals("RESTART_CLUSTER")) {
+    restartCluster = true
+}
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
         stage('Setup virtualenv for Pepper') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
+
+        def galeraStatus = [:]
         stage('Verify status') {
             def sysstatTargets = 'I@xtrabackup:client or I@xtrabackup:server'
             def sysstatTargetsNodes = salt.getMinions(pepperEnv, sysstatTargets)
@@ -58,50 +64,48 @@ timeout(time: 12, unit: 'HOURS') {
                     input message: "Do you want to continue? Click to confirm"
                 }
             }
-            resultCode = galera.verifyGaleraStatus(pepperEnv, false, checkTimeSync)
-            if (resultCode == 128) {
-                common.errorMsg("Unable to connect to Galera Master. Trying slaves...")
-                resultCode = galera.verifyGaleraStatus(pepperEnv, true, checkTimeSync)
-                if (resultCode == 129) {
-                    common.errorMsg("Unable to obtain Galera slave minions list. Without fixing this issue, pipeline cannot continue in verification, backup and restoration. This may be caused by wrong Galera configuration or corrupted pillar data.")
+            galeraStatus = galera.verifyGaleraStatus(pepperEnv, checkTimeSync)
+
+            switch (galeraStatus.error) {
+                case 128:
+                    common.errorMsg("Unable to obtain Galera members minions list. Without fixing this issue, pipeline cannot continue in verification, backup and restoration. This may be caused by wrong Galera configuration or corrupted pillar data.")
                     currentBuild.result = "FAILURE"
                     return
-                } else if (resultCode == 130) {
+                case 130:
                     common.errorMsg("Neither master or slaves are reachable. Without fixing this issue, pipeline cannot continue in verification, backup and restoration. Is at least one member of the Galera cluster up and running?")
                     currentBuild.result = "FAILURE"
                     return
-                }
-            }
-            if (resultCode == 131) {
-                common.errorMsg("Time desynced - Please fix this issue and rerun the pipeline.")
-                currentBuild.result = "FAILURE"
-                return
-            }
-            if (resultCode == 140 || resultCode == 141) {
-                common.errorMsg("Disk utilization check failed - Please fix this issue and rerun the pipeline.")
-                currentBuild.result = "FAILURE"
-                return
-            }
-            if (resultCode == 1) {
-                if (askConfirmation) {
-                    input message: "There was a problem with parsing the status output or with determining it. Do you want to run a restore?"
-                } else {
-                    common.warningMsg("There was a problem with parsing the status output or with determining it. Try to restore.")
-                }
-            } else if (resultCode > 1) {
-                if (askConfirmation) {
-                    input message: "There's something wrong with the cluster, do you want to continue with backup and/or restore?"
-                } else {
-                    common.warningMsg("There's something wrong with the cluster, try to backup and/or restore.")
-                }
-            } else {
-                if (askConfirmation) {
-                    input message: "There seems to be everything alright with the cluster, do you still want to continue with backup and/or restore?"
-                } else {
-                    common.warningMsg("There seems to be everything alright with the cluster, no backup and no restoration will be done.")
-                    currentBuild.result = "SUCCESS"
+                case 131:
+                    common.errorMsg("Time desynced - Please fix this issue and rerun the pipeline.")
+                    currentBuild.result = "FAILURE"
                     return
-                }
+                case 140..141:
+                    common.errorMsg("Disk utilization check failed - Please fix this issue and rerun the pipeline.")
+                    currentBuild.result = "FAILURE"
+                    return
+                case 1:
+                    if (askConfirmation) {
+                        input message: "There was a problem with parsing the status output or with determining it. Do you want to run a next action: ${restoreType}?"
+                    } else {
+                        common.warningMsg("There was a problem with parsing the status output or with determining it. Trying to perform action: ${restoreType}.")
+                    }
+                    break
+                case 0:
+                    if (askConfirmation) {
+                        input message: "There seems to be everything alright with the cluster, do you still want to continue with next action: ${restoreType}?"
+                        break
+                    } else {
+                        common.warningMsg("There seems to be everything alright with the cluster, no backup and no restoration will be done.")
+                        currentBuild.result = "SUCCESS"
+                        return
+                    }
+                default:
+                    if (askConfirmation) {
+                        input message: "There's something wrong with the cluster, do you want to continue with action: ${restoreType}?"
+                    } else {
+                        common.warningMsg("There's something wrong with the cluster, trying to perform action: ${restoreType}")
+                    }
+                    break
             }
         }
         if (runBackupDb) {
@@ -117,24 +121,41 @@ timeout(time: 12, unit: 'HOURS') {
                 )
             }
         }
-        if (runRestoreDb) {
-            stage('Restore') {
-                if (askConfirmation) {
-                    input message: "Are you sure you want to run a restore? Click to confirm"
-                }
-                try {
-                    if ((!askConfirmation && resultCode > 0) || askConfirmation) {
-                        galera.restoreGaleraCluster(pepperEnv, runRestoreDb)
+        if (runRestoreDb || restartCluster) {
+            if (runRestoreDb) {
+                stage('Restore') {
+                    if (askConfirmation) {
+                        input message: "Are you sure you want to run a restore? Click to confirm"
                     }
-                } catch (Exception e) {
-                    common.errorMsg("Restoration process has failed.")
-                    common.errorMsg(e.getMessage())
+                    try {
+                        if ((!askConfirmation && resultCode > 0) || askConfirmation) {
+                            galera.restoreGaleraCluster(pepperEnv, galeraStatus)
+                        }
+                    } catch (Exception e) {
+                        common.errorMsg("Restoration process has failed.")
+                        common.errorMsg(e.getMessage())
+                    }
+                }
+            }
+            if (restartCluster) {
+                stage('Restart cluster') {
+                    if (askConfirmation) {
+                        input message: "Are you sure you want to run a restart? Click to confirm"
+                    }
+                    try {
+                        if ((!askConfirmation && resultCode > 0) || askConfirmation) {
+                            galera.restoreGaleraCluster(pepperEnv, galeraStatus, false)
+                        }
+                    } catch (Exception e) {
+                        common.errorMsg("Restart process has failed.")
+                        common.errorMsg(e.getMessage())
+                    }
                 }
             }
             stage('Verify restoration result') {
                 common.retry(verificationRetries, 15) {
-                    exitCode = galera.verifyGaleraStatus(pepperEnv, false, false)
-                    if (exitCode >= 1) {
+                    def status = galera.verifyGaleraStatus(pepperEnv, false)
+                    if (status.error >= 1) {
                         error("Verification attempt finished with an error. This may be caused by cluster not having enough time to come up or to sync. Next verification attempt in 5 seconds.")
                     } else {
                         common.infoMsg("Restoration procedure seems to be successful. See verification report to be sure.")
