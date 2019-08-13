@@ -66,8 +66,10 @@ node (SLAVE_NODE) {
                     ] + env_vars
 
                 // Generating final config
+                def force_pull = (env.getProperty('force_pull')) ?: false
                 configRun = [
                     'image': IMAGE,
+                    'dockerPull': force_pull.toBoolean(),
                     'baseRepoPreConfig': false,
                     'dockerMaxCpus': 2,
                     'dockerExtraOpts' : [

@@ -188,6 +188,26 @@ def wa29155(ArrayList saltMinions, String cname) {
 
 }
 
+def wa32284(String clusterName) {
+    def clientGluster = salt.getPillar(venvPepper, 'I@salt:master', "glusterfs:client:enabled").get("return")[0].values()[0]
+    def pkiGluster = salt.getPillar(venvPepper, 'I@salt:master', "glusterfs:client:volumes:salt_pki").get("return")[0].values()[0]
+    def nginxEnabledAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]
+    if (nginxEnabledAtMaster.toString().toLowerCase() == 'true' && clientGluster.toString().toLowerCase() == 'true' && pkiGluster) {
+        def nginxRequires = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:wait_for_service').get('return')[0].values()[0]
+        if (nginxRequires.isEmpty()) {
+            def nginxRequiresClassName = "cluster.${clusterName}.infra.config.nginx_requires_wa32284"
+            def nginxRequiresClassFile = "/srv/salt/reclass/classes/cluster/${clusterName}/infra/config/nginx_requires_wa32284.yml"
+            def nginxRequiresBlock = ['parameters': ['nginx': ['server': ['wait_for_service': ['srv-salt-pki.mount'] ] ] ] ]
+            def _tempFile = '/tmp/wa32284_' + UUID.randomUUID().toString().take(8)
+            writeYaml file: _tempFile , data: nginxRequiresBlock
+            def nginxRequiresBlockString = sh(script: "cat ${_tempFile}", returnStdout: true).trim()
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${clusterName} && " +
+                "sed -i '/^parameters:/i - ${nginxRequiresClassName}' infra/config/init.yml")
+            salt.cmdRun(venvPepper, 'I@salt:master', "echo '${nginxRequiresBlockString}'  > ${nginxRequiresClassFile}", false, null, false)
+        }
+    }
+}
+
 def archiveReclassInventory(filename) {
     def _tmp_file = '/tmp/' + filename + UUID.randomUUID().toString().take(8)
     // jenkins may fail at overheap. Compress data with gzip like WA
@@ -307,6 +327,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             }
             python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
             def minions = salt.getMinions(venvPepper, '*')
+            def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_name").get("return")[0].values()[0]
+            if (cluster_name == '' || cluster_name == 'null' || cluster_name == null) {
+                error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
+            }
 
             stage('Update Reclass and Salt-Formulas') {
                 common.infoMsg('Perform: Full salt sync')
@@ -317,7 +341,6 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 common.infoMsg('Perform: archiveReclassInventory before upgrade')
                 archiveReclassInventory(inventoryBeforeFilename)
 
-                def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', '_param:cluster_name').get('return')[0].values()[0]
                 try {
                     salt.cmdRun(venvPepper, 'I@salt:master', 'cd /srv/salt/reclass/ && git status && git diff-index --quiet HEAD --')
                 }
@@ -347,6 +370,29 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.updates' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.updates/system.linux.system.repo.mcp.apt_mirantis.update/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.extra' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.extra/system.linux.system.repo.mcp.apt_mirantis.extra/g'")
+
+                    // Switch Jenkins/Gerrit to use LDAP SSL/TLS
+                    def gerritldapURI = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                        "grep -r --exclude-dir=aptly 'gerrit_ldap_server: .*' * | grep -Po 'gerrit_ldap_server: \\K.*' | tr -d '\"'", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                    if (gerritldapURI.startsWith('ldap://')) {
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r --exclude-dir=aptly -l 'gerrit_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|ldap://|ldaps://|g'")
+                    } else if (! gerritldapURI.startsWith('ldaps://')) {
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r --exclude-dir=aptly -l 'gerrit_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|gerrit_ldap_server: .*|gerrit_ldap_server: \"ldaps://${gerritldapURI}\"|g'")
+                    }
+                    def jenkinsldapURI = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                        "grep -r --exclude-dir=aptly 'jenkins_security_ldap_server: .*' * | grep -Po 'jenkins_security_ldap_server: \\K.*' | tr -d '\"'", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                    if (jenkinsldapURI.startsWith('ldap://')) {
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r --exclude-dir=aptly -l 'jenkins_security_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|ldap://|ldaps://|g'")
+                    } else if (! jenkinsldapURI.startsWith('ldaps://')) {
+                        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
+                            "grep -r --exclude-dir=aptly -l 'jenkins_security_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|jenkins_security_ldap_server: .*|jenkins_security_ldap_server: \"ldaps://${jenkinsldapURI}\"|g'")
+                    }
+
+                    wa32284(cluster_name)
+
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add kubernetes-extra repo
                     if (salt.testTarget(venvPepper, "I@kubernetes:master")) {
@@ -394,7 +440,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 try {
                     common.infoMsg('Perform: UPDATE Salt Formulas')
                     salt.fullRefresh(venvPepper, '*')
-                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['linux.system.repo'], read_timeout: 60, retries: 2])
+                    salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo', true, true, null, false, 60, 2)
                     def saltEnv = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_master_base_environment").get("return")[0].values()[0]
                     salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'state.sls_id', ["salt_master_${saltEnv}_pkg_formulas", 'salt.master.env'])
                     salt.fullRefresh(venvPepper, '*')
@@ -417,9 +463,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 salt.fullRefresh(venvPepper, 'I@salt:master')
-                salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['reclass.storage'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@salt:master', 'reclass.storage', true, true, null, false, 60, 2)
                 try {
-                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['reclass'], read_timeout: 60, retries: 2])
+                    salt.enforceState(venvPepper, 'I@salt:master', 'reclass', true, true, null, false, 60, 2)
                 }
                 catch (Exception ex) {
                     common.errorMsg(ex.toString())
@@ -489,7 +535,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 if (upgradeSaltStack) {
                     updateSaltStack('I@salt:master', '["salt-master", "salt-common", "salt-api", "salt-minion"]')
 
-                    salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['linux.system.repo'], read_timeout: 60, retries: 2])
+                    salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.repo', true, true, null, false, 60, 2)
                     updateSaltStack('I@salt:minion and not I@salt:master', '["salt-minion"]')
                 }
 
@@ -502,25 +548,27 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // update minions certs
                 // call for `salt.minion.ca` state on related nodes to make sure
                 // mine was updated with required data after salt-minion/salt-master restart salt:minion:ca
-                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion:ca', state: ['salt.minion.ca'], read_timeout: 60, retries: 2])
-                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion', state: ['salt.minion.cert'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@salt:minion:ca', 'salt.minion.ca', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion.cert', true, true, null, false, 60, 2)
 
                 // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
-                salt.enforceState([saltId: venvPepper, target: 'I@salt:minion', state: ['salt.minion'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion', true, true, null, false, 60, 2)
                 // Retry needed only for rare race-condition in user appearance
                 common.infoMsg('Perform: updating users and keys')
-                salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['linux.system.user'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.user', true, true, null, false, 60, 2)
                 common.infoMsg('Perform: updating openssh')
-                salt.enforceState([saltId: venvPepper, target: 'I@linux:system', state: ['openssh'], read_timeout: 60, retries: 2])
+                salt.enforceState(venvPepper, 'I@linux:system', 'openssh', true, true, null, false, 60, 2)
 
                 // apply salt API TLS if needed
                 def nginxAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]
                 if (nginxAtMaster.toString().toLowerCase() == 'true') {
-                    salt.enforceState([saltId: venvPepper, target: 'I@salt:master', state: ['nginx'], read_timeout: 60, retries: 2])
+                    salt.enforceState(venvPepper, 'I@salt:master', 'nginx', true, true, null, false, 60, 2)
                 }
 
-                salt.enforceState([saltId: venvPepper, target: 'I@jenkins:client and not I@salt:master', state: ['jenkins.client'], read_timeout: 60, retries: 2])
-                salt.cmdRun(venvPepper, 'I@salt:master', "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
+                // Apply changes for HaProxy on CI/CD nodes
+                salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
+
+                salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
 
                 sleep(180)
 
@@ -533,6 +581,13 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
                 catch (Exception ex) {
                     error("Docker containers for CI/CD services are having troubles with starting.")
+                }
+
+                salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true, true, null, false, 60, 2)
+
+                // update Nginx proxy settings for Jenkins/Gerrit if needed
+                if (salt.testTarget(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit')) {
+                    salt.enforceState(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit', 'nginx.server', true, true, null, false, 60, 2)
                 }
             }
         }

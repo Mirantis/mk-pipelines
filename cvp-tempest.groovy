@@ -74,6 +74,11 @@ node() {
         tempest_node=salt.getPillar(saltMaster, SERVICE_NODE, '_param:tempest_test_target')['return'][0].values()[0] ?: default_node+'*'
         // TARGET_NODE will always override any settings above
         TARGET_NODE = (env.TARGET_NODE) ?: tempest_node
+        // default is /root/test/
+        runtest_tempest_cfg_dir = (env.runtest_tempest_cfg_dir) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_dir')['return'][0].values()[0]
+        // default is tempest_generated.conf
+        runtest_tempest_cfg_name = (env.runtest_tempest_cfg_name) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_name')['return'][0].values()[0]
+        common.infoMsg("runtest_tempest_cfg is ${runtest_tempest_cfg_dir}/${runtest_tempest_cfg_name}")
     }
     stage('Preparing resources') {
         if ( PREPARE_RESOURCES.toBoolean() ) {
@@ -92,11 +97,6 @@ node() {
     }
     stage('Generate config') {
         if ( GENERATE_CONFIG.toBoolean() ) {
-            // default is /root/test/
-            runtest_tempest_cfg_dir = (env.runtest_tempest_cfg_dir) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_dir')['return'][0].values()[0]
-            // default is tempest_generated.conf
-            runtest_tempest_cfg_name = (env.runtest_tempest_cfg_name) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:runtest_tempest_cfg_name')['return'][0].values()[0]
-            common.infoMsg("runtest_tempest_cfg is ${runtest_tempest_cfg_dir}/${runtest_tempest_cfg_name}")
             salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.remove', ["${runtest_tempest_cfg_dir}"])
             salt.runSaltProcessStep(saltMaster, SERVICE_NODE, 'file.mkdir', ["${runtest_tempest_cfg_dir}"])
             fullnodename = salt.getMinions(saltMaster, SERVICE_NODE).get(0)
@@ -128,9 +128,8 @@ node() {
             }
             SKIP_LIST_PATH = (env.SKIP_LIST_PATH) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:tempest_skip_list_path')['return'][0].values()[0]
             if (SKIP_LIST_PATH) {
-                mounts = ["${runtest_tempest_cfg_dir}/skip.list": "/root/tempest/skip.list"]
+                mounts = ["${runtest_tempest_cfg_dir}/skip.list": "/var/lib/tempest/skiplists/skip.list"]
                 salt.cmdRun(saltMaster, SERVICE_NODE, "salt-cp ${TARGET_NODE} ${SKIP_LIST_PATH} ${runtest_tempest_cfg_dir}/skip.list")
-                args += ' --blacklist-file /root/tempest/skip.list '
             }
         }
         else {
@@ -171,7 +170,7 @@ node() {
             junit "${report_prefix}.xml"
         }
     } finally {
-        if (DEBUG_MODE == 'false') {
+        if ( ! DEBUG_MODE.toBoolean() ) {
             validate.runCleanup(saltMaster, TARGET_NODE, container_name)
         }
     }
