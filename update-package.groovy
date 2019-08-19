@@ -6,6 +6,7 @@
  *   SALT_MASTER_URL            Full Salt API address [https://10.10.10.1:8000].
  *   TARGET_SERVERS             Salt compound target to match nodes to be updated [*, G@osfamily:debian].
  *   TARGET_PACKAGES            Space delimited list of packages to be updates [package1=version package2=version], empty string means all updating all packages to the latest version.
+ *   BATCH_SIZE                 Use batching for large amount of target nodes
  *
 **/
 
@@ -13,14 +14,19 @@ pepperEnv = "pepperEnv"
 salt = new com.mirantis.mk.Salt()
 common = new com.mirantis.mk.Common()
 
-def installSaltStack(target, pkgs, masterUpdate = false){
+def batch_size = ''
+if (common.validInputParam('BATCH_SIZE')) {
+    batch_size = "${BATCH_SIZE}"
+}
+
+def installSaltStack(target, pkgs, batch, masterUpdate = false){
     salt.cmdRun(pepperEnv, "I@salt:master", "salt -C '${target}' --async pkg.install force_yes=True pkgs='$pkgs'")
     def minions_reachable = target
     if (masterUpdate) {
         // in case of update Salt Master packages - check all minions are good
         minions_reachable = '*'
     }
-    salt.checkTargetMinionsReady(['saltId': pepperEnv, 'target': target, 'target_reachable': minions_reachable])
+    salt.checkTargetMinionsReady(['saltId': pepperEnv, 'target': target, 'target_reachable': minions_reachable, 'batch': batch])
 }
 
 timeout(time: 12, unit: 'HOURS') {
@@ -46,7 +52,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage("List package upgrades") {
                 common.infoMsg("Listing all the packages that have a new update available on nodes: ${targetLiveAll}")
-                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.list_upgrades', [], null, true)
+                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.list_upgrades', [], batch_size, true)
                 if (TARGET_PACKAGES != '' && TARGET_PACKAGES != '*') {
                     common.warningMsg("Note that only the \"${TARGET_PACKAGES}\" would be installed from the above list of available updates on the ${targetLiveAll}")
                     command = "pkg.install"
@@ -68,9 +74,9 @@ timeout(time: 12, unit: 'HOURS') {
                     for (int i = 0; i < saltTargets.size(); i++ ) {
                         common.retry(10, 5) {
                             if (salt.getMinions(pepperEnv, "I@salt:master and ${saltTargets[i]}")) {
-                                installSaltStack("I@salt:master and ${saltTargets[i]}", '["salt-master", "salt-common", "salt-api", "salt-minion"]', true)
+                                installSaltStack("I@salt:master and ${saltTargets[i]}", '["salt-master", "salt-common", "salt-api", "salt-minion"]', null, true)
                             } else if (salt.getMinions(pepperEnv, "I@salt:minion and not I@salt:master and ${saltTargets[i]}")) {
-                                installSaltStack("I@salt:minion and not I@salt:master and ${saltTargets[i]}", '["salt-minion"]')
+                                installSaltStack("I@salt:minion and not I@salt:master and ${saltTargets[i]}", '["salt-minion"]', batch_size)
                             } else {
                                 error("Minion ${saltTargets[i]} is not reachable!")
                             }
@@ -78,7 +84,7 @@ timeout(time: 12, unit: 'HOURS') {
                     }
                 }
                 common.infoMsg('Starting package upgrades...')
-                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, null, packages, commandKwargs)
+                out = salt.runSaltCommand(pepperEnv, 'local', ['expression': targetLiveAll, 'type': 'compound'], command, batch_size, packages, commandKwargs)
                 salt.printSaltCommandResult(out)
                 for(value in out.get("return")[0].values()){
                     if (value.containsKey('result') && value.result == false) {
