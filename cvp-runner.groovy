@@ -48,7 +48,7 @@ node (SLAVE_NODE) {
                 def container_workdir = '/var/lib'
                 def workdir = "${container_workdir}/${test_suite_name}"
                 def tests_set = (env.getProperty('tests_set')) ?: ''
-                def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} --tb=short -vv ${tests_set}"
+                def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} -vv ${tests_set}"
 
                 sh "mkdir -p ${artifacts_dir}"
 
