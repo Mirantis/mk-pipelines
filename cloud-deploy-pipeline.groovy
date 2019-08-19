@@ -46,6 +46,10 @@
  *   SALT_VERSION               Version of Salt  which is going to be installed i.e. 'stable 2016.3' or 'stable 2017.7' etc.
  *
  *   EXTRA_TARGET               The value will be added to target nodes
+ *   BATCH_SIZE                 Use batching for states, which may be targeted for huge amount of nodes. Format:
+                                - 10 - number of nodes
+                                - 10% - percentage of all targeted nodes
+
  *
  * Test settings:
  *   TEST_K8S_API_SERVER     Kubernetes API address
@@ -103,6 +107,10 @@ if (common.validInputParam('SLAVE_NODE')) {
 def extra_tgt = ''
 if (common.validInputParam('EXTRA_TARGET')) {
     extra_tgt = "${EXTRA_TARGET}"
+}
+def batch_size = ''
+if (common.validInputParam('BATCH_SIZE')) {
+    batch_size = "${BATCH_SIZE}"
 }
 
 timeout(time: 12, unit: 'HOURS') {
@@ -333,9 +341,15 @@ timeout(time: 12, unit: 'HOURS') {
             //
             // Install
             //
+            if (!batch_size) {
+                def workerThreads = salt.getReturnValues(salt.getPillar(venvPepper, "I@salt:master", "salt:master:worker_threads", null))
+                if (workerThreads.isInteger() && workerThreads.toInteger() > 0) {
+                   batch_size = workerThreads
+                }
+            }
 
             // Check if all minions are reachable and ready
-            salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': '*'])
+            salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': '*', batch: batch_size])
 
             if (common.checkContains('STACK_INSTALL', 'core')) {
                 stage('Install core infrastructure') {
@@ -343,7 +357,7 @@ timeout(time: 12, unit: 'HOURS') {
                     if (common.validInputParam('STATIC_MGMT_NETWORK')) {
                         staticMgmtNetwork = STATIC_MGMT_NETWORK.toBoolean()
                     }
-                    orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_tgt)
+                    orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_tgt, batch_size)
 
                     if (common.checkContains('STACK_INSTALL', 'kvm')) {
                         orchestrate.installInfraKvm(venvPepper, extra_tgt)
@@ -497,7 +511,7 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 stage('Install OpenStack compute') {
-                    orchestrate.installOpenstackCompute(venvPepper, extra_tgt)
+                    orchestrate.installOpenstackCompute(venvPepper, extra_tgt, batch_size)
 
                     if (common.checkContains('STACK_INSTALL', 'contrail')) {
                         orchestrate.installContrailCompute(venvPepper, extra_tgt)
@@ -662,7 +676,7 @@ timeout(time: 12, unit: 'HOURS') {
                     def gluster_compound = "I@glusterfs:server ${extra_tgt}"
                     def salt_ca_compound = "I@salt:minion:ca:salt_master_ca ${extra_tgt}"
                     // Enforce highstate asynchronous only on the nodes which are not glusterfs servers
-                    salt.enforceHighstate(venvPepper, '* and not ' + gluster_compound + ' and not ' + salt_ca_compound)
+                    salt.enforceHighstate(venvPepper, '* and not ' + gluster_compound + ' and not ' + salt_ca_compound, batch_size)
                     // Iterate over nonempty set of gluster servers and apply highstates one by one
                     // TODO: switch to batch once salt 2017.7+ would be used
                     def saltcaMinions = salt.getMinionsSorted(venvPepper, salt_ca_compound)

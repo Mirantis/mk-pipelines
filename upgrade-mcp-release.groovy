@@ -8,6 +8,7 @@
  *   DRIVE_TRAIN_PARAMS         Yaml, DriveTrain releated params:
  *     SALT_MASTER_URL            Salt API server location
  *     SALT_MASTER_CREDENTIALS    Credentials to the Salt API
+ *     BATCH_SIZE                 Use batch sizing during upgrade for large envs
  *     UPGRADE_SALTSTACK          Upgrade SaltStack packages to new version.
  *     UPDATE_CLUSTER_MODEL       Update MCP version parameter in cluster model
  *     UPDATE_PIPELINES           Update pipeline repositories on Gerrit
@@ -299,6 +300,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             def updateLocalRepos = ''
             def reclassSystemBranch = ''
             def reclassSystemBranchDefault = gitTargetMcpVersion
+            def batchSize = ''
             if (gitTargetMcpVersion != 'proposed') {
                 reclassSystemBranchDefault = "origin/${gitTargetMcpVersion}"
             }
@@ -312,6 +314,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 updatePipelines = driteTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
                 updateLocalRepos = driteTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
                 reclassSystemBranch = driteTrainParams.get('RECLASS_SYSTEM_BRANCH', reclassSystemBranchDefault)
+                batchSize = driveTrainParams.get('BATCH_SIZE', '')
             } else {
                 // backward compatibility for 2018.11.0
                 saltMastURL = env.getProperty('SALT_MASTER_URL')
@@ -327,6 +330,12 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_name").get("return")[0].values()[0]
             if (cluster_name == '' || cluster_name == 'null' || cluster_name == null) {
                 error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
+            }
+            if (!batch_size) {
+                def workerThreads = salt.getReturnValues(salt.getPillar(venvPepper, "I@salt:master", "salt:master:worker_threads", null))
+                if (workerThreads.isInteger() && workerThreads.toInteger() > 0) {
+                   batch_size = workerThreads
+                }
             }
 
             stage('Update Reclass and Salt-Formulas') {
@@ -533,7 +542,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 if (upgradeSaltStack) {
                     updateSaltStack('I@salt:master', '["salt-master", "salt-common", "salt-api", "salt-minion"]')
 
-                    salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.repo', true, true, null, false, 60, 2)
+                    salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.repo', true, true, batchSize, false, 60, 2)
                     updateSaltStack('I@salt:minion and not I@salt:master', '["salt-minion"]')
                 }
 
@@ -546,16 +555,16 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // update minions certs
                 // call for `salt.minion.ca` state on related nodes to make sure
                 // mine was updated with required data after salt-minion/salt-master restart salt:minion:ca
-                salt.enforceState(venvPepper, 'I@salt:minion:ca', 'salt.minion.ca', true, true, null, false, 60, 2)
-                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion.cert', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@salt:minion:ca', 'salt.minion.ca', true, true, batchSize, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion.cert', true, true, batchSize, false, 60, 2)
 
                 // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
                 salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion', true, true, null, false, 60, 2)
                 // Retry needed only for rare race-condition in user appearance
                 common.infoMsg('Perform: updating users and keys')
-                salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.user', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.user', true, true, batchSize, false, 60, 2)
                 common.infoMsg('Perform: updating openssh')
-                salt.enforceState(venvPepper, 'I@linux:system', 'openssh', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@linux:system', 'openssh', true, true, batchSize, false, 60, 2)
 
                 // apply salt API TLS if needed
                 def nginxAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]
