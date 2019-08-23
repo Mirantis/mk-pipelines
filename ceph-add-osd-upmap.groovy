@@ -64,7 +64,8 @@ timeout(time: 12, unit: 'HOURS') {
 
         stage ("verify client versions")
         {
-          def nodes = salt.getMinions("pepperEnv", "I@ceph:common and not E@mon*")
+          // I@docker:swarm and I@prometheus:server - mon* nodes
+          def nodes = salt.getMinions("pepperEnv", "I@ceph:common and not ( I@docker:swarm and I@prometheus:server )")
           for ( node in nodes )
           {
             def versions = salt.cmdRun("pepperEnv", node, "ceph features --format json", checkResponse=true, batch=null, output=false).values()[0]

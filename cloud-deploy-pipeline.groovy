@@ -384,7 +384,7 @@ timeout(time: 12, unit: 'HOURS') {
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
                 extra_tgt_bckp = extra_tgt
-                extra_tgt = 'and not kdt* and not cfg* ' + extra_tgt_bckp
+                extra_tgt = 'and not kdt* and not I@salt:master ' + extra_tgt_bckp
                 stage('Install Kubernetes infra') {
                     if (STACK_TYPE == 'aws') {
                         // configure kubernetes_control_address - save loadbalancer
@@ -509,7 +509,8 @@ timeout(time: 12, unit: 'HOURS') {
                 // Workaround for PROD-17765 issue to prevent crashes of keystone.role_present state.
                 // More details: https://mirantis.jira.com/browse/PROD-17765
                 salt.restartSaltMinion(venvPepper, "I@keystone:client ${extra_tgt}")
-                salt.minionsReachable(venvPepper, "I@salt:master and *01* ${extra_tgt}", 'I@keystone:client', null, 10, 6)
+                //
+                salt.minionsReachable(venvPepper, 'I@salt:master', 'I@keystone:client ${extra_tgt}', null, 10, 6)
 
                 stage('Install OpenStack network') {
 
@@ -560,7 +561,7 @@ timeout(time: 12, unit: 'HOURS') {
             if (common.checkContains('STACK_INSTALL', 'cicd')) {
                 stage('Install Cicd') {
                     extra_tgt_bckp = extra_tgt
-                    extra_tgt = 'and cid* ' + extra_tgt_bckp
+                    extra_tgt = 'and I@_param:drivetrain_role:cicd ' + extra_tgt_bckp
                     orchestrate.installInfra(venvPepper, extra_tgt)
                     orchestrate.installCicd(venvPepper, extra_tgt)
                     extra_tgt = extra_tgt_bckp
@@ -612,7 +613,7 @@ timeout(time: 12, unit: 'HOURS') {
                         test.executeConformance(config)
                     } else {
                         def output_file = image.replaceAll('/', '-') + '.output'
-                        def target = "ctl01* ${extra_tgt}"
+                        def target = "I@keystone:server:role:primary ${extra_tgt}"
                         def conformance_output_file = 'conformance_test.tar'
 
                         // run image
@@ -642,7 +643,7 @@ timeout(time: 12, unit: 'HOURS') {
                               "py.test --junit-xml=${report_dir}report.xml" +
                               " --html=${report_dir}report.html -v vapor/tests/ -k 'not destructive' "
 
-                    salt.runSaltProcessStep(venvPepper, 'cfg*', 'saltutil.refresh_pillar', [], null, true)
+                    salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'saltutil.refresh_pillar', [], null, true)
                     salt.enforceState(venvPepper, 'I@opencontrail:test' , 'opencontrail.test' , true)
 
                     salt.cmdRun(venvPepper, 'I@opencontrail:test', cmd, false)
