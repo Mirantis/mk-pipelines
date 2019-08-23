@@ -128,12 +128,9 @@ def wa29155(ArrayList saltMinions, String cname) {
         common.infoMsg('Work-around for PROD-29155 already apply, nothing todo')
         return
     }
-    salt.fullRefresh(venvPepper, 'cfg*')
-    salt.fullRefresh(venvPepper, 'cmp*')
+    salt.fullRefresh(venvPepper, 'I@salt:master')
+    salt.fullRefresh(venvPepper, 'I@nova:compute')
     for (String minion in saltMinions) {
-        if (!minion.startsWith('cmp')) {
-            continue
-        }
         // First attempt, second will be performed in next validateReclassModel() stages
         try {
             salt.cmdRun(venvPepper, 'I@salt:master', "reclass -n ${minion}", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
@@ -451,7 +448,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 wa29352(minions, cluster_name)
-                wa29155(minions, cluster_name)
+                def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
+                wa29155(computeMinions, cluster_name)
 
                 try {
                     common.infoMsg('Perform: UPDATE Reclass package')

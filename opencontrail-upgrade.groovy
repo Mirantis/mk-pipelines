@@ -66,7 +66,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Opencontrail controllers upgrade') {
 
-                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
 
                 oc_component_repo = oc_component_repo['return'][0].values()[0]
 
@@ -103,22 +103,14 @@ timeout(time: 12, unit: 'HOURS') {
                 args = 'apt install contrail-database -y;'
                 check = 'nodetool status'
 
-                // ntw01
-                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
-                // ntw02
-                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
-                // ntw03
-                runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:primary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 args = "apt install -o Dpkg::Options::=\"--force-confold\" ${CONTROL_PKGS} -y --force-yes;"
                 check = 'contrail-status'
 
-                // ntw01
-                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
-                // ntw02
-                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
-                // ntw03
-                runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:primary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 try {
                     salt.enforceState(pepperEnv, 'I@opencontrail:control', 'opencontrail')
@@ -144,7 +136,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Opencontrail analytics upgrade') {
 
-                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector:role:primary', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
 
                 oc_component_repo = oc_component_repo['return'][0].values()[0]
 
@@ -161,22 +153,14 @@ timeout(time: 12, unit: 'HOURS') {
                 args = 'apt install contrail-database -y;'
                 check = 'nodetool status'
 
-                // nal01
-                runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
-                // nal02
-                runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
-                // nal03
-                runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:collector:role:primary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:collector:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 args = "apt install -o Dpkg::Options::=\"--force-confold\" ${ANALYTIC_PKGS} -y --force-yes;"
                 check = 'contrail-status'
 
-                // nal01
-                runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
-                // nal02
-                runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
-                // nal03
-                runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:collector:role:primary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:collector:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 try {
                     salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'opencontrail')
@@ -302,7 +286,7 @@ timeout(time: 12, unit: 'HOURS') {
 
            stage('Opencontrail controllers rollback') {
 
-                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:control:role:primary', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
                 oc_component_repo = oc_component_repo['return'][0].values()[0]
 
                 try {
@@ -318,22 +302,14 @@ timeout(time: 12, unit: 'HOURS') {
                 args = 'apt install contrail-database -y --force-yes;'
                 check = 'nodetool status'
 
-                // ntw01
-                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
-                // ntw02
-                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
-                // ntw03
-                runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:primary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 args = "apt install -o Dpkg::Options::=\"--force-confold\" ${CONTROL_PKGS} -y --force-yes;"
                 check = 'contrail-status'
 
-                // ntw01
-                runCommonCommands('I@opencontrail:control and *01*', command, args, check, salt, pepperEnv, common)
-                // ntw02
-                runCommonCommands('I@opencontrail:control and *02*', command, args, check, salt, pepperEnv, common)
-                // ntw03
-                runCommonCommands('I@opencontrail:control and *03*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:primary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:control:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 try {
                     salt.enforceState(pepperEnv, 'I@opencontrail:control', 'opencontrail')
@@ -361,7 +337,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Opencontrail analytics rollback') {
 
-                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector and *01*', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
+                oc_component_repo = salt.runSaltProcessStep(pepperEnv, 'I@opencontrail:collector:role:primary', 'cmd.shell', ['grep -RE \'oc[0-9]{2,3}\' /etc/apt/sources.list* | awk \'{print $1}\' | sed \'s/ *:.*//\''], null, true)
                 oc_component_repo = oc_component_repo['return'][0].values()[0]
 
                 try {
@@ -377,22 +353,14 @@ timeout(time: 12, unit: 'HOURS') {
                 args = 'apt install contrail-database -y --force-yes;'
                 check = 'nodetool status'
 
-                // nal01
-                runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
-                // nal02
-                runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
-                // nal03
-                runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:collector:role:primary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:collector:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 args = "apt install -o Dpkg::Options::=\"--force-confold\" ${ANALYTIC_PKGS} -y --force-yes;"
                 check = 'contrail-status'
 
-                // nal01
-                runCommonCommands('I@opencontrail:collector and *01*', command, args, check, salt, pepperEnv, common)
-                // nal02
-                runCommonCommands('I@opencontrail:collector and *02*', command, args, check, salt, pepperEnv, common)
-                // nal03
-                runCommonCommands('I@opencontrail:collector and *03*', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:collector:role:primary', command, args, check, salt, pepperEnv, common)
+                runCommonCommands('I@opencontrail:collector:role:secondary', command, args, check, salt, pepperEnv, common)
 
                 try {
                     salt.enforceState(pepperEnv, 'I@opencontrail:collector', 'opencontrail')
