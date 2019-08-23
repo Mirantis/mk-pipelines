@@ -57,5 +57,19 @@ timeout(time: 12, unit: 'HOURS') {
         stage('Clean-up') {
             salt.cmdRun(pepperEnv, backupNode, "su root -c '/usr/local/bin/innobackupex-runner.sh -c'")
         }
+        stage('Backup Dogtag') {
+            if (!salt.getPillar(pepperEnv, "I@salt:master", "I@dogtag:server:enabled")['return'].isEmpty()) {
+                dogtagBackupBuild = build(job: 'backupninja-backup-pipeline', parameters: [
+                        [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
+                        [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
+                        [$class: 'BooleanParameterValue', name: 'ASK_CONFIRMATION', value: "false"],
+                        [$class: 'BooleanParameterValue', name: 'BACKUP_SALTMASTER_AND_MAAS', value: "false"],
+                        [$class: 'BooleanParameterValue', name: 'BACKUP_DOGTAG', value: "true"],
+                ]
+                )
+            } else {
+                common.warningMsg("Dogtag pillar not found. This is fine if you are using different Barbican backend.")
+            }
+        }
     }
 }
