@@ -206,6 +206,30 @@ def wa32284(String clusterName) {
     }
 }
 
+def wa32182(String cluster_name) {
+    if (salt.testTarget('I@opencontrail:control or I@opencontrail:collector')) {
+        def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
+        def fixFile = "${clusterModelPath}/opencontrail/common_wa32182.yml"
+        def usualFile = "${clusterModelPath}/opencontrail/common.yml"
+        def fixFileContent = "classes:\n- system.opencontrail.common\n"
+        salt.cmdRun(venvPepper, 'I@salt:master', "test -f ${fixFile} -o -f ${usualFile} || echo '${fixFileContent}' > ${fixFile}")
+        def contrailFiles = ['opencontrail/analytics.yml', 'opencontrail/control.yml', 'openstack/compute/init.yml']
+        if (salt.testTarget(venvPepper, "I@kubernetes:master")) {
+            contrailFiles.add('kubernetes/compute.yml')
+        }
+        for(String contrailFile in contrailFiles) {
+            contrailFile = "${clusterModelPath}/${contrailFile}"
+            def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster\\.${cluster_name}\\.opencontrail\\.common(_wa32182)?\$' ${contrailFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+            if (containsFix) {
+                continue
+            } else {
+                salt.cmdRun(venvPepper, 'I@salt:master', "grep -q -E '^parameters:' ${contrailFile} && sed -i '/^parameters:/i - cluster.${cluster_name}.opencontrail.common_wa32182' ${contrailFile} || " +
+                    "echo '- cluster.${cluster_name}.opencontrail.common_wa32182' >> ${contrailFile}")
+            }
+        }
+    }
+}
+
 def archiveReclassInventory(filename) {
     def _tmp_file = '/tmp/' + filename + UUID.randomUUID().toString().take(8)
     // jenkins may fail at overheap. Compress data with gzip like WA
@@ -407,6 +431,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                             }
                         }
                     }
+                    wa32182(cluster_name)
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
