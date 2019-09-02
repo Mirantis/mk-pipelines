@@ -56,10 +56,14 @@ def removePartition(master, target, partition_uuid, type='', id=-1) {
         }
     }
     if (partition?.trim()) {
-        // dev = /dev/sdi
+        def part_id
+        if (partition.contains("nvme")) {
+          part_id = partition.substring(partition.lastIndexOf("p")+1).replaceAll("[^0-9]+", "")
+        }
+        else {
+          part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]+", "")
+        }
         def dev = partition.replaceAll('\\d+$', "")
-        // part_id = 2
-        def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]+", "")
         runCephCommand(master, target, "Ignore | parted ${dev} rm ${part_id}")
     }
     return
