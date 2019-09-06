@@ -207,7 +207,7 @@ def wa32284(String clusterName) {
 }
 
 def wa32182(String cluster_name) {
-    if (salt.testTarget('I@opencontrail:control or I@opencontrail:collector')) {
+    if (salt.testTarget(venvPepper, 'I@opencontrail:control or I@opencontrail:collector')) {
         def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
         def fixFile = "${clusterModelPath}/opencontrail/common_wa32182.yml"
         def usualFile = "${clusterModelPath}/opencontrail/common.yml"
@@ -328,16 +328,16 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             if (gitTargetMcpVersion != 'proposed') {
                 reclassSystemBranchDefault = "origin/${gitTargetMcpVersion}"
             }
-            def driteTrainParamsYaml = env.getProperty('DRIVE_TRAIN_PARAMS')
-            if (driteTrainParamsYaml) {
-                def driteTrainParams = readYaml text: driteTrainParamsYaml
-                saltMastURL = driteTrainParams.get('SALT_MASTER_URL')
-                saltMastCreds = driteTrainParams.get('SALT_MASTER_CREDENTIALS')
-                upgradeSaltStack = driteTrainParams.get('UPGRADE_SALTSTACK', false).toBoolean()
-                updateClusterModel = driteTrainParams.get('UPDATE_CLUSTER_MODEL', false).toBoolean()
-                updatePipelines = driteTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
-                updateLocalRepos = driteTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
-                reclassSystemBranch = driteTrainParams.get('RECLASS_SYSTEM_BRANCH', reclassSystemBranchDefault)
+            def driveTrainParamsYaml = env.getProperty('DRIVE_TRAIN_PARAMS')
+            if (driveTrainParamsYaml) {
+                def driveTrainParams = readYaml text: driveTrainParamsYaml
+                saltMastURL = driveTrainParams.get('SALT_MASTER_URL')
+                saltMastCreds = driveTrainParams.get('SALT_MASTER_CREDENTIALS')
+                upgradeSaltStack = driveTrainParams.get('UPGRADE_SALTSTACK', false).toBoolean()
+                updateClusterModel = driveTrainParams.get('UPDATE_CLUSTER_MODEL', false).toBoolean()
+                updatePipelines = driveTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
+                updateLocalRepos = driveTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
+                reclassSystemBranch = driveTrainParams.get('RECLASS_SYSTEM_BRANCH', reclassSystemBranchDefault)
                 batchSize = driveTrainParams.get('BATCH_SIZE', '')
             } else {
                 // backward compatibility for 2018.11.0
@@ -355,10 +355,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             if (cluster_name == '' || cluster_name == 'null' || cluster_name == null) {
                 error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
             }
-            if (!batch_size) {
-                def workerThreads = salt.getReturnValues(salt.getPillar(venvPepper, "I@salt:master", "salt:master:worker_threads", null))
+            if (!batchSize) {
+                def workerThreads = salt.getReturnValues(salt.getPillar(venvPepper, "I@salt:master", "salt:master:worker_threads", null)).toString()
                 if (workerThreads.isInteger() && workerThreads.toInteger() > 0) {
-                   batch_size = workerThreads
+                   batchSize = workerThreads
                 }
             }
 
