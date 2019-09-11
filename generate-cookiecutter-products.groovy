@@ -118,7 +118,7 @@ def globalVariatorsUpdate() {
     if (gitGuessedVersion == 'release/proposed/2019.2.0') {
         def mcpSaltRepoUpdateVar = 'deb [arch=amd64] http://mirror.mirantis.com/update/proposed/salt-formulas/xenial xenial main'
         if (context.get('offline_deployment', 'False').toBoolean()) {
-            mcpSaltRepoUpdateVar = "deb [arch=amd64] http://${context.get('aptly_server_deploy_address')}/update/proposed/salt-formulas/xenial xenial main"
+            mcpSaltRepoUpdateVar = "deb [arch=amd64] http://${context.get('aptly_server_deploy_address')}/update/proposed/salt-formulas/xenial xenial main".toString()
         }
         // CFG node in 2019.2.X update has to be bootstrapped with update/proposed repository for salt formulas
         context['cloudinit_master_config'] = context.get('cloudinit_master_config', false) ?: [:]
