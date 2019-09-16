@@ -91,8 +91,11 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg('An error has been occurred during cassandra db startup on I@opencontrail:control and not I@cassandra:backup:client nodes: ' + err.getMessage())
                     throw err
                 }
-                // another mantra, wait till all services are up
-                sleep(60)
+                // wait till outstanding cassandra dbs are up
+                common.retry(6, 20){
+                    common.infoMsg("Trying to connect to casandra db on I@opencontrail:control and not I@cassandra:backup:client nodes ...")
+                    salt.cmdRun(pepperEnv, 'I@opencontrail:control and not I@cassandra:backup:client', "nc -v -z -w2 ${configDbIp} ${configDbPort}")
+                }
                 try {
                     common.infoMsg("Start analytics containers node")
                     salt.cmdRun(pepperEnv, 'I@opencontrail:collector', 'cd /etc/docker/compose/opencontrail/; docker-compose up -d')
