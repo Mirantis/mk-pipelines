@@ -398,6 +398,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.extra' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.extra/system.linux.system.repo.mcp.apt_mirantis.extra/g'")
 
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name/infra && sed -i '/linux_system_repo_mcp_maas_url/d' maas.yml")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name/infra && sed -i '/maas_region_main_archive/d' maas.yml")
+
                     // Switch Jenkins/Gerrit to use LDAP SSL/TLS
                     def gerritldapURI = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly 'gerrit_ldap_server: .*' * | grep -Po 'gerrit_ldap_server: \\K.*' | tr -d '\"'", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
@@ -434,7 +437,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     }
                     // Add all update repositories
                     def repoIncludeBase = '- system.linux.system.repo.mcp.apt_mirantis.'
-                    def updateRepoList = ['cassandra', 'ceph', 'contrail', 'docker', 'elastic', 'extra', 'openstack', 'percona', 'salt-formulas', 'saltstack', 'ubuntu']
+                    def updateRepoList = ['cassandra', 'ceph', 'contrail', 'docker', 'elastic', 'extra', 'openstack', 'maas', 'percona', 'salt-formulas', 'saltstack', 'ubuntu']
                     updateRepoList.each { repo ->
                         def repoNameUpdateInclude = "${repoIncludeBase}update.${repo}"
                         def filesWithInclude = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -Plr '\\${repoIncludeBase}${repo}\$' . || true", false).get('return')[0].values()[0].trim().tokenize('\n')
