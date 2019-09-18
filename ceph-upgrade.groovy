@@ -33,20 +33,27 @@ def runCephCommand(master, target, cmd) {
     return salt.cmdRun(master, target, cmd)
 }
 
-def waitForHealthy(master, count=0, attempts=300) {
+def waitForHealthy(master, flags, count=0, attempts=300) {
     // wait for healthy cluster
     while (count<attempts) {
         def health = runCephCommand(master, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
         if (health.contains('HEALTH_OK')) {
             common.infoMsg('Cluster is healthy')
             break;
+        } else {
+          for (flag in flags) {
+            if (health.contains(flag + ' flag(s) set') && !(health.contains('down'))) {
+              common.infoMsg('Cluster is healthy')
+              return;
+            }
+          }
         }
         count++
         sleep(10)
     }
 }
 
-def backup(master, target) {
+def backup(master, flags, target) {
     stage("backup ${target}") {
 
         if (target == 'osd') {
@@ -72,7 +79,7 @@ def backup(master, target) {
                 def provider_pillar = salt.getPillar(master, "${kvm01}", "salt:control:cluster:internal:node:${minion_name}:provider")
                 def minionProvider = provider_pillar['return'][0].values()[0]
 
-                waitForHealthy(master)
+                waitForHealthy(master, flags)
                 try {
                     salt.cmdRun(master, "${minionProvider}", "[ ! -f ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak ] && virsh destroy ${minion_name}.${domain}")
                 } catch (Exception e) {
@@ -89,14 +96,14 @@ def backup(master, target) {
                     common.warningMsg(e)
                 }
                 salt.minionsReachable(master, 'I@salt:master', "${minion_name}*")
-                waitForHealthy(master)
+                waitForHealthy(master, flags)
             }
         }
     }
     return
 }
 
-def upgrade(master, target) {
+def upgrade(master, target, flags) {
 
     stage("Change ${target} repos") {
         salt.runSaltProcessStep(master, "I@ceph:${target}", 'saltutil.refresh_pillar', [], null, true, 5)
@@ -127,13 +134,21 @@ def upgrade(master, target) {
             }
             // restart services
             stage("Restart ${target} services on ${minion}") {
-                runCephCommand(master, "${minion}", "systemctl restart ceph-${target}.target")
+                if (target == 'osd') {
+                  def osds = salt.getGrain(master, "${minion}", 'ceph:ceph_disk').values()[0]
+                  osds[0].values()[0].values()[0].each { osd,param ->
+                    runCephCommand(master, "${minion}", "systemctl restart ceph-${target}@${osd}")
+                    waitForHealthy(master, flags)
+                  }
+                } else {
+                  runCephCommand(master, "${minion}", "systemctl restart ceph-${target}.target")
+                  waitForHealthy(master, flags)
+                }
             }
 
             stage("Verify services for ${minion}") {
                 sleep(10)
                 runCephCommand(master, "${minion}", "systemctl status ceph-${target}.target")
-                waitForHealthy(master)
             }
 
             stage('Ask for manual confirmation') {
@@ -198,23 +213,23 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         if (STAGE_UPGRADE_MON.toBoolean() == true) {
-            upgrade(pepperEnv, 'mon')
+            upgrade(pepperEnv, 'mon', flags)
         }
 
         if (STAGE_UPGRADE_MGR.toBoolean() == true) {
-            upgrade(pepperEnv, 'mgr')
+            upgrade(pepperEnv, 'mgr', flags)
         }
 
         if (STAGE_UPGRADE_OSD.toBoolean() == true) {
-            upgrade(pepperEnv, 'osd')
+            upgrade(pepperEnv, 'osd', flags)
         }
 
         if (STAGE_UPGRADE_RGW.toBoolean() == true) {
-            upgrade(pepperEnv, 'radosgw')
+            upgrade(pepperEnv, 'radosgw', flags)
         }
 
         if (STAGE_UPGRADE_CLIENT.toBoolean() == true) {
-            upgrade(pepperEnv, 'common')
+            upgrade(pepperEnv, 'common', flags)
         }
 
         // remove cluster flags
@@ -248,7 +263,7 @@ timeout(time: 12, unit: 'HOURS') {
 
         // wait for healthy cluster
         if (WAIT_FOR_HEALTHY.toBoolean() == true) {
-            waitForHealthy(pepperEnv)
+            waitForHealthy(pepperEnv, flags)
         }
     }
 }
