@@ -58,8 +58,8 @@ timeout(time: 12, unit: 'HOURS') {
             salt.cmdRun(pepperEnv, backupNode, "su root -c '/usr/local/bin/innobackupex-runner.sh -c'")
         }
         stage('Backup Dogtag') {
-            if (!salt.getPillar(pepperEnv, "I@salt:master", "I@dogtag:server:enabled")['return'].isEmpty()) {
-                dogtagBackupBuild = build(job: 'backupninja-backup-pipeline', parameters: [
+            if (!salt.getMinions(pepperEnv, "I@dogtag:server:enabled").isEmpty()) {
+                dogtagBackupBuild = build(job: 'backupninja_backup', parameters: [
                         [$class: 'StringParameterValue', name: 'SALT_MASTER_URL', value: SALT_MASTER_URL],
                         [$class: 'StringParameterValue', name: 'SALT_MASTER_CREDENTIALS', value: SALT_MASTER_CREDENTIALS],
                         [$class: 'BooleanParameterValue', name: 'ASK_CONFIRMATION', value: "false"],
