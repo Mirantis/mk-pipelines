@@ -337,10 +337,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
             }
             if (!batchSize) {
-                def workerThreads = salt.getReturnValues(salt.getPillar(venvPepper, "I@salt:master", "salt:master:worker_threads", null)).toString()
-                if (workerThreads.isInteger() && workerThreads.toInteger() > 0) {
-                   batchSize = workerThreads
-                }
+                batchSize = salt.getWorkerThreads(venvPepper)
             }
 
             stage('Update Reclass and Salt-Formulas') {

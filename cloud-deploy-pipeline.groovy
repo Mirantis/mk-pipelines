@@ -356,10 +356,7 @@ timeout(time: 12, unit: 'HOURS') {
             // Install
             //
             if (!batch_size) {
-                def workerThreads = salt.getReturnValues(salt.getPillar(venvPepper, "I@salt:master", "salt:master:worker_threads", null)).toString()
-                if (workerThreads.isInteger() && workerThreads.toInteger() > 0) {
-                   batch_size = workerThreads
-                }
+                batch_size = salt.getWorkerThreads(venvPepper)
             }
 
             // Check if all minions are reachable and ready
