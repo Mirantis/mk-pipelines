@@ -70,6 +70,14 @@ def updateSaltStack(target, pkgs) {
     }
 }
 
+def getWorkerThreads(saltId) {
+    if (env.getEnvironment().containsKey('SALT_MASTER_OPT_WORKER_THREADS')) {
+        return env['SALT_MASTER_OPT_WORKER_THREADS'].toString()
+    }
+    def threads = salt.cmdRun(saltId, "I@salt:master", "cat /etc/salt/master.d/master.conf | grep worker_threads | cut -f 2 -d ':'", true, null, true)
+    return threads['return'][0].values()[0].replaceAll('Salt command execution success','').trim()
+}
+
 def wa29352(ArrayList saltMinions, String cname) {
     // WA for PROD-29352. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/12/openssh/client/root.yml
     // Default soft-param has been removed, what now makes not possible to render some old env's.
@@ -356,7 +364,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
             }
             if (!batchSize) {
-                batchSize = salt.getWorkerThreads(venvPepper)
+                batchSize = getWorkerThreads(venvPepper)
             }
 
             stage('Update Reclass and Salt-Formulas') {
