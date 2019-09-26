@@ -335,7 +335,7 @@ timeout(time: 1, unit: 'HOURS') {
                         smc['MCP_SALT_REPO_URL'] = "http://${localRepoIP}"
                     }
                     smc['MCP_SALT_REPO_KEY'] = "http://${localRepoIP}/public.gpg"
-                    smc['PIPELINES_FROM_ISO'] = 'true'
+                    smc['PIPELINES_FROM_ISO'] = 'false'
                     smc['PIPELINE_REPO_URL'] = "http://${localRepoIP}:8088"
                     smc['LOCAL_REPOS'] = 'true'
                 }
