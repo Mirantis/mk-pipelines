@@ -146,6 +146,10 @@ def StepGenerateModels(_contextFileList, _virtualenv, _templateEnvDir) {
                 contextYaml['default_context']['secrets_encryption_enabled'] = 'False'
             }
 
+            // disabling strong_usernames for tests to reduce diff between head and patched model
+            common.warningMsg('Disabling strong_usernames for tests!')
+            contextYaml['default_context']['strong_usernames'] = 'False'
+
             def context = mcpCommon.dumpYAML(contextYaml)
             if (!fileExists(new File(_templateEnvDir, 'tox.ini').toString())) {
                 common.warningMsg('Forming NEW reclass-root structure...')
