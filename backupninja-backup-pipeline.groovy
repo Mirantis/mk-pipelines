@@ -11,6 +11,7 @@ logBackupSuccess = []
 logBackupFailure = []
 
 def checkBackupninjaLog(output, backupName='', terminateOnFailure=true) {
+    def common = new com.mirantis.mk.Common()
     def outputPattern = java.util.regex.Pattern.compile("\\d+")
     def outputMatcher = outputPattern.matcher(output)
     if (outputMatcher.find()) {
@@ -61,7 +62,7 @@ timeout(time: 12, unit: 'HOURS') {
             if (backupDogtag) {
                 try {
                     def dogtagPillar = salt.getPillar(pepperEnv, "I@salt:master", "dogtag:server")
-                    if (masterPillar['return'].isEmpty()) {
+                    if (dogtagPillar['return'].isEmpty()) {
                         throw new Exception("Problem with dogtag pillar on I@dogtag:server node.")
                     }
                 }
