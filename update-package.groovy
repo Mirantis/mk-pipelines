@@ -54,10 +54,14 @@ timeout(time: 12, unit: 'HOURS') {
                 common.infoMsg("Listing all the packages that have a new update available on nodes: ${targetLiveAll}")
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.list_upgrades', [], batch_size, true)
                 if (TARGET_PACKAGES != '' && TARGET_PACKAGES != '*') {
-                    common.warningMsg("Note that only the \"${TARGET_PACKAGES}\" would be installed from the above list of available updates on the ${targetLiveAll}")
+                    if (ALLOW_DEPENDENCY_UPDATE.toBoolean()) {
+                        common.warningMsg("Note that the \"${TARGET_PACKAGES}\" and it new dependencies would be installed from the above list of available updates on the ${targetLiveAll}")
+                    } else {
+                        common.warningMsg("Note that only the \"${TARGET_PACKAGES}\" would be installed from the above list of available updates on the ${targetLiveAll}")
+                        commandKwargs = ['only_upgrade': 'true']
+                    }
                     command = "pkg.install"
                     packages = TARGET_PACKAGES.tokenize(' ')
-                    commandKwargs = ['only_upgrade': 'true']
                 }
             }
 
