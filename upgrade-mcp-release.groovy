@@ -91,7 +91,7 @@ def wa29352(ArrayList saltMinions, String cname) {
         salt.cmdRun(venvPepper, 'I@salt:master', "test ! -f ${wa29352File}", true, null, false)
     }
     catch (Exception ex) {
-        common.infoMsg('Work-around for PROD-29352 already apply, nothing todo')
+        common.infoMsg('Work-around for PROD-29352 already applied, nothing todo')
         return
     }
     def rKeysDict = [
@@ -120,6 +120,9 @@ def wa29352(ArrayList saltMinions, String cname) {
         "grep -q '${wa29352ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29352ClassName' infra/secrets.yml")
     salt.fullRefresh(venvPepper, '*')
     sh('rm -fv ' + _tempFile)
+    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && git status && " +
+            "git add ${wa29352File} && git add -u && git commit --allow-empty -m 'Cluster model updated with WA for PROD-29352. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/ at ${common.getDatetime()}' ")
+    common.infoMsg('Work-around for PROD-29352 successfully applied')
 }
 
 def wa29155(ArrayList saltMinions, String cname) {
