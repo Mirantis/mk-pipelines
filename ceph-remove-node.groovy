@@ -304,7 +304,8 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
 
-        if (HOST_TYPE.toLowerCase() == 'osd' && GENERATE_CRUSHMAP.toBoolean() == true) {
+        def crushmap_target = salt.getMinions(pepperEnv, "I@ceph:setup:crush")
+        if (HOST_TYPE.toLowerCase() == 'osd' && GENERATE_CRUSHMAP.toBoolean() == true && crushmap_target ) {
             stage('Generate CRUSHMAP') {
                 salt.enforceState(pepperEnv, 'I@ceph:setup:crush', 'ceph.setup.crush', true)
             }
