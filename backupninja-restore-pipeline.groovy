@@ -2,7 +2,7 @@ def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 def pepperEnv = "pepperEnv"
-def maasNodes = {}
+def maasNodes = []
 def restoreSaltMasterAndMaas = (env.getProperty('RESTORE_SALTMASTER_AND_MAAS') ?: true).toBoolean()
 def restoreDogtag = (env.getProperty('RESTORE_DOGTAG') ?: true).toBoolean()
 
