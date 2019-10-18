@@ -241,6 +241,27 @@ def wa32182(String cluster_name) {
     }
 }
 
+def wa33771(String cluster_name) {
+    def octaviaEnabled = salt.getMinions(venvPepper, 'I@octavia:api:enabled')
+    def octaviaWSGI = salt.getMinions(venvPepper, 'I@apache:server:site:octavia_api')
+    if (octaviaEnabled && ! octaviaWSGI) {
+        def openstackControl = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/control.yml"
+        def octaviaFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/octavia_wa33771.yml"
+        def octaviaContext = [
+            'classes': [ 'system.apache.server.site.octavia' ],
+            'parameters': [
+                '_param': [ 'apache_octavia_api_address' : '${_param:cluster_local_address}' ],
+                'apache': [ 'server': [ 'site': [ 'apache_proxy_openstack_api_octavia': [ 'enabled': false ] ] ] ]
+            ]
+        ]
+        def _tempFile = '/tmp/wa33771' + UUID.randomUUID().toString().take(8)
+        writeYaml file: _tempFile , data: octaviaContext
+        def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+        salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.octavia_wa33771' ${openstackControl}")
+        salt.cmdRun(venvPepper, 'I@salt:master', "echo '${octaviaFileContent}' | base64 -d > ${octaviaFile}", false, null, false)
+    }
+}
+
 def archiveReclassInventory(filename) {
     def _tmp_file = '/tmp/' + filename + UUID.randomUUID().toString().take(8)
     // jenkins may fail at overheap. Compress data with gzip like WA
@@ -463,6 +484,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                         }
                     }
                     wa32182(cluster_name)
+                    wa33771(cluster_name)
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
