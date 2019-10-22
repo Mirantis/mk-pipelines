@@ -64,6 +64,18 @@ timeout(time: 12, unit: 'HOURS') {
                     input message: "Do you want to continue? Click to confirm"
                 }
             }
+            try {
+                common.infoMsg('Checking required xtrabackup pillars...')
+                def xtrabackupRestoreFrom = salt.getPillar(pepperEnv, 'I@galera:master or I@galera:slave', 'xtrabackup:client:restore_from')
+                def xtrabackupRestoreLatest = salt.getPillar(pepperEnv, 'I@galera:master or I@galera:slave', 'xtrabackup:client:restore_full_latest')
+                if ('' in xtrabackupRestoreFrom['return'][0].values() || '' in xtrabackupRestoreLatest['return'][0].values()) {
+                    throw new Exception('Pillars xtrabackup:client:restore_from or xtrabackup:client:restore_full_latest are missed for \'I@galera:master or I@galera:slave\' nodes.')
+                }
+            } catch (Exception e) {
+                common.errorMsg(e.getMessage())
+                common.errorMsg('Please fix your pillar data. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/openstack/database/xtrabackup-restore-database.html')
+                return
+            }
             galeraStatus = galera.verifyGaleraStatus(pepperEnv, checkTimeSync)
 
             switch (galeraStatus.error) {
