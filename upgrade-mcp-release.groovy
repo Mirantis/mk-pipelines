@@ -241,6 +241,17 @@ def wa32182(String cluster_name) {
     }
 }
 
+def wa33867(String cluster_name) {
+    if (salt.testTarget(venvPepper, 'I@opencontrail:control or I@opencontrail:collector')) {
+        def contrailControlFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/opencontrail/control.yml"
+        def line = salt.cmdRun(venvPepper, 'I@salt:master', "awk '/^- cluster.${cluster_name}.infra.backup.client_zookeeper/ {getline; print \$0}' ${contrailControlFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+        if (line == "- cluster.${cluster_name}.infra") {
+            salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^- cluster.${cluster_name}.infra\$/d' ${contrailControlFile}")
+            salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^- cluster.${cluster_name}.infra.backup.client_zookeeper\$/i - cluster.${cluster_name}.infra' ${contrailControlFile}")
+        }
+    }
+}
+
 def wa33771(String cluster_name) {
     def octaviaEnabled = salt.getMinions(venvPepper, 'I@octavia:api:enabled')
     def octaviaWSGI = salt.getMinions(venvPepper, 'I@apache:server:site:octavia_api')
@@ -465,6 +476,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     }
                     wa32182(cluster_name)
                     wa33771(cluster_name)
+                    wa33867(cluster_name)
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
