@@ -229,5 +229,9 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
         }
+        stage('Post upgrade steps') {
+            common.infoMsg('Apply workaround for PROD-33878')
+            salt.runSaltProcessStep(pepperEnv, "I@fluentd:agent and I@rabbitmq:server", "service.restart", "td-agent", null, true)
+        }
     }
 }
