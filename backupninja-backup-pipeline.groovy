@@ -86,7 +86,7 @@ timeout(time: 12, unit: 'HOURS') {
                     return
                 }
 
-                def maasNodes = salt.getMinions(pepperEnv, 'I@maas:server')
+                def maasNodes = salt.getMinions(pepperEnv, 'I@maas:region')
                 if (!maasNodes.isEmpty()) {
                     def postgresqlMajorVersion = salt.getPillar(pepperEnv, 'I@salt:master', '_param:postgresql_major_version').get('return')[0].values()[0]
                     if (! postgresqlMajorVersion) {
@@ -95,16 +95,16 @@ timeout(time: 12, unit: 'HOURS') {
                                 input message: "Confirm to proceed anyway."
                             }
                     } else {
-                        def postgresqlClientPackage = "postgresql-client-${postgresqlMajorVersion}"
+                        def postgresqlClientPackages = "postgresql-client-${postgresqlMajorVersion}"
                         try {
-                            if (!salt.isPackageInstalled(['saltId': pepperEnv, 'target': saltMasterBackupNode, 'packageName': postgresqlClientPackage, 'output': false])) {
+                            if (!salt.isPackageInstalled(['saltId': pepperEnv, 'target': saltMasterBackupNode, 'packageName': postgresqlClientPackages, 'output': false])) {
                                 if (askConfirmation) {
                                     input message: "Do you want to install ${postgresqlClientPackages} package on targeted nodes: ${saltMasterBackupNode}? It's required to make backup. Click to confirm."
                                 } else {
                                     common.infoMsg("Package ${postgresqlClientPackages} will be installed. It's required to make backup.")
                                 }
                                 // update also common fake package
-                                salt.runSaltProcessStep(pepperEnv, saltMasterBackupNode, 'pkg.install', ["postgresql-client,${postgresqlClientPackage}"])
+                                salt.runSaltProcessStep(pepperEnv, saltMasterBackupNode, 'pkg.install', ["postgresql-client,${postgresqlClientPackages}"])
                             }
                         } catch (Exception e) {
                             common.errorMsg("Unable to determine status of ${postgresqlClientPackages} packages on target nodes: ${saltMasterBackupNode}.")
