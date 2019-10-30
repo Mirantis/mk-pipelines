@@ -8,6 +8,10 @@ def restoreDogtag = (env.getProperty('RESTORE_DOGTAG') ?: true).toBoolean()
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
+        if (restoreDogtag) {
+            common.warningMsg("Dogtag restore does not work and disabled by default. For more information check the docs https://docs.mirantis.com/mcp/q4-18/mcp-operations-guide/backup-restore.html")
+        }
+        restoreDogtag = false
         stage('Setup virtualenv for Pepper') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
