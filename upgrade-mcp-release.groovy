@@ -613,6 +613,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // Apply changes for HaProxy on CI/CD nodes
                 salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
 
+                // Gerrit 2019.2.0 (2.13.6) version has wrong file name for download-commands plugin and was not loaded, let's remove if still there before upgrade
+                def gerritGlusterPath = salt.getPillar(venvPepper, 'I@gerrit:client', 'glusterfs:client:volumes:gerrit:path').get('return')[0].values()[0]
+                def wrongPluginJarName = "${gerritGlusterPath}/plugins/project-download-commands.jar"
+                salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName}")
+
                 salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
 
                 sleep(180)
