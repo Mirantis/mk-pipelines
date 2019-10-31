@@ -18,48 +18,48 @@ timeout(time: 12, unit: 'HOURS') {
         stage('Verify pillar for restore') {
             if (restoreSaltMasterAndMaas) {
                 try {
-                    def masterPillar = salt.getPillar(pepperEnv, "I@salt:master", 'salt:master:initial_data')
-                    if(masterPillar['return'].isEmpty()) {
+                    def masterPillar = salt.getPillar(pepperEnv, "I@salt:master", 'salt:master:initial_data').get('return')[0].values()[0]
+                    if(masterPillar.isEmpty()) {
                         throw new Exception("Problem with salt-master pillar on 'I@salt:master' node.")
                     }
-                    def minionPillar = salt.getPillar(pepperEnv, "I@salt:master", 'salt:minion:initial_data')
-                    if(minionPillar['return'].isEmpty()) {
+                    def minionPillar = salt.getPillar(pepperEnv, "I@salt:master", 'salt:minion:initial_data').get('return')[0].values()[0]
+                    if(minionPillar.isEmpty()) {
                         throw new Exception("Problem with salt-minion pillar on 'I@salt:master' node.")
                     }
                 }
                 catch (Exception e){
                     common.errorMsg(e.getMessage())
                     common.errorMsg('Please fix your pillar. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/salt-master/salt-master-restore.html')
-                    return
+                    throw e
                 }
                 maasNodes = salt.getMinions(pepperEnv, 'I@maas:region')
             }
             if (!maasNodes.isEmpty()) {
                 try {
-                    def maaSPillar = salt.getPillar(pepperEnv, "I@maas:region", 'maas:region:database:initial_data')
-                    if (maaSPillar['return'].isEmpty()) {
+                    def maaSPillar = salt.getPillar(pepperEnv, "I@maas:region", 'maas:region:database:initial_data').get('return')[0].values()[0]
+                    if (maaSPillar.isEmpty()) {
                         throw new Exception("Problem with MaaS pillar on 'I@maas:region' node.")
                     }
                 }
                 catch (Exception e) {
                     common.errorMsg(e.getMessage())
                     common.errorMsg('Please fix your pillar. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/maas-postgresql/backupninja-postgresql-restore.html')
-                    return
+                    throw e
                 }
             } else {
                 common.warningMsg("No MaaS Pillar was found. You can ignore this if it's expected. Otherwise you should fix you pillar. Check: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/maas-postgresql/backupninja-postgresql-restore.html")
             }
             if (restoreDogtag) {
                 try {
-                    def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server:role:master", 'dogtag:server:initial_data')
-                    if (dogtagPillar['return'].isEmpty()) {
+                    def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server:role:master", 'dogtag:server:initial_data').get('return')[0].values()[0]
+                    if (dogtagPillar.isEmpty()) {
                         throw new Exception("Problem with Dogtag pillar on 'I@dogtag:server:role:master' node.")
                     }
                 }
                 catch (Exception e) {
                     common.errorMsg(e.getMessage())
                     common.errorMsg('Please fix your pillar. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/dogtag/restore-dogtag.html')
-                    return
+                    throw e
                 }
             }
         }
