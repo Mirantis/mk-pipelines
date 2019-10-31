@@ -27,7 +27,7 @@ timeout(time: 12, unit: 'HOURS') {
                         'apt-get update && apt-get install -y salt-formula-*'
                     )
                     common.infoMsg("Running salt sync-all")
-                    salt.runSaltProcessStep(venvPepper, 'jma*', 'saltutil.sync_all', [], null, true)
+                    salt.runSaltProcessStep(venvPepper, '*', 'saltutil.sync_all', [], null, true)
                 }
             }
             stage("Update Reclass") {

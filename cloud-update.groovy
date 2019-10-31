@@ -190,6 +190,70 @@ def updatePkgs(pepperEnv, target, targetType="", targetPackages="") {
                     }
                 } else {
                     if (distUpgrade) {
+                        common.infoMsg("Checking availability of Linux HWE Kernel...")
+                        def switchHwe = false
+                        def nodesOut = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], 'linux_kernel_switch.check_hwe_kernel').get('return')[0]
+                        def targetHWE = []
+                        for (node in nodesOut) {
+                            def nodeName = node.getKey()
+                            def statusPkgs = node.getValue()
+                            if (statusPkgs) {
+                                statusPkgs.each { pkg, pkgStatus ->
+                                    if (pkgStatus instanceof String) {
+                                        common.warningMsg("Target ${nodeName} has no installed Linux HWE Kernel package: ${pkg}")
+                                        if (! targetHWE.contains(nodeName)) {
+                                            targetHWE.add(nodeName)
+                                        }
+                                    }
+                                }
+                            } else {
+                                common.warningMsg("Target ${nodeName} has no info about Linux HWE Kernel, check formula or resync minion data.")
+                            }
+                        }
+                        if (targetHWE) {
+                            if (INTERACTIVE.toBoolean()) {
+                                try {
+                                    input message: "Do you want to switch from generic to hwe kernel for ${targetHWE} nodes? Click to confirm", ok: 'Switch to HWE'
+                                    switchHwe = true
+                                } catch (Exception ex) {
+                                    common.warningMsg("Kernel switch from generic to hwe for ${targetHWE} cancelled. Continue dist-upgrade with existing kernel.")
+                                }
+                            } else {
+                                switchHwe = true
+                            }
+                        }
+                        if (switchHwe) {
+                            def onlyKernel='True'
+                            def targetHWECompound = targetHWE.join(' or ')
+                            if (INTERACTIVE.toBoolean()) {
+                                try {
+                                    input message: "Install HWE headers and generic packages?", ok: 'Install'
+                                    onlyKernel='False'
+                                    common.infoMsg("HWE Kernel, headers and generic packages will be installed.")
+                                } catch (Exception e) {
+                                    common.infoMsg("Only HWE Kernel packages will be installed.")
+                                }
+                            } else {
+                                onlyKernel='False'
+                            }
+                            salt.runSaltCommand(pepperEnv, 'local', ['expression': targetHWECompound, 'type': 'compound'], 'linux_kernel_switch.switch_kernel', false, "only_kernel=${onlyKernel}")
+                            common.infoMsg("HWE Kernel has been installed on ${targetHWE} nodes")
+                            def rebootNow = true
+                            if (INTERACTIVE.toBoolean()) {
+                                try {
+                                    input message: "To finish switch on HWE kernel it is needed to reboot. Reboot nodes ${targetHWE} now?", ok: 'Reboot'
+                                } catch (Exception e) {
+                                    common.warningMsg("HWE Kernel is not used. Please reboot nodes ${targetHWE} manually to finish kernel switch.")
+                                    rebootNow = false
+                                }
+                            }
+                            if (rebootNow) {
+                                common.infoMsg('Performing nodes reboot after kernel install...')
+                                salt.runSaltCommand(pepperEnv, 'local', ['expression': targetHWECompound, 'type': 'compound'], 'system.reboot', null, 'at_time=1')
+                                sleep(180)
+                                salt.minionsReachable(pepperEnv, 'I@salt:master', targetHWECompound, null, 10, 20)
+                            }
+                        }
                         common.retry(3){
                             out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' dist-upgrade'])
                         }
@@ -335,6 +399,22 @@ def rollbackPkgs(pepperEnv, target, targetType = "", targetPackages="") {
                 }
             } else {
                 if (distUpgrade) {
+                    salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], 'linux_kernel_switch.rollback_switch_kernel', false)
+                    def rebootNow = true
+                    if (INTERACTIVE.toBoolean()) {
+                        try {
+                            input message: "To finish kernel downgrade it is needed to reboot. Reboot nodes ${target} now?", ok: 'Reboot'
+                        } catch (Exception e) {
+                            common.warningMsg("Please reboot nodes ${target} manually to finish kernel downgrade.")
+                            rebootNow = false
+                        }
+                    }
+                    if (rebootNow) {
+                        common.infoMsg('Performing nodes reboot after kernel downgrade...')
+                        salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], 'system.reboot', null, 'at_time=1')
+                        sleep(180)
+                        salt.minionsReachable(pepperEnv, 'I@salt:master', target, null, 10, 20)
+                    }
                     common.retry(3){
                         out = salt.runSaltProcessStep(pepperEnv, target, 'cmd.run', [args + ' dist-upgrade'])
                     }

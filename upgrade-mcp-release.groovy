@@ -8,6 +8,7 @@
  *   DRIVE_TRAIN_PARAMS         Yaml, DriveTrain releated params:
  *     SALT_MASTER_URL            Salt API server location
  *     SALT_MASTER_CREDENTIALS    Credentials to the Salt API
+ *     BATCH_SIZE                 Use batch sizing during upgrade for large envs
  *     UPGRADE_SALTSTACK          Upgrade SaltStack packages to new version.
  *     UPDATE_CLUSTER_MODEL       Update MCP version parameter in cluster model
  *     UPDATE_PIPELINES           Update pipeline repositories on Gerrit
@@ -69,6 +70,14 @@ def updateSaltStack(target, pkgs) {
     }
 }
 
+def getWorkerThreads(saltId) {
+    if (env.getEnvironment().containsKey('SALT_MASTER_OPT_WORKER_THREADS')) {
+        return env['SALT_MASTER_OPT_WORKER_THREADS'].toString()
+    }
+    def threads = salt.cmdRun(saltId, "I@salt:master", "cat /etc/salt/master.d/master.conf | grep worker_threads | cut -f 2 -d ':'", true, null, true)
+    return threads['return'][0].values()[0].replaceAll('Salt command execution success','').trim()
+}
+
 def wa29352(ArrayList saltMinions, String cname) {
     // WA for PROD-29352. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/12/openssh/client/root.yml
     // Default soft-param has been removed, what now makes not possible to render some old env's.
@@ -82,7 +91,7 @@ def wa29352(ArrayList saltMinions, String cname) {
         salt.cmdRun(venvPepper, 'I@salt:master', "test ! -f ${wa29352File}", true, null, false)
     }
     catch (Exception ex) {
-        common.infoMsg('Work-around for PROD-29352 already apply, nothing todo')
+        common.infoMsg('Work-around for PROD-29352 already applied, nothing todo')
         return
     }
     def rKeysDict = [
@@ -111,6 +120,9 @@ def wa29352(ArrayList saltMinions, String cname) {
         "grep -q '${wa29352ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29352ClassName' infra/secrets.yml")
     salt.fullRefresh(venvPepper, '*')
     sh('rm -fv ' + _tempFile)
+    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && git status && " +
+            "git add ${wa29352File} && git add -u && git commit --allow-empty -m 'Cluster model updated with WA for PROD-29352. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/ at ${common.getDatetime()}' ")
+    common.infoMsg('Work-around for PROD-29352 successfully applied')
 }
 
 def wa29155(ArrayList saltMinions, String cname) {
@@ -128,12 +140,9 @@ def wa29155(ArrayList saltMinions, String cname) {
         common.infoMsg('Work-around for PROD-29155 already apply, nothing todo')
         return
     }
-    salt.fullRefresh(venvPepper, 'cfg*')
-    salt.fullRefresh(venvPepper, 'cmp*')
+    salt.fullRefresh(venvPepper, 'I@salt:master')
+    salt.fullRefresh(venvPepper, 'I@nova:compute')
     for (String minion in saltMinions) {
-        if (!minion.startsWith('cmp')) {
-            continue
-        }
         // First attempt, second will be performed in next validateReclassModel() stages
         try {
             salt.cmdRun(venvPepper, 'I@salt:master', "reclass -n ${minion}", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
@@ -205,6 +214,62 @@ def wa32284(String clusterName) {
                 "sed -i '/^parameters:/i - ${nginxRequiresClassName}' infra/config/init.yml")
             salt.cmdRun(venvPepper, 'I@salt:master', "echo '${nginxRequiresBlockString}'  > ${nginxRequiresClassFile}", false, null, false)
         }
+    }
+}
+
+def wa32182(String cluster_name) {
+    if (salt.testTarget(venvPepper, 'I@opencontrail:control or I@opencontrail:collector')) {
+        def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
+        def fixFile = "${clusterModelPath}/opencontrail/common_wa32182.yml"
+        def usualFile = "${clusterModelPath}/opencontrail/common.yml"
+        def fixFileContent = "classes:\n- system.opencontrail.common\n"
+        salt.cmdRun(venvPepper, 'I@salt:master', "test -f ${fixFile} -o -f ${usualFile} || echo '${fixFileContent}' > ${fixFile}")
+        def contrailFiles = ['opencontrail/analytics.yml', 'opencontrail/control.yml', 'openstack/compute/init.yml']
+        if (salt.testTarget(venvPepper, "I@kubernetes:master")) {
+            contrailFiles.add('kubernetes/compute.yml')
+        }
+        for(String contrailFile in contrailFiles) {
+            contrailFile = "${clusterModelPath}/${contrailFile}"
+            def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster\\.${cluster_name}\\.opencontrail\\.common(_wa32182)?\$' ${contrailFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+            if (containsFix) {
+                continue
+            } else {
+                salt.cmdRun(venvPepper, 'I@salt:master', "grep -q -E '^parameters:' ${contrailFile} && sed -i '/^parameters:/i - cluster.${cluster_name}.opencontrail.common_wa32182' ${contrailFile} || " +
+                    "echo '- cluster.${cluster_name}.opencontrail.common_wa32182' >> ${contrailFile}")
+            }
+        }
+    }
+}
+
+def wa33867(String cluster_name) {
+    if (salt.testTarget(venvPepper, 'I@opencontrail:control or I@opencontrail:collector')) {
+        def contrailControlFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/opencontrail/control.yml"
+        def line = salt.cmdRun(venvPepper, 'I@salt:master', "awk '/^- cluster.${cluster_name}.infra.backup.client_zookeeper/ {getline; print \$0}' ${contrailControlFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+        if (line == "- cluster.${cluster_name}.infra") {
+            salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^- cluster.${cluster_name}.infra\$/d' ${contrailControlFile}")
+            salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^- cluster.${cluster_name}.infra.backup.client_zookeeper\$/i - cluster.${cluster_name}.infra' ${contrailControlFile}")
+        }
+    }
+}
+
+def wa33771(String cluster_name) {
+    def octaviaEnabled = salt.getMinions(venvPepper, 'I@octavia:api:enabled')
+    def octaviaWSGI = salt.getMinions(venvPepper, 'I@apache:server:site:octavia_api')
+    if (octaviaEnabled && ! octaviaWSGI) {
+        def openstackControl = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/control.yml"
+        def octaviaFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/octavia_wa33771.yml"
+        def octaviaContext = [
+            'classes': [ 'system.apache.server.site.octavia' ],
+            'parameters': [
+                '_param': [ 'apache_octavia_api_address' : '${_param:cluster_local_address}' ],
+                'apache': [ 'server': [ 'site': [ 'apache_proxy_openstack_api_octavia': [ 'enabled': false ] ] ] ]
+            ]
+        ]
+        def _tempFile = '/tmp/wa33771' + UUID.randomUUID().toString().take(8)
+        writeYaml file: _tempFile , data: octaviaContext
+        def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+        salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.octavia_wa33771' ${openstackControl}")
+        salt.cmdRun(venvPepper, 'I@salt:master', "echo '${octaviaFileContent}' | base64 -d > ${octaviaFile}", false, null, false)
     }
 }
 
@@ -302,19 +367,21 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             def updateLocalRepos = ''
             def reclassSystemBranch = ''
             def reclassSystemBranchDefault = gitTargetMcpVersion
+            def batchSize = ''
             if (gitTargetMcpVersion != 'proposed') {
                 reclassSystemBranchDefault = "origin/${gitTargetMcpVersion}"
             }
-            def driteTrainParamsYaml = env.getProperty('DRIVE_TRAIN_PARAMS')
-            if (driteTrainParamsYaml) {
-                def driteTrainParams = readYaml text: driteTrainParamsYaml
-                saltMastURL = driteTrainParams.get('SALT_MASTER_URL')
-                saltMastCreds = driteTrainParams.get('SALT_MASTER_CREDENTIALS')
-                upgradeSaltStack = driteTrainParams.get('UPGRADE_SALTSTACK', false).toBoolean()
-                updateClusterModel = driteTrainParams.get('UPDATE_CLUSTER_MODEL', false).toBoolean()
-                updatePipelines = driteTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
-                updateLocalRepos = driteTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
-                reclassSystemBranch = driteTrainParams.get('RECLASS_SYSTEM_BRANCH', reclassSystemBranchDefault)
+            def driveTrainParamsYaml = env.getProperty('DRIVE_TRAIN_PARAMS')
+            if (driveTrainParamsYaml) {
+                def driveTrainParams = readYaml text: driveTrainParamsYaml
+                saltMastURL = driveTrainParams.get('SALT_MASTER_URL')
+                saltMastCreds = driveTrainParams.get('SALT_MASTER_CREDENTIALS')
+                upgradeSaltStack = driveTrainParams.get('UPGRADE_SALTSTACK', false).toBoolean()
+                updateClusterModel = driveTrainParams.get('UPDATE_CLUSTER_MODEL', false).toBoolean()
+                updatePipelines = driveTrainParams.get('UPDATE_PIPELINES', false).toBoolean()
+                updateLocalRepos = driveTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
+                reclassSystemBranch = driveTrainParams.get('RECLASS_SYSTEM_BRANCH', reclassSystemBranchDefault)
+                batchSize = driveTrainParams.get('BATCH_SIZE', '')
             } else {
                 // backward compatibility for 2018.11.0
                 saltMastURL = env.getProperty('SALT_MASTER_URL')
@@ -330,6 +397,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             def cluster_name = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_name").get("return")[0].values()[0]
             if (cluster_name == '' || cluster_name == 'null' || cluster_name == null) {
                 error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
+            }
+            if (!batchSize) {
+                batchSize = getWorkerThreads(venvPepper)
             }
 
             stage('Update Reclass and Salt-Formulas') {
@@ -371,6 +441,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.extra' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.extra/system.linux.system.repo.mcp.apt_mirantis.extra/g'")
 
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name/infra && sed -i '/linux_system_repo_mcp_maas_url/d' maas.yml")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name/infra && sed -i '/maas_region_main_archive/d' maas.yml")
+
                     // Switch Jenkins/Gerrit to use LDAP SSL/TLS
                     def gerritldapURI = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly 'gerrit_ldap_server: .*' * | grep -Po 'gerrit_ldap_server: \\K.*' | tr -d '\"'", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
@@ -407,7 +480,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     }
                     // Add all update repositories
                     def repoIncludeBase = '- system.linux.system.repo.mcp.apt_mirantis.'
-                    def updateRepoList = ['cassandra', 'ceph', 'contrail', 'docker', 'elastic', 'extra', 'openstack', 'percona', 'salt-formulas', 'saltstack', 'ubuntu']
+                    def updateRepoList = ['cassandra', 'ceph', 'contrail', 'docker', 'elastic', 'extra', 'openstack', 'maas', 'percona', 'salt-formulas', 'saltstack', 'ubuntu']
                     updateRepoList.each { repo ->
                         def repoNameUpdateInclude = "${repoIncludeBase}update.${repo}"
                         def filesWithInclude = salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -Plr '\\${repoIncludeBase}${repo}\$' . || true", false).get('return')[0].values()[0].trim().tokenize('\n')
@@ -421,6 +494,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                             }
                         }
                     }
+                    wa32182(cluster_name)
+                    wa33771(cluster_name)
+                    wa33867(cluster_name)
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
@@ -451,7 +527,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
 
                 wa29352(minions, cluster_name)
-                wa29155(minions, cluster_name)
+                def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
+                wa29155(computeMinions, cluster_name)
 
                 try {
                     common.infoMsg('Perform: UPDATE Reclass package')
@@ -535,7 +612,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 if (upgradeSaltStack) {
                     updateSaltStack('I@salt:master', '["salt-master", "salt-common", "salt-api", "salt-minion"]')
 
-                    salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.repo', true, true, null, false, 60, 2)
+                    salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.repo', true, true, batchSize, false, 60, 2)
                     updateSaltStack('I@salt:minion and not I@salt:master', '["salt-minion"]')
                 }
 
@@ -548,16 +625,16 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // update minions certs
                 // call for `salt.minion.ca` state on related nodes to make sure
                 // mine was updated with required data after salt-minion/salt-master restart salt:minion:ca
-                salt.enforceState(venvPepper, 'I@salt:minion:ca', 'salt.minion.ca', true, true, null, false, 60, 2)
-                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion.cert', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@salt:minion:ca', 'salt.minion.ca', true, true, batchSize, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion.cert', true, true, batchSize, false, 60, 2)
 
                 // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
                 salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion', true, true, null, false, 60, 2)
                 // Retry needed only for rare race-condition in user appearance
                 common.infoMsg('Perform: updating users and keys')
-                salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.user', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.user', true, true, batchSize, false, 60, 2)
                 common.infoMsg('Perform: updating openssh')
-                salt.enforceState(venvPepper, 'I@linux:system', 'openssh', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@linux:system', 'openssh', true, true, batchSize, false, 60, 2)
 
                 // apply salt API TLS if needed
                 def nginxAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]

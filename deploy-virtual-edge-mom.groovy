@@ -171,7 +171,7 @@ node(slave_node) {
                     saltMasterURL = "http://${edgeBuildsInfra[ed_].description.tokenize(' ')[1]}:6969"
 
 
-                    enableSyndic(saltMasterURL, 'cfg01*', SALT_MASTER_CREDENTIALS, salt_mom_ip)
+                    enableSyndic(saltMasterURL, 'I@salt:master', SALT_MASTER_CREDENTIALS, salt_mom_ip)
 
                     props_ = edge_deploy_schemas[ed_]['properties']
                     deploy_job = edge_deploy_schemas[ed_]['deploy_job_name']
