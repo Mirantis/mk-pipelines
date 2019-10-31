@@ -44,32 +44,32 @@ timeout(time: 12, unit: 'HOURS') {
         stage('Verify pillar for backups') {
             if (backupSaltMasterAndMaas) {
                 try {
-                    def masterPillar = salt.getPillar(pepperEnv, "I@salt:master", 'salt:master:initial_data')
-                    if (masterPillar['return'].isEmpty()) {
+                    def masterPillar = salt.getPillar(pepperEnv, "I@salt:master", 'salt:master:initial_data').get('return')[0].values()[0]
+                    if (masterPillar.isEmpty()) {
                         throw new Exception("Problem with salt-master pillar on 'I@salt:master' node.")
                     }
-                    def minionPillar = salt.getPillar(pepperEnv, "I@salt:master", 'salt:minion:initial_data')
-                    if (minionPillar['return'].isEmpty()) {
+                    def minionPillar = salt.getPillar(pepperEnv, "I@salt:master", 'salt:minion:initial_data').get('return')[0].values()[0]
+                    if (minionPillar.isEmpty()) {
                         throw new Exception("Problem with salt-minion pillar on I@salt:master node.")
                     }
                 }
                 catch (Exception e) {
                     common.errorMsg(e.getMessage())
                     common.errorMsg('Please fix your pillar. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/salt-master.html')
-                    return
+                    throw e
                 }
             }
             if (backupDogtag) {
                 try {
-                    def dogtagPillar = salt.getPillar(pepperEnv, "I@salt:master", "dogtag:server")
-                    if (dogtagPillar['return'].isEmpty()) {
+                    def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server", "dogtag:server").get('return')[0].values()[0]
+                    if (dogtagPillar.isEmpty()) {
                         throw new Exception("Problem with dogtag pillar on I@dogtag:server node.")
                     }
                 }
                 catch (Exception e) {
                     common.errorMsg(e.getMessage())
                     common.errorMsg("Looks like dogtag pillar is not defined. Fix your pillar or disable dogtag backup by setting the BACKUP_DOGTAG parameter to False if you're using different barbican backend.")
-                    return
+                    throw e
                 }
             }
         }
@@ -83,7 +83,7 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg(e.getMessage())
                     common.errorMsg("Pipeline wasn't able to detect backupninja:client pillar on Salt master node or the minion is not reachable")
                     currentBuild.result = "FAILURE"
-                    return
+                    throw e
                 }
 
                 def maasNodes = salt.getMinions(pepperEnv, 'I@maas:region')
@@ -124,7 +124,7 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg(e.getMessage())
                     common.errorMsg("Pipeline wasn't able to detect node with backupninja:client and dogtag:server pillars defined or the minion is not reachable")
                     currentBuild.result = "FAILURE"
-                    return
+                    throw e
                 }
             }
 
@@ -136,7 +136,7 @@ timeout(time: 12, unit: 'HOURS') {
                 common.errorMsg(e.getMessage())
                 common.errorMsg("Pipeline wasn't able to detect backupninja:server pillar or the minion is not reachable")
                 currentBuild.result = "FAILURE"
-                return
+                throw e
             }
         }
         stage('Prepare for backup') {
