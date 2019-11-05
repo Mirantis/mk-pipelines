@@ -7,43 +7,19 @@
  */
 
 pepperEnv = "pepperEnv"
-salt = new com.mirantis.mk.Salt()
-def common = new com.mirantis.mk.Common()
+def salt = new com.mirantis.mk.Salt()
+def ceph = new com.mirantis.mk.Ceph()
 def python = new com.mirantis.mk.Python()
-def targetLiveSubset
-def targetLiveAll
-def minions
-def result
 def packages
 def command
 def commandKwargs
 def selMinions = []
-def check_mon
-
-def runCephCommand(master, target, cmd) {
-    return salt.cmdRun(master, target, cmd)
-}
-
-def waitForHealthy(master, tgt, count = 0, attempts=100) {
-    // wait for healthy cluster
-    common = new com.mirantis.mk.Common()
-    while (count<attempts) {
-        def health = runCephCommand(master, tgt, 'ceph health')['return'][0].values()[0]
-        if (health.contains('HEALTH_OK') || health.contains('HEALTH_WARN noout flag(s) set\n')) {
-            common.infoMsg('Cluster is healthy')
-            break;
-        }
-        count++
-        sleep(10)
-    }
-}
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
-
             def targets = ["common": "ceph-common", "osd": "ceph-osd", "mon": "ceph-mon",
-                          "mgr":"ceph-mgr", "radosgw": "radosgw"]
+                           "mgr"   : "ceph-mgr", "radosgw": "radosgw"]
 
             stage('Setup virtualenv for Pepper') {
                 python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
@@ -52,13 +28,13 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Apply package upgrades on all nodes') {
 
                 targets.each { key, value ->
-                   // try {
-                        command = "pkg.install"
-                        packages = value
-                        commandKwargs = ['only_upgrade': 'true','force_yes': 'true']
-                        target = "I@ceph:${key}"
-                        out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, true, packages, commandKwargs)
-                        salt.printSaltCommandResult(out)
+                    // try {
+                    command = "pkg.install"
+                    packages = value
+                    commandKwargs = ['only_upgrade': 'true', 'force_yes': 'true']
+                    target = "I@ceph:${key}"
+                    out = salt.runSaltCommand(pepperEnv, 'local', ['expression': target, 'type': 'compound'], command, true, packages, commandKwargs)
+                    salt.printSaltCommandResult(out)
                 }
             }
 
@@ -66,13 +42,13 @@ timeout(time: 12, unit: 'HOURS') {
                 selMinions = salt.getMinions(pepperEnv, "I@ceph:mon")
                 for (tgt in selMinions) {
                     // runSaltProcessStep 'service.restart' don't work for this services
-                    runCephCommand(pepperEnv, tgt, "systemctl restart ceph-mon.target")
-                    waitForHealthy(pepperEnv, tgt)
+                    salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-mon.target")
+                    ceph.waitForHealthy(pepperEnv, tgt)
                 }
                 selMinions = salt.getMinions(pepperEnv, "I@ceph:radosgw")
                 for (tgt in selMinions) {
-                    runCephCommand(pepperEnv, tgt, "systemctl restart ceph-radosgw.target")
-                    waitForHealthy(pepperEnv, tgt)
+                    salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-radosgw.target")
+                    ceph.waitForHealthy(pepperEnv, tgt)
                 }
             }
 
@@ -89,15 +65,15 @@ timeout(time: 12, unit: 'HOURS') {
                         osd_ids.add('osd.' + osd_id)
                     }
 
-                    runCephCommand(pepperEnv, tgt, 'ceph osd set noout')
+                    salt.cmdRun(pepperEnv, tgt, 'ceph osd set noout')
 
                     for (i in osd_ids) {
-                        salt.runSaltProcessStep(pepperEnv, tgt, 'service.restart', ['ceph-osd@' + i.replaceAll('osd.', '')],  null, true)
+                        salt.runSaltProcessStep(pepperEnv, tgt, 'service.restart', ['ceph-osd@' + i.replaceAll('osd.', '')], null, true)
                         // wait for healthy cluster
-                        waitForHealthy(pepperEnv, tgt)
+                        ceph.waitForHealthy(pepperEnv, tgt, ['noout'], 0, 100)
                     }
 
-                    runCephCommand(pepperEnv, tgt, 'ceph osd unset noout')
+                    salt.cmdRun(pepperEnv, tgt, 'ceph osd unset noout')
                 }
             }
 
