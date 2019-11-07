@@ -381,7 +381,8 @@ timeout(time: 12, unit: 'HOURS') {
 
             stage('Install infra') {
                 if (common.checkContains('STACK_INSTALL', 'core') ||
-                    common.checkContains('STACK_INSTALL', 'openstack')) {
+                    common.checkContains('STACK_INSTALL', 'openstack') ||
+                    common.checkContains('STACK_INSTALL', 'cicd')) {
                         orchestrate.installInfra(venvPepper, extra_tgt)
                 }
             }
@@ -573,7 +574,6 @@ timeout(time: 12, unit: 'HOURS') {
                 stage('Install Cicd') {
                     extra_tgt_bckp = extra_tgt
                     extra_tgt = 'and I@_param:drivetrain_role:cicd ' + extra_tgt_bckp
-                    orchestrate.installInfra(venvPepper, extra_tgt)
                     orchestrate.installCicd(venvPepper, extra_tgt)
                     extra_tgt = extra_tgt_bckp
                 }
