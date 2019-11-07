@@ -50,16 +50,22 @@ timeout(time: 12, unit: 'HOURS') {
                 common.warningMsg("No MaaS Pillar was found. You can ignore this if it's expected. Otherwise you should fix you pillar. Check: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/maas-postgresql/backupninja-postgresql-restore.html")
             }
             if (restoreDogtag) {
-                try {
-                    def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server:role:master", 'dogtag:server:initial_data').get('return')[0].values()[0]
-                    if (dogtagPillar.isEmpty()) {
-                        throw new Exception("Problem with Dogtag pillar on 'I@dogtag:server:role:master' node.")
+                def barbicanBackendPresent = salt.getPillar(pepperEnv, "I@salt:master", "_param:barbican_backend").get('return')[0].values()[0]
+                if (barbicanBackendPresent == 'dogtag') {
+                    try {
+                        def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server:role:master", 'dogtag:server:initial_data').get('return')[0].values()[0]
+                        if (dogtagPillar.isEmpty()) {
+                            throw new Exception("Problem with Dogtag pillar on 'I@dogtag:server:role:master' node.")
+                        }
                     }
-                }
-                catch (Exception e) {
-                    common.errorMsg(e.getMessage())
-                    common.errorMsg('Please fix your pillar. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/dogtag/restore-dogtag.html')
-                    throw e
+                    catch (Exception e) {
+                        common.errorMsg(e.getMessage())
+                        common.errorMsg('Please fix your pillar. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/dogtag/restore-dogtag.html')
+                        throw e
+                    }
+                }  else {
+                    restoreDogtag = false
+                    common.warningMsg('Restore for Dogtag is enabled, but service itself is not present. Skipping...')
                 }
             }
         }
