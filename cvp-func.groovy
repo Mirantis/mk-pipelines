@@ -46,7 +46,9 @@ node() {
             if (!keystone_creds) {
                 keystone_creds = validate._get_keystone_creds_v2(saltMaster)
             }
-            validate.runContainer(saltMaster, TARGET_NODE, TEST_IMAGE, 'cvp', keystone_creds)
+            def containerParams = ['master': saltMaster, 'target': TARGET_NODE, 'dockerImageLink': TEST_IMAGE,
+                                   'name': 'cvp', 'env_var': keystone_creds, 'output_replacing': [/ (OS_PASSWORD=)(.*?)+ /]]
+            validate.runContainer(containerParams)
             validate.configureContainer(saltMaster, TARGET_NODE, PROXY, TOOLS_REPO, TEMPEST_REPO, TEMPEST_ENDPOINT_TYPE)
         }
 
