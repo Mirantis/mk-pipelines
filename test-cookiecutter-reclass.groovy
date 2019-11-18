@@ -221,13 +221,7 @@ def globalVariatorsUpdate() {
     }
     // 'binary' branch logic w\o 'release/' prefix
     if (testDistribRevision.contains('/')) {
-        if (testDistribRevision.contains('proposed')) {
-            // set distrib revision to proposed to catch all updated from update/proposed
-            testDistribRevision = 'proposed'
-            messages.add('Enabled update/proposed repo')
-        } else {
-            testDistribRevision = testDistribRevision.split('/')[-1]
-        }
+        testDistribRevision = testDistribRevision.split('/')[-1]
     }
     // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
     // After 2018q4 releases, need to also check 'static' repo, for example ubuntu.

@@ -116,7 +116,6 @@ def globalVariatorsUpdate() {
     }
 
     if (gitGuessedVersion == 'release/proposed/2019.2.0') {
-        distribRevision = 'proposed'
         def mcpSaltRepoUpdateVar = 'deb [arch=amd64] http://mirror.mirantis.com/update/proposed/salt-formulas/xenial xenial main'
         if (context.get('offline_deployment', 'False').toBoolean()) {
             mcpSaltRepoUpdateVar = "deb [arch=amd64] http://${context.get('aptly_server_deploy_address')}/update/proposed/salt-formulas/xenial xenial main".toString()
