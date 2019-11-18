@@ -75,14 +75,18 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         stage("Update/Install monitoring") {
-            //Collect Grains
-            salt.enforceState(pepperEnv, HOST, 'salt.minion.grains')
-            salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.refresh_modules')
-            salt.runSaltProcessStep(pepperEnv, HOST, 'mine.update')
-            sleep(5)
-
-            salt.enforceState(pepperEnv, HOST, 'prometheus')
-            salt.enforceState(pepperEnv, 'I@prometheus:server', 'prometheus')
+            def prometheusNodes = salt.getMinions(pepperEnv, 'I@prometheus:server')
+            if (!prometheusNodes.isEmpty()) {
+                //Collect Grains
+                salt.enforceState(pepperEnv, HOST, 'salt.minion.grains')
+                salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.refresh_modules')
+                salt.runSaltProcessStep(pepperEnv, HOST, 'mine.update')
+                sleep(5)
+                salt.enforceState(pepperEnv, HOST, 'prometheus')
+                salt.enforceState(pepperEnv, 'I@prometheus:server', 'prometheus')
+            } else {
+                common.infoMsg('No Prometheus nodes in cluster. Nothing to do')
+            }
         }
     }
 }

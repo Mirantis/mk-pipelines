@@ -13,48 +13,12 @@
  *
  */
 
-common = new com.mirantis.mk.Common()
-salt = new com.mirantis.mk.Salt()
-orchestrate = new com.mirantis.mk.Orchestrate()
+def common = new com.mirantis.mk.Common()
+def salt = new com.mirantis.mk.Salt()
+def ceph = new com.mirantis.mk.Ceph()
 def python = new com.mirantis.mk.Python()
-
 def pepperEnv = "pepperEnv"
 
-def removePartition(master, target, partition_uuid) {
-    def partition = ""
-    try {
-        // partition = /dev/sdi2
-        partition = runCephCommand(master, target, "blkid | grep ${partition_uuid} ")['return'][0].values()[0].split("(?<=[0-9])")[0]
-    } catch (Exception e) {
-        common.warningMsg(e)
-    }
-
-    if (partition?.trim()) {
-        // dev = /dev/sdi
-        def dev = partition.replaceAll('\\d+$', "")
-        // part_id = 2
-        def part_id = partition.substring(partition.lastIndexOf("/")+1).replaceAll("[^0-9]", "")
-        runCephCommand(master, target, "parted ${dev} rm ${part_id}")
-    }
-    return
-}
-
-def runCephCommand(master, target, cmd) {
-    return salt.cmdRun(master, target, cmd)
-}
-
-def waitForHealthy(master, count=0, attempts=300) {
-    // wait for healthy cluster
-    while (count<attempts) {
-        def health = runCephCommand(master, ADMIN_HOST, 'ceph health')['return'][0].values()[0]
-        if (health.contains('HEALTH_OK')) {
-            common.infoMsg('Cluster is healthy')
-            break;
-        }
-        count++
-        sleep(10)
-    }
-}
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
 
@@ -124,40 +88,40 @@ timeout(time: 12, unit: 'HOURS') {
 
             // `ceph osd out <id> <id>`
             stage('Set OSDs out') {
-                    runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd out ' + osd_ids.join(' '))
+                salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd out ' + osd_ids.join(' '))
             }
 
             // wait for healthy cluster
-            if (WAIT_FOR_HEALTHY.toBoolean() == true) {
+            if (WAIT_FOR_HEALTHY.toBoolean()) {
                 sleep(5)
-                waitForHealthy(pepperEnv)
+                ceph.waitForHealthy(pepperEnv, ADMIN_HOST)
             }
 
             // stop osd daemons
             stage('Stop OSD daemons') {
                 for (i in osd_ids) {
-                    salt.runSaltProcessStep(pepperEnv, HOST, 'service.stop', ['ceph-osd@' + i.replaceAll('osd.', '')],  null, true)
+                    salt.runSaltProcessStep(pepperEnv, HOST, 'service.stop', ['ceph-osd@' + i.replaceAll('osd.', '')], null, true)
                 }
             }
 
             // `ceph osd crush remove osd.2`
             stage('Remove OSDs from CRUSH') {
                 for (i in osd_ids) {
-                    runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd crush remove ' + i)
+                    salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd crush remove ' + i)
                 }
             }
 
             // remove keyring `ceph auth del osd.3`
             stage('Remove OSD keyrings from auth') {
                 for (i in osd_ids) {
-                    runCephCommand(pepperEnv, ADMIN_HOST, 'ceph auth del ' + i)
+                    salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph auth del ' + i)
                 }
             }
 
             // remove osd `ceph osd rm osd.3`
             stage('Remove OSDs') {
                 for (i in osd_ids) {
-                    runCephCommand(pepperEnv, ADMIN_HOST, 'ceph osd rm ' + i)
+                    salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd rm ' + i)
                 }
             }
 
@@ -166,18 +130,18 @@ timeout(time: 12, unit: 'HOURS') {
                 id = osd_id.replaceAll('osd.', '')
                 def dmcrypt = ""
                 try {
-                    dmcrypt = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep dmcrypt")['return'][0].values()[0]
+                    dmcrypt = salt.cmdRun(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep dmcrypt")['return'][0].values()[0]
                 } catch (Exception e) {
                     common.warningMsg(e)
                 }
 
                 if (dmcrypt?.trim()) {
-                    mount = runCephCommand(pepperEnv, HOST, "lsblk -rp | grep /var/lib/ceph/osd/ceph-${id} -B1")['return'][0].values()[0]
-                    dev = mount.split()[0].replaceAll("[0-9]","")
+                    mount = salt.cmdRun(pepperEnv, HOST, "lsblk -rp | grep /var/lib/ceph/osd/ceph-${id} -B1")['return'][0].values()[0]
+                    dev = mount.split()[0].replaceAll("[0-9]", "")
 
                     // remove partition tables
                     stage("dd part table on ${dev}") {
-                        runCephCommand(pepperEnv, HOST, "dd if=/dev/zero of=${dev} bs=512 count=1 conv=notrunc")
+                        salt.cmdRun(pepperEnv, HOST, "dd if=/dev/zero of=${dev} bs=512 count=1 conv=notrunc")
                     }
 
                 }
@@ -188,21 +152,21 @@ timeout(time: 12, unit: 'HOURS') {
                     def block_db_partition_uuid = ""
                     def block_wal_partition_uuid = ""
                     try {
-                        journal_partition_uuid = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep journal | grep partuuid")
-                        journal_partition_uuid = journal_partition_uuid.toString().trim().split("\n")[0].substring(journal_partition_uuid.toString().trim().lastIndexOf("/")+1)
+                        journal_partition_uuid = salt.cmdRun(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep journal | grep partuuid")
+                        journal_partition_uuid = journal_partition_uuid.toString().trim().split("\n")[0].substring(journal_partition_uuid.toString().trim().lastIndexOf("/") + 1)
                     } catch (Exception e) {
                         common.infoMsg(e)
                     }
                     try {
-                        block_db_partition_uuid = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.db' | grep partuuid")
-                        block_db_partition_uuid = block_db_partition_uuid.toString().trim().split("\n")[0].substring(block_db_partition_uuid.toString().trim().lastIndexOf("/")+1)
+                        block_db_partition_uuid = salt.cmdRun(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.db' | grep partuuid")
+                        block_db_partition_uuid = block_db_partition_uuid.toString().trim().split("\n")[0].substring(block_db_partition_uuid.toString().trim().lastIndexOf("/") + 1)
                     } catch (Exception e) {
                         common.infoMsg(e)
                     }
 
                     try {
-                        block_wal_partition_uuid = runCephCommand(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.wal' | grep partuuid")
-                        block_wal_partition_uuid = block_wal_partition_uuid.toString().trim().split("\n")[0].substring(block_wal_partition_uuid.toString().trim().lastIndexOf("/")+1)
+                        block_wal_partition_uuid = salt.cmdRun(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.wal' | grep partuuid")
+                        block_wal_partition_uuid = block_wal_partition_uuid.toString().trim().split("\n")[0].substring(block_wal_partition_uuid.toString().trim().lastIndexOf("/") + 1)
                     } catch (Exception e) {
                         common.infoMsg(e)
                     }
@@ -216,10 +180,10 @@ timeout(time: 12, unit: 'HOURS') {
 
                     // if disk has journal, block_db or block_wal on different disk, then remove the partition
                     if (partition_uuid?.trim()) {
-                        removePartition(pepperEnv, HOST, partition_uuid)
+                        ceph.removePartition(pepperEnv, HOST, partition_uuid)
                     }
                     if (block_wal_partition_uuid?.trim()) {
-                        removePartition(pepperEnv, HOST, block_wal_partition_uuid)
+                        ceph.removePartition(pepperEnv, HOST, block_wal_partition_uuid)
                     }
                 }
             }
@@ -230,9 +194,9 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Remove OSD host from crushmap') {
-                def hostname = runCephCommand(pepperEnv, HOST, "hostname -s")['return'][0].values()[0].split('\n')[0]
+                def hostname = salt.cmdRun(pepperEnv, HOST, "hostname -s")['return'][0].values()[0].split('\n')[0]
                 try {
-                    runCephCommand(pepperEnv, ADMIN_HOST, "ceph osd crush remove ${hostname}")
+                    salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph osd crush remove ${hostname}")
                 } catch (Exception e) {
                     common.warningMsg(e)
                 }
@@ -262,7 +226,7 @@ timeout(time: 12, unit: 'HOURS') {
             def keyring = ""
             def keyring_lines = ""
             try {
-                keyring_lines = runCephCommand(pepperEnv, ADMIN_HOST, "ceph auth list | grep ${target}")['return'][0].values()[0].split('\n')
+                keyring_lines = salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph auth list | grep ${target}")['return'][0].values()[0].split('\n')
             } catch (Exception e) {
                 common.warningMsg(e)
             }
@@ -273,20 +237,20 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
             if (keyring?.trim()) {
-                runCephCommand(pepperEnv, ADMIN_HOST, "ceph auth del ${keyring}")
+                salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph auth del ${keyring}")
             }
         }
 
         if (HOST_TYPE.toLowerCase() == 'mon') {
             // Update Monmap
             stage('Update monmap') {
-                runCephCommand(pepperEnv, 'I@ceph:mon', "ceph mon getmap -o monmap.backup")
+                salt.cmdRun(pepperEnv, 'I@ceph:mon', "ceph mon getmap -o monmap.backup")
                 try {
-                    runCephCommand(pepperEnv, 'I@ceph:mon', "ceph mon remove ${target}")
+                    salt.cmdRun(pepperEnv, 'I@ceph:mon', "ceph mon remove ${target}")
                 } catch (Exception e) {
                     common.warningMsg(e)
                 }
-                runCephCommand(pepperEnv, 'I@ceph:mon', "monmaptool /tmp/monmap --rm ${target}")
+                salt.cmdRun(pepperEnv, 'I@ceph:mon', "monmaptool /tmp/monmap --rm ${target}")
             }
 
             def target_hosts = salt.getMinions(pepperEnv, 'I@ceph:common')
@@ -305,7 +269,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         def crushmap_target = salt.getMinions(pepperEnv, "I@ceph:setup:crush")
-        if (HOST_TYPE.toLowerCase() == 'osd' && GENERATE_CRUSHMAP.toBoolean() == true && crushmap_target ) {
+        if (HOST_TYPE.toLowerCase() == 'osd' && GENERATE_CRUSHMAP.toBoolean() == true && crushmap_target) {
             stage('Generate CRUSHMAP') {
                 salt.enforceState(pepperEnv, 'I@ceph:setup:crush', 'ceph.setup.crush', true)
             }
