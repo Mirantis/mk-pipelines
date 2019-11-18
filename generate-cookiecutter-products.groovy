@@ -258,6 +258,9 @@ timeout(time: 1, unit: 'HOURS') {
                             'dockerExtraOpts'    : ['--memory=3g'],
                             'updateSaltFormulas' : updateSaltFormulasDuringTest
                         ]
+                        if (gitGuessedVersion == 'release/proposed/2019.2.0') {
+                            config['updateSaltFormulasRev'] = 'proposed'
+                        }
                         testResult = saltModelTesting.testNode(config)
                         common.infoMsg("Test finished: SUCCESS")
                     } catch (Exception ex) {

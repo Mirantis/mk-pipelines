@@ -37,6 +37,9 @@ timeout(time: 1, unit: 'HOURS') {
                 if (extraVars.DISTRIB_REVISION == 'nightly') {
                     config['nodegenerator'] = true
                 }
+                if (extraVars.updatesVersion) {
+                    config['updateSaltFormulasRev'] = extraVars.updatesVersion
+                }
                 if (extraVars.useExtraRepos) {
                     config['extraRepos'] = extraVars.extraRepos ? extraVars.extraRepos : [:]
                     config['extraRepoMergeStrategy'] = extraVars.extraRepoMergeStrategy ? extraVars.extraRepoMergeStrategy : ''

@@ -59,6 +59,7 @@ gerritDataRS['gerritProject'] = 'salt-models/reclass-system'
 
 // version of debRepos, aka formulas|reclass|ubuntu
 testDistribRevision = env.DISTRIB_REVISION ?: 'nightly'
+updatesVersion = null
 
 // Name of sub-test chunk job
 chunkJobName = "test-mk-cookiecutter-templates-chunk"
@@ -85,6 +86,7 @@ def testModel(modelFile, reclassArtifactName, artifactCopyPath, useExtraRepos = 
         modelFile       : "contexts/${modelFile}.yml",
         DISTRIB_REVISION: testDistribRevision,
         useExtraRepos   : useExtraRepos,
+        updatesVersion  : updatesVersion,
     ]
     def _values_string = JsonOutput.toJson(_values << extraVars)
     def chunkJob = build job: chunkJobName, parameters: [
@@ -222,6 +224,9 @@ def globalVariatorsUpdate() {
     // 'binary' branch logic w\o 'release/' prefix
     if (testDistribRevision.contains('/')) {
         testDistribRevision = testDistribRevision.split('/')[-1]
+        if (testDistribRevision.contains('proposed')) {
+            updatesVersion = 'proposed'
+        }
     }
     // Check if we are going to test bleeding-edge release, which doesn't have binary release yet
     // After 2018q4 releases, need to also check 'static' repo, for example ubuntu.
