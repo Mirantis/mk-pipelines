@@ -16,6 +16,7 @@ salt_testing = new com.mirantis.mk.SaltModelTesting()
 
 def EXTRA_PARAMS = readYaml(text: env.getProperty('EXTRA_PARAMS')) ?: [:]
 def env_vars = EXTRA_PARAMS.get("envs") ?: []
+def override_config = env.getProperty('EXTRA_PARAMS') ?: ""
 
 def IMAGE = (env.getProperty('IMAGE')) ?: 'docker-prod-local.docker.mirantis.net/mirantis/cvp/cvp-sanity-checks:stable'
 def SLAVE_NODE = (env.getProperty('SLAVE_NODE')) ?: 'docker'
@@ -62,7 +63,8 @@ node (SLAVE_NODE) {
                     "SALT_USERNAME=${creds.username}",
                     "SALT_PASSWORD=${creds.password}",
                     "SALT_URL=${SALT_MASTER_URL}",
-                    "REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt"
+                    "REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt",
+                    "OVERRIDE_CONFIG=${override_config}"
                     ] + env_vars
 
                 // Generating final config
