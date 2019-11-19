@@ -14,6 +14,7 @@ def python = new com.mirantis.mk.Python()
 def ceph = new com.mirantis.mk.Ceph()
 orchestrate = new com.mirantis.mk.Orchestrate()
 pepperEnv = "pepperEnv"
+def flags = CLUSTER_FLAGS ? CLUSTER_FLAGS.tokenize(',') : []
 
 def runCephCommand(cmd) {
     return salt.cmdRun(pepperEnv, "I@ceph:mon and I@ceph:common:keyring:admin", cmd, checkResponse = true, batch = null, output = false)
@@ -89,7 +90,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         stage("wait for healthy cluster") {
-            ceph.waitForHealthy(pepperEnv, "I@ceph:mon and I@ceph:common:keyring:admin")
+            ceph.waitForHealthy(pepperEnv, "I@ceph:mon and I@ceph:common:keyring:admin", flags)
         }
     }
 }

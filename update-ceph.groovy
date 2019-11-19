@@ -14,6 +14,7 @@ def packages
 def command
 def commandKwargs
 def selMinions = []
+def flags = CLUSTER_FLAGS ? CLUSTER_FLAGS.tokenize(',') : []
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -43,12 +44,12 @@ timeout(time: 12, unit: 'HOURS') {
                 for (tgt in selMinions) {
                     // runSaltProcessStep 'service.restart' don't work for this services
                     salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-mon.target")
-                    ceph.waitForHealthy(pepperEnv, tgt)
+                    ceph.waitForHealthy(pepperEnv, tgt, flags)
                 }
                 selMinions = salt.getMinions(pepperEnv, "I@ceph:radosgw")
                 for (tgt in selMinions) {
                     salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-radosgw.target")
-                    ceph.waitForHealthy(pepperEnv, tgt)
+                    ceph.waitForHealthy(pepperEnv, tgt, flags)
                 }
             }
 
@@ -66,11 +67,12 @@ timeout(time: 12, unit: 'HOURS') {
                     }
 
                     salt.cmdRun(pepperEnv, tgt, 'ceph osd set noout')
+                    flags = 'noout' in flags ? flags : flags + ['noout']
 
                     for (i in osd_ids) {
                         salt.runSaltProcessStep(pepperEnv, tgt, 'service.restart', ['ceph-osd@' + i.replaceAll('osd.', '')], null, true)
                         // wait for healthy cluster
-                        ceph.waitForHealthy(pepperEnv, tgt, ['noout'], 0, 100)
+                        ceph.waitForHealthy(pepperEnv, tgt, flags, 0, 100)
                     }
 
                     salt.cmdRun(pepperEnv, tgt, 'ceph osd unset noout')
