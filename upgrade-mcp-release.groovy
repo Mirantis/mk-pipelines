@@ -273,6 +273,35 @@ def wa33771(String cluster_name) {
     }
 }
 
+def wa33930_33931(String cluster_name) {
+    def openstackControlFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/control.yml"
+    def fixName = 'clients_common_wa33930_33931'
+    def fixFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/${fixName}.yml"
+    def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster\\.${cluster_name}\\.openstack\\.${fixName}\$' ${openstackControlFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+    if (! containsFix) {
+        def fixContext = [
+            'classes': [ 'service.nova.client', 'service.glance.client', 'service.neutron.client' ]
+        ]
+        if (salt.getMinions(venvPepper, 'I@manila:api:enabled')) {
+            fixContext['classes'] << 'service.manila.client'
+        }
+        if (salt.getMinions(venvPepper, 'I@ironic:api:enabled')) {
+            fixContext['classes'] << 'service.ironic.client'
+        }
+        if (salt.getMinions(venvPepper, 'I@gnocchi:server:enabled')) {
+            fixContext['classes'] << 'service.gnocchi.client'
+        }
+        if (salt.getMinions(venvPepper, 'I@barbican:server:enabled')) {
+            fixContext['classes'] << 'service.barbican.client.single'
+        }
+        def _tempFile = '/tmp/wa33930_33931' + UUID.randomUUID().toString().take(8)
+        writeYaml file: _tempFile , data: fixContext
+        def fixFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+        salt.cmdRun(venvPepper, 'I@salt:master', "echo '${fixFileContent}' | base64 -d > ${fixFile}", false, null, false)
+        salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.${fixName}' ${openstackControlFile}")
+    }
+}
+
 def archiveReclassInventory(filename) {
     def _tmp_file = '/tmp/' + filename + UUID.randomUUID().toString().take(8)
     // jenkins may fail at overheap. Compress data with gzip like WA
@@ -477,6 +506,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     wa32182(cluster_name)
                     wa33771(cluster_name)
                     wa33867(cluster_name)
+                    wa33930_33931(cluster_name)
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
