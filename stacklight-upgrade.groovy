@@ -70,10 +70,10 @@ def verify_es_is_green(master) {
             common.errorMsg('[ERROR] Elasticsearch VIP port could not be retrieved')
         }
 
-        pillar = salt.getPillar(master, "I@elasticsearch:client ${extra_tgt}", 'elasticsearch:client:server:scheme')
+        pillar = salt.getReturnValues(salt.getPillar(master, "I@elasticsearch:client", 'elasticsearch:client:server:scheme'))
         def elasticsearch_scheme
-        if (!pillar['return'].isEmpty()) {
-            elasticsearch_scheme = pillar['return'][0].values()[0]
+        if(pillar) {
+            elasticsearch_scheme = pillar
             common.infoMsg("[INFO] Using elasticsearch scheme: ${elasticsearch_scheme}")
         } else {
             common.infoMsg('[INFO] No pillar with Elasticsearch server scheme, using scheme: http')
