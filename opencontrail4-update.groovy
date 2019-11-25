@@ -14,6 +14,7 @@ salt = new com.mirantis.mk.Salt()
 python = new com.mirantis.mk.Python()
 
 def pepperEnv = "pepperEnv"
+def askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 def supportedOcTargetVersions = ['4.0', '4.1']
 def neutronServerPkgs = 'neutron-plugin-contrail,contrail-heat,python-contrail'
 def config4Services = ['zookeeper', 'contrail-webui-middleware', 'contrail-webui', 'contrail-api', 'contrail-schema', 'contrail-svc-monitor', 'contrail-device-manager', 'contrail-config-nodemgr', 'contrail-database']
@@ -280,7 +281,9 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 stage('Confirm update on sample nodes') {
-                    input message: "Do you want to continue with the Opencontrail components update on compute sample nodes? ${cmpTargetFirstSubset}"
+                    if (askConfirmation) {
+                        input message: "Do you want to continue with the Opencontrail components update on compute sample nodes? ${cmpTargetFirstSubset}"
+                    }
                 }
 
                 stage("Opencontrail compute update on sample nodes") {
@@ -289,8 +292,9 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 stage('Confirm update on all remaining target nodes') {
-
-                    input message: "Do you want to continue with the Opencontrail components update on all targeted compute nodes? Node list: ${cmpTargetSecondSubset}"
+                    if (askConfirmation) {
+                        input message: "Do you want to continue with the Opencontrail components update on all targeted compute nodes? Node list: ${cmpTargetSecondSubset}"
+                    }
                 }
 
                 stage("Opencontrail compute update on all targeted nodes") {
