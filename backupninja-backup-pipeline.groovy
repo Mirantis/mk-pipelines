@@ -158,7 +158,9 @@ timeout(time: 12, unit: 'HOURS') {
                 def maasNodes = salt.getMinions(pepperEnv, 'I@maas:region')
                 if (!maasNodes.isEmpty()) {
                     common.infoMsg("Trying to save maas file permissions on ${maasNodes} if possible")
-                    salt.cmdRun(pepperEnv, 'I@maas:region', 'which getfacl && getfacl -pR /var/lib/maas/ > /var/lib/maas/file_permissions.txt || true')
+                    salt.cmdRun(pepperEnv, 'I@maas:region', 'which getfacl && ' +
+                            'getfacl -pR /var/lib/maas/ > /var/lib/maas/file_permissions.txt &&' +
+                            'getfacl -pR /etc/maas/ > /etc/maas/file_permissions.txt || true')
                 }
             }
             if (backupDogtag) {
