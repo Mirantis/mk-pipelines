@@ -91,13 +91,13 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             def target_hosts = salt.getMinions(pepperEnv, TARGET)
-
+            def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
             for (tgt in target_hosts) {
                 def osd_ids = []
 
                 // get list of osd disks of the tgt
                 salt.runSaltProcessStep(pepperEnv, tgt, 'saltutil.sync_grains', [], null, true, 5)
-                def ceph_disks = salt.getGrain(pepperEnv, tgt, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
+                def ceph_disks = salt.getGrain(pepperEnv, tgt, 'ceph')['return'][0].values()[0].values()[0][device_grain_name]
 
                 for (i in ceph_disks) {
                     def osd_id = i.getKey().toString()

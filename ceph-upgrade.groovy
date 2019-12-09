@@ -112,8 +112,9 @@ def upgrade(master, target) {
             // restart services
             stage("Restart ${target} services on ${minion}") {
                 if (target == 'osd') {
-                    def osds = salt.getGrain(master, "${minion}", 'ceph:ceph_disk').values()[0]
-                    osds[0].values()[0].values()[0].each { osd, param ->
+                    def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
+                    def ceph_disks = salt.getGrain(pepperEnv, minion, 'ceph')['return'][0].values()[0].values()[0][device_grain_name]
+                    ceph_disks[0].values()[0].values()[0].each { osd, param ->
                         salt.cmdRun(master, "${minion}", "systemctl restart ceph-${target}@${osd}")
                         ceph.waitForHealthy(master, ADMIN_HOST, flags)
                     }
