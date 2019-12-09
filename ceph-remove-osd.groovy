@@ -47,7 +47,8 @@ timeout(time: 12, unit: 'HOURS') {
             throw new Exception("Ceph salt grain cannot be found!")
         }
         common.print(cephGrain)
-        def ceph_disks = cephGrain['return'][0].values()[0].values()[0]['ceph_disk']
+        def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
+        def ceph_disks = cephGrain['return'][0].values()[0].values()[0][device_grain_name]
         common.prettyPrint(ceph_disks)
 
         for (i in ceph_disks) {
@@ -153,9 +154,20 @@ timeout(time: 12, unit: 'HOURS') {
                 def data_partition_uuid = ""
                 def block_partition_uuid = ""
                 def lockbox_partition_uuid = ""
+                def osd_fsid = ""
+                def lvm = ""
+                def lvm_enabled= salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true)
                 try {
-                    data_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/fsid")['return'][0].values()[0].split("\n")[0]
-                    common.print(data_partition_uuid)
+                    osd_fsid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/fsid")['return'][0].values()[0].split("\n")[0]
+                    if (lvm_enabled) {
+                        lvm = salt.runSaltCommand(pepperEnv, 'local', ['expression': HOST, 'type': 'compound'], 'cmd.run', null, "salt-call lvm.lvdisplay --output json -l quiet")['return'][0].values()[0]
+                        lvm = new groovy.json.JsonSlurperClassic().parseText(lvm)
+                        lvm["local"].each { lv, params ->
+                            if (params["Logical Volume Name"].contains(osd_fsid)) {
+                                data_partition_uuid = params["Logical Volume Name"].minus("/dev/")
+                            }
+                        }
+                    }
                 } catch (Exception e) {
                     common.infoMsg(e)
                 }
