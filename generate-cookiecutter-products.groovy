@@ -54,7 +54,7 @@ def GenerateModelToxDocker(Map params) {
                          '002_set_jenkins_id': {
                             sh("""
                                 usermod -u ${jenkinsUID} jenkins
-                                groupmod -g ${jenkinsUID} jenkins
+                                groupmod -g ${jenkinsGID} jenkins
                                 """)
                          },
                          '003_run_generate_auto': {
@@ -110,8 +110,10 @@ def globalVariatorsUpdate() {
         common.warningMsg('Apply WA for PROD-25732')
         context.cookiecutter_template_url = 'ssh://gerrit.mcp.mirantis.com:29418/mk/cookiecutter-templates.git'
     }
-    // check, if we are going to test clear release version, w\o any updates and patches
-    if (!gitGuessedVersion && (distribRevision == context.mcp_version)) {
+    // check, if we are going to test clear release version, w\o any updates and patches.
+    // All 2019.2.X starting from 2019.2.1 and above have update repo which has to be used for salt-formulas.
+    // update/2019.2.0 repo can't be used b/c it points to latest 2019.2.X
+    if (!gitGuessedVersion && (distribRevision == context.mcp_version) && !(distribRevision ==~ /2019\.2\.[1-9]\d*/)) {
         updateSaltFormulasDuringTest = false
     }
 
