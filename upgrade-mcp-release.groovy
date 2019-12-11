@@ -22,6 +22,8 @@ jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 def pipelineTimeout = 12
 venvPepper = "venvPepper"
 workspace = ""
+def saltMastURL = ''
+def saltMastCreds = ''
 
 def triggerMirrorJob(String jobName, String reclassSystemBranch) {
     params = jenkinsUtils.getJobParameters(jobName)
@@ -387,8 +389,6 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 gitTargetMcpVersion = "release/${targetMcpVersion}"
             }
             common.warningMsg("gitTargetMcpVersion has been changed to:${gitTargetMcpVersion}")
-            def saltMastURL = ''
-            def saltMastCreds = ''
             def upgradeSaltStack = ''
             def updateClusterModel = ''
             def updatePipelines = ''
@@ -681,7 +681,21 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName} || true")
 
                 salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
-                sleep(180)
+            }
+        }
+        catch (Throwable e) {
+            // If there was an error or exception thrown, the build failed
+            currentBuild.result = "FAILURE"
+            throw e
+        }
+    }
+    // docker.client state may trigger change of jenkins master or jenkins slave services,
+    // so we need wait for slave to reconnect and continue pipeline
+    sleep(180)
+    node('python') {
+        try {
+            stage('Update Drivetrain: Phase 2') {
+                python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
                 common.infoMsg('Perform: Checking if Docker containers are up')
                 try {
                     common.retry(20, 30) {
