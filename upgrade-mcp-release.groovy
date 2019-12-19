@@ -410,7 +410,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
             }
             if (!batchSize) {
-                batchSize = getWorkerThreads(venvPepper)
+                // if no batch size provided get current worker threads and set batch size to 2/3 of it to avoid
+                // 'SaltReqTimeoutError: Message timed out' issue on Salt targets for large amount of nodes
+                // do not use toDouble/Double as it requires additional approved method
+                def workerThreads = getWorkerThreads(venvPepper).toInteger()
+                batch_size = (workerThreads * 2 / 3).toString().tokenize('.')[0]
             }
             def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
 

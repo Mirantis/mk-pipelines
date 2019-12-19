@@ -356,7 +356,11 @@ timeout(time: 12, unit: 'HOURS') {
             // Install
             //
             if (!batch_size) {
-                batch_size = salt.getWorkerThreads(venvPepper)
+                // if no batch size provided get current worker threads and set batch size to 2/3 of it to avoid
+                // 'SaltReqTimeoutError: Message timed out' issue on Salt targets for large amount of nodes
+                // do not use toDouble/Double as it requires additional approved method
+                def workerThreads = salt.getWorkerThreads(venvPepper).toInteger()
+                batch_size = (workerThreads * 2 / 3).toString().tokenize('.')[0]
             }
 
             // Check if all minions are reachable and ready
