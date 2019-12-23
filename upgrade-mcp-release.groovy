@@ -22,6 +22,8 @@ jenkinsUtils = new com.mirantis.mk.JenkinsUtils()
 def pipelineTimeout = 12
 venvPepper = "venvPepper"
 workspace = ""
+def saltMastURL = ''
+def saltMastCreds = ''
 
 def triggerMirrorJob(String jobName, String reclassSystemBranch) {
     params = jenkinsUtils.getJobParameters(jobName)
@@ -78,7 +80,7 @@ def getWorkerThreads(saltId) {
     return threads['return'][0].values()[0].replaceAll('Salt command execution success','').trim()
 }
 
-def wa29352(ArrayList saltMinions, String cname) {
+def wa29352(String cname) {
     // WA for PROD-29352. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/12/openssh/client/root.yml
     // Default soft-param has been removed, what now makes not possible to render some old env's.
     // Like fix, we found copy-paste already generated key from backups, to secrets.yml with correct key name
@@ -141,7 +143,6 @@ def wa29155(ArrayList saltMinions, String cname) {
         return
     }
     salt.fullRefresh(venvPepper, 'I@salt:master')
-    salt.fullRefresh(venvPepper, 'I@nova:compute')
     for (String minion in saltMinions) {
         // First attempt, second will be performed in next validateReclassModel() stages
         try {
@@ -184,8 +185,8 @@ def wa29155(ArrayList saltMinions, String cname) {
 
             salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
                 "grep -q '${wa29155ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29155ClassName' infra/secrets.yml")
-            salt.fullRefresh(venvPepper, 'cfg*')
-            salt.fullRefresh(venvPepper, 'cmp*')
+            salt.fullRefresh(venvPepper, 'I@salt:master')
+            salt.fullRefresh(venvPepper, saltMinions)
             patched = true
         }
     }
@@ -270,6 +271,35 @@ def wa33771(String cluster_name) {
         def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
         salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.octavia_wa33771' ${openstackControl}")
         salt.cmdRun(venvPepper, 'I@salt:master', "echo '${octaviaFileContent}' | base64 -d > ${octaviaFile}", false, null, false)
+    }
+}
+
+def wa33930_33931(String cluster_name) {
+    def openstackControlFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/control.yml"
+    def fixName = 'clients_common_wa33930_33931'
+    def fixFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/${fixName}.yml"
+    def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster\\.${cluster_name}\\.openstack\\.${fixName}\$' ${openstackControlFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+    if (! containsFix) {
+        def fixContext = [
+            'classes': [ 'service.nova.client', 'service.glance.client', 'service.neutron.client' ]
+        ]
+        if (salt.getMinions(venvPepper, 'I@manila:api:enabled')) {
+            fixContext['classes'] << 'service.manila.client'
+        }
+        if (salt.getMinions(venvPepper, 'I@ironic:api:enabled')) {
+            fixContext['classes'] << 'service.ironic.client'
+        }
+        if (salt.getMinions(venvPepper, 'I@gnocchi:server:enabled')) {
+            fixContext['classes'] << 'service.gnocchi.client'
+        }
+        if (salt.getMinions(venvPepper, 'I@barbican:server:enabled')) {
+            fixContext['classes'] << 'service.barbican.client.single'
+        }
+        def _tempFile = '/tmp/wa33930_33931' + UUID.randomUUID().toString().take(8)
+        writeYaml file: _tempFile , data: fixContext
+        def fixFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+        salt.cmdRun(venvPepper, 'I@salt:master', "echo '${fixFileContent}' | base64 -d > ${fixFile}", false, null, false)
+        salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.${fixName}' ${openstackControlFile}")
     }
 }
 
@@ -359,8 +389,6 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 gitTargetMcpVersion = "release/${targetMcpVersion}"
             }
             common.warningMsg("gitTargetMcpVersion has been changed to:${gitTargetMcpVersion}")
-            def saltMastURL = ''
-            def saltMastCreds = ''
             def upgradeSaltStack = ''
             def updateClusterModel = ''
             def updatePipelines = ''
@@ -368,7 +396,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             def reclassSystemBranch = ''
             def reclassSystemBranchDefault = gitTargetMcpVersion
             def batchSize = ''
-            if (gitTargetMcpVersion != 'proposed') {
+            if (gitTargetMcpVersion ==~ /^\d\d\d\d\.\d\d?\.\d+$/) {
+                reclassSystemBranchDefault = "tags/${gitTargetMcpVersion}"
+            } else if (gitTargetMcpVersion != 'proposed') {
                 reclassSystemBranchDefault = "origin/${gitTargetMcpVersion}"
             }
             def driveTrainParamsYaml = env.getProperty('DRIVE_TRAIN_PARAMS')
@@ -401,6 +431,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             if (!batchSize) {
                 batchSize = getWorkerThreads(venvPepper)
             }
+            def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
 
             stage('Update Reclass and Salt-Formulas') {
                 common.infoMsg('Perform: Full salt sync')
@@ -497,6 +528,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     wa32182(cluster_name)
                     wa33771(cluster_name)
                     wa33867(cluster_name)
+                    wa33930_33931(cluster_name)
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
@@ -526,8 +558,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     input message: 'Continue anyway?'
                 }
 
-                wa29352(minions, cluster_name)
-                def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
+                wa29352(cluster_name)
                 wa29155(computeMinions, cluster_name)
 
                 try {
@@ -541,6 +572,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
 
                 salt.fullRefresh(venvPepper, 'I@salt:master')
                 salt.enforceState(venvPepper, 'I@salt:master', 'reclass.storage', true, true, null, false, 60, 2)
+                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && " +
+                        "git add -u && git commit --allow-empty -m 'Reclass nodes update to the release ${targetMcpVersion} on ${common.getDatetime()}'")
                 try {
                     salt.enforceState(venvPepper, 'I@salt:master', 'reclass', true, true, null, false, 60, 2)
                 }
@@ -642,15 +675,28 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.enforceState(venvPepper, 'I@salt:master', 'nginx', true, true, null, false, 60, 2)
                 }
 
-                // Apply changes for HaProxy on CI/CD nodes
-                salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
+                // Gerrit 2019.2.0 (2.13.6) version has wrong file name for download-commands plugin and was not loaded, let's remove if still there before upgrade
+                def gerritGlusterPath = salt.getPillar(venvPepper, 'I@gerrit:client', 'glusterfs:client:volumes:gerrit:path').get('return')[0].values()[0]
+                def wrongPluginJarName = "${gerritGlusterPath}/plugins/project-download-commands.jar"
+                salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName} || true")
 
                 salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
-
-                sleep(180)
-
+            }
+        }
+        catch (Throwable e) {
+            // If there was an error or exception thrown, the build failed
+            currentBuild.result = "FAILURE"
+            throw e
+        }
+    }
+    // docker.client state may trigger change of jenkins master or jenkins slave services,
+    // so we need wait for slave to reconnect and continue pipeline
+    sleep(180)
+    node('python') {
+        try {
+            stage('Update Drivetrain: Phase 2') {
+                python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
                 common.infoMsg('Perform: Checking if Docker containers are up')
-
                 try {
                     common.retry(20, 30) {
                         salt.cmdRun(venvPepper, 'I@jenkins:client and I@docker:client', "! docker service ls | tail -n +2 | grep -v -E '\\s([0-9])/\\1\\s'")
@@ -659,6 +705,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 catch (Exception ex) {
                     error("Docker containers for CI/CD services are having troubles with starting.")
                 }
+
+                // Apply changes for HaProxy on CI/CD nodes
+                salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
 
                 salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true, true, null, false, 60, 2)
 

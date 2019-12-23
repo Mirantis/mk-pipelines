@@ -368,7 +368,8 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Install infra') {
               if (common.checkContains('STACK_INSTALL', 'core') ||
                     common.checkContains('STACK_INSTALL', 'openstack') ||
-                      common.checkContains('STACK_INSTALL', 'oss')) {
+                      common.checkContains('STACK_INSTALL', 'oss') ||
+                        common.checkContains('STACK_INSTALL', 'cicd')) {
                   orchestrate.installInfra(venvPepper, extra_tgt)
               }
             }
@@ -534,7 +535,6 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (common.checkContains('STACK_INSTALL', 'cicd')) {
                 stage('Install Cicd') {
-                    orchestrate.installInfra(venvPepper, extra_tgt)
                     orchestrate.installCicd(venvPepper, extra_tgt)
                 }
             }

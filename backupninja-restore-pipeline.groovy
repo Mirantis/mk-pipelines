@@ -8,10 +8,6 @@ def restoreDogtag = (env.getProperty('RESTORE_DOGTAG') ?: true).toBoolean()
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
-        if (restoreDogtag) {
-            common.warningMsg("Dogtag restore does not work and disabled by default. For more information check the docs https://docs.mirantis.com/mcp/q4-18/mcp-operations-guide/backup-restore.html")
-        }
-        restoreDogtag = false
         stage('Setup virtualenv for Pepper') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
@@ -50,16 +46,26 @@ timeout(time: 12, unit: 'HOURS') {
                 common.warningMsg("No MaaS Pillar was found. You can ignore this if it's expected. Otherwise you should fix you pillar. Check: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/maas-postgresql/backupninja-postgresql-restore.html")
             }
             if (restoreDogtag) {
-                try {
-                    def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server:role:master", 'dogtag:server:initial_data').get('return')[0].values()[0]
-                    if (dogtagPillar.isEmpty()) {
-                        throw new Exception("Problem with Dogtag pillar on 'I@dogtag:server:role:master' node.")
+                def barbicanBackendPresent = salt.getPillar(pepperEnv, "I@salt:master", "_param:barbican_backend").get('return')[0].values()[0]
+                if (barbicanBackendPresent == 'dogtag') {
+                    try {
+                        def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server:role:master", 'dogtag:server:initial_data').get('return')[0].values()[0]
+                        if (dogtagPillar.isEmpty()) {
+                            throw new Exception("Problem with Dogtag pillar on 'I@dogtag:server:role:master' node.")
+                        }
+                        def mineCertPresent = salt.runSaltProcessStep(pepperEnv, "I@dogtag:server:role:master", 'mine.get', ['*', 'dogtag_admin_cert'], null, false).get('return')[0].values()[0]
+                        if (mineCertPresent.isEmpty()) {
+                            throw new Exception("Problem with Dogtag Admin cert mine data on 'I@dogtag:server:role:master' node.")
+                        }
                     }
-                }
-                catch (Exception e) {
-                    common.errorMsg(e.getMessage())
-                    common.errorMsg('Please fix your pillar. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/dogtag/restore-dogtag.html')
-                    throw e
+                    catch (Exception e) {
+                        common.errorMsg(e.getMessage())
+                        common.errorMsg('Please fix your pillar or missed mine data. For more information check docs: https://docs.mirantis.com/mcp/latest/mcp-operations-guide/backup-restore/dogtag/2.6-and-newer/restore-dogtag.html')
+                        throw e
+                    }
+                }  else {
+                    restoreDogtag = false
+                    common.warningMsg('Restore for Dogtag is enabled, but service itself is not present. Skipping...')
                 }
             }
         }
@@ -90,13 +96,11 @@ timeout(time: 12, unit: 'HOURS') {
                 common.infoMsg("No more steps for Salt Master and MaaS restore are required.")
             }
             if (restoreDogtag) {
-                salt.enforceState(['saltId': pepperEnv, 'target': 'I@salt:master', 'state': ['salt', 'reclass']])
                 salt.enforceState(['saltId': pepperEnv, 'target': 'I@dogtag:server:role:master', 'state': 'dogtag.server'])
                 salt.enforceState(['saltId': pepperEnv, 'target': 'I@dogtag:server', 'state': 'dogtag.server'])
-                salt.enforceState(['saltId': pepperEnv, 'target': 'I@haproxy:proxy', 'state': 'haproxy'])
                 salt.enforceState(['saltId': pepperEnv, 'target': 'I@barbican:server:role:primary', 'state': 'barbican.server'])
                 salt.enforceState(['saltId': pepperEnv, 'target': 'I@barbican:server', 'state': 'barbican.server'])
-                salt.cmdRun(pepperEnv, 'I@barbican:server', 'rm /etc/barbican/alias/*')
+                salt.cmdRun(pepperEnv, 'I@barbican:server', 'rm -rf /etc/barbican/alias')
                 salt.runSaltProcessStep(pepperEnv, 'I@barbican:server', 'service.restart', 'apache2')
             }
         }

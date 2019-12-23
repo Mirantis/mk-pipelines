@@ -60,16 +60,22 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
             if (backupDogtag) {
-                try {
-                    def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server", "dogtag:server").get('return')[0].values()[0]
-                    if (dogtagPillar.isEmpty()) {
-                        throw new Exception("Problem with dogtag pillar on I@dogtag:server node.")
+                def barbicanBackendPresent = salt.getPillar(pepperEnv, "I@salt:master", "_param:barbican_backend").get('return')[0].values()[0]
+                if (barbicanBackendPresent == 'dogtag') {
+                    try {
+                        def dogtagPillar = salt.getPillar(pepperEnv, "I@dogtag:server", "dogtag:server").get('return')[0].values()[0]
+                        if (dogtagPillar.isEmpty()) {
+                            throw new Exception("Problem with dogtag pillar on I@dogtag:server node.")
+                        }
                     }
-                }
-                catch (Exception e) {
-                    common.errorMsg(e.getMessage())
-                    common.errorMsg("Looks like dogtag pillar is not defined. Fix your pillar or disable dogtag backup by setting the BACKUP_DOGTAG parameter to False if you're using different barbican backend.")
-                    throw e
+                    catch (Exception e) {
+                        common.errorMsg(e.getMessage())
+                        common.errorMsg("Looks like dogtag pillar is not defined. Fix your pillar or disable dogtag backup by setting the BACKUP_DOGTAG parameter to False if you're using different barbican backend.")
+                        throw e
+                    }
+                } else {
+                    backupDogtag = false
+                    common.warningMsg('Backup for Dogtag is enabled, but service itself is not present. Skipping...')
                 }
             }
         }
@@ -152,7 +158,9 @@ timeout(time: 12, unit: 'HOURS') {
                 def maasNodes = salt.getMinions(pepperEnv, 'I@maas:region')
                 if (!maasNodes.isEmpty()) {
                     common.infoMsg("Trying to save maas file permissions on ${maasNodes} if possible")
-                    salt.cmdRun(pepperEnv, 'I@maas:region', 'which getfacl && getfacl -pR /var/lib/maas/ > /var/lib/maas/file_permissions.txt || true')
+                    salt.cmdRun(pepperEnv, 'I@maas:region', 'which getfacl && ' +
+                            'getfacl -pR /var/lib/maas/ > /var/lib/maas/file_permissions.txt &&' +
+                            'getfacl -pR /etc/maas/ > /etc/maas/file_permissions.txt || true')
                 }
             }
             if (backupDogtag) {
