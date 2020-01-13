@@ -1,5 +1,5 @@
 /**
- * Update packages on given nodes
+ * Deploy OpenStack compute node
  *
  * Expected parameters:
  *   SALT_MASTER_CREDENTIALS    Credentials to the Salt API.
@@ -44,6 +44,11 @@ timeout(time: 12, unit: 'HOURS') {
                 common.infoMsg("Selected nodes: ${targetLiveAll}")
             }
 
+            stage('Sync modules') {
+                // Sync all of the modules from the salt master.
+                salt.syncAll(pepperEnv, targetLiveAll, batch_size)
+            }
+
             stage("Trusty workaround") {
                 if(salt.getGrain(pepperEnv, minions[0], "oscodename")['return'][0].values()[0]["oscodename"] == "trusty") {
                     common.infoMsg("First node %nodename% has trusty")
@@ -63,14 +68,7 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'pkg.upgrade', [], batch_size, true)
             }
 
-            stage("Update Hosts file") {
-                salt.enforceState(pepperEnv, "I@linux:system", 'linux.network.host', true, true, batch_size)
-            }
-
             stage("Setup networking") {
-                // Sync all of the modules from the salt master.
-                salt.syncAll(pepperEnv, targetLiveAll, batch_size)
-
                 // Apply state 'salt' to install python-psutil for network configuration without restarting salt-minion to avoid losing connection.
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'state.apply',  ['salt', 'exclude=[{\'id\': \'salt_minion_service\'}, {\'id\': \'salt_minion_service_restart\'}, {\'id\': \'salt_minion_sync_all\'}]'], batch_size, true)
 
@@ -84,8 +82,8 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'ps.pkill', ['ifup'], batch_size, false)
                 salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'ps.pkill', ['ifdown'], batch_size, false)
 
-                // Restart networking to bring UP all interfaces.
-                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'service.restart', ['networking'], batch_size, true, 300)
+                // Restart networking to bring UP all interfaces and restart minion to catch network changes.
+                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'cmd.shell', ["salt-call service.restart networking; salt-call service.restart salt-minion"], batch_size, true, 300)
             }
 
             stage("Highstate compute") {
@@ -100,9 +98,6 @@ timeout(time: 12, unit: 'HOURS') {
                 // Execute highstate.
                 salt.enforceHighstate(pepperEnv, targetLiveAll, true, true, batch_size)
 
-                // Restart supervisor-vrouter.
-                salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'service.restart', ['supervisor-vrouter'], batch_size, true, 300)
-
                 // Apply salt and collectd if is present to update information about current network interfaces.
                 salt.enforceState(pepperEnv, targetLiveAll, 'salt', true, true, batch_size)
                 if(!salt.getPillar(pepperEnv, minions[0], "collectd")['return'][0].values()[0].isEmpty()) {
@@ -110,16 +105,33 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-        stage("Update/Install monitoring") {
-            //Collect Grains
-            salt.enforceState(pepperEnv, targetLiveAll, 'salt.minion.grains', true, true, batch_size)
-            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'saltutil.refresh_modules', [], batch_size)
-            salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'mine.update', [], batch_size)
-            sleep(5)
+            // host records for compute nodes are generated dynamically - so apply state after node setup
+            stage('Update Hosts file') {
+                salt.enforceState(pepperEnv, "I@linux:system", 'linux.network.host', true, true, batch_size)
+            }
 
-            salt.enforceState(pepperEnv, targetLiveAll, 'prometheus', true, true, batch_size)
-            salt.enforceState(pepperEnv, 'I@prometheus:server', 'prometheus', true, true, batch_size)
-        }
+            // discover added compute hosts
+            stage('Discover compute hosts') {
+                salt.runSaltProcessStep(pepperEnv, 'I@nova:controller:role:primary', 'state.sls_id', ['nova_controller_discover_hosts', 'nova.controller'], batch_size, true)
+            }
+
+            stage("Update/Install monitoring") {
+                def slaServers = 'I@prometheus:server'
+                def slaMinions = salt.getMinions(pepperEnv, slaServers)
+
+                if (slaMinions.isEmpty()) {
+                    common.infoMsg('Monitoring is not enabled on environment, skipping...')
+                } else {
+                    //Collect Grains
+                    salt.enforceState(pepperEnv, targetLiveAll, 'salt.minion.grains', true, true, batch_size)
+                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'saltutil.refresh_modules', [], batch_size)
+                    salt.runSaltProcessStep(pepperEnv, targetLiveAll, 'mine.update', [], batch_size)
+                    sleep(5)
+
+                    salt.enforceState(pepperEnv, targetLiveAll, 'prometheus', true, true, batch_size)
+                    salt.enforceState(pepperEnv, 'I@prometheus:server', 'prometheus', true, true, batch_size)
+                }
+            }
 
         } catch (Throwable e) {
             // If there was an error or exception thrown, the build failed
