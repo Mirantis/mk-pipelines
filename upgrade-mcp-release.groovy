@@ -199,22 +199,23 @@ def wa29155(ArrayList saltMinions, String cname) {
 
 }
 
-def wa32284(String clusterName) {
+def wa32284(String cluster_name) {
     def clientGluster = salt.getPillar(venvPepper, 'I@salt:master', "glusterfs:client:enabled").get("return")[0].values()[0]
     def pkiGluster = salt.getPillar(venvPepper, 'I@salt:master', "glusterfs:client:volumes:salt_pki").get("return")[0].values()[0]
     def nginxEnabledAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]
     if (nginxEnabledAtMaster.toString().toLowerCase() == 'true' && clientGluster.toString().toLowerCase() == 'true' && pkiGluster) {
         def nginxRequires = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:wait_for_service').get('return')[0].values()[0]
         if (nginxRequires.isEmpty()) {
-            def nginxRequiresClassName = "cluster.${clusterName}.infra.config.nginx_requires_wa32284"
-            def nginxRequiresClassFile = "/srv/salt/reclass/classes/cluster/${clusterName}/infra/config/nginx_requires_wa32284.yml"
+            def nginxRequiresClassName = "cluster.${cluster_name}.infra.config.nginx_requires_wa32284"
+            def nginxRequiresClassFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/infra/config/nginx_requires_wa32284.yml"
             def nginxRequiresBlock = ['parameters': ['nginx': ['server': ['wait_for_service': ['srv-salt-pki.mount'] ] ] ] ]
             def _tempFile = '/tmp/wa32284_' + UUID.randomUUID().toString().take(8)
             writeYaml file: _tempFile , data: nginxRequiresBlock
             def nginxRequiresBlockString = sh(script: "cat ${_tempFile}", returnStdout: true).trim()
-            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${clusterName} && " +
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && " +
                 "sed -i '/^parameters:/i - ${nginxRequiresClassName}' infra/config/init.yml")
             salt.cmdRun(venvPepper, 'I@salt:master', "echo '${nginxRequiresBlockString}'  > ${nginxRequiresClassFile}", false, null, false)
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${nginxRequiresClassFile}")
         }
     }
 }
@@ -240,6 +241,7 @@ def wa32182(String cluster_name) {
                     "echo '- cluster.${cluster_name}.opencontrail.common_wa32182' >> ${contrailFile}")
             }
         }
+        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
     }
 }
 
@@ -272,6 +274,7 @@ def wa33771(String cluster_name) {
         def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
         salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.octavia_wa33771' ${openstackControl}")
         salt.cmdRun(venvPepper, 'I@salt:master', "echo '${octaviaFileContent}' | base64 -d > ${octaviaFile}", false, null, false)
+        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${octaviaFile}")
     }
 }
 
@@ -301,6 +304,7 @@ def wa33930_33931(String cluster_name) {
         def fixFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
         salt.cmdRun(venvPepper, 'I@salt:master', "echo '${fixFileContent}' | base64 -d > ${fixFile}", false, null, false)
         salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.${fixName}' ${openstackControlFile}")
+        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
     }
 }
 
@@ -337,7 +341,75 @@ def wa34245(cluster_name) {
             if (fixFileContent) {
                 salt.cmdRun(venvPepper, 'I@salt:master', "echo 'classes:\n${fixFileContent.join('\n')}' > ${fixFile}")
                 salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.infra.${fixName}' ${infraInitFile}")
+                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
             }
+        }
+    }
+}
+
+def wa34528(String cluster_name) {
+    // Mysql users have to be defined on each Galera node
+    if(salt.getMinions(venvPepper, 'I@galera:master').isEmpty()) {
+        common.errorMsg('No Galera master found in cluster. Skipping')
+        return
+    }
+    def mysqlUsersMasterPillar = salt.getPillar(venvPepper, 'I@galera:master', 'mysql:server:database').get("return")[0].values()[0]
+    if (mysqlUsersMasterPillar == '' || mysqlUsersMasterPillar == 'null' || mysqlUsersMasterPillar == null) {
+        common.errorMsg('Pillar data is broken for Galera master node!')
+        input message: 'Do you want to ignore and continue without Galera pillar patch?'
+        return
+    }
+    def fileToPatch = salt.cmdRun(venvPepper, 'I@salt:master', "ls /srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/init.yml || " +
+            "ls /srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/slave.yml || echo 'File not found'", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+    if (fileToPatch == 'File not found') {
+        common.errorMsg('Cluster model is old and cannot be patched for PROD-34528. Patching is possible for 2019.2.x cluster models only')
+        return
+    }
+    def patchRequired = false
+    def mysqlUsersSlavePillar = ''
+    def galeraSlaveNodes = salt.getMinions(venvPepper, 'I@galera:slave')
+    if (!galeraSlaveNodes.isEmpty()) {
+        for (galeraSlave in galeraSlaveNodes) {
+            mysqlUsersSlavePillar = salt.getPillar(venvPepper, galeraSlave, 'mysql:server:database').get("return")[0].values()[0]
+            if (mysqlUsersSlavePillar == '' || mysqlUsersSlavePillar == 'null' || mysqlUsersSlavePillar == null) {
+                common.errorMsg('Mysql users data is not defined for Galera slave nodes. Fixing...')
+                patchRequired = true
+                break
+            }
+        }
+        if (patchRequired) {
+            def fixFileContent = []
+            def fixName = 'db_wa34528'
+            def fixFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/${fixName}.yml"
+            for (dbName in mysqlUsersMasterPillar.keySet()) {
+                def classIncluded = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.galera\\.server\\.database\\.${dbName}\$'" +
+                        " /srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/master.yml", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if(classIncluded) {
+                    fixFileContent << "- system.galera.server.database.${dbName}"
+                }
+                def sslClassIncluded = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.galera\\.server\\.database\\.x509\\.${dbName}\$'" +
+                        " /srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/master.yml", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if(sslClassIncluded) {
+                    fixFileContent << "- system.galera.server.database.x509.${dbName}"
+                }
+            }
+            if (fixFileContent) {
+                salt.cmdRun(venvPepper, 'I@salt:master', "echo 'classes:\n${fixFileContent.join('\n')}' > ${fixFile}")
+                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.database.${fixName}' ${fileToPatch}")
+            }
+            salt.fullRefresh(venvPepper, 'I@galera:slave')
+            // Verify
+            for (galeraSlave in galeraSlaveNodes) {
+                mysqlUsersSlavePillar = salt.getPillar(venvPepper, galeraSlave, 'mysql:server:database').get("return")[0].values()[0]
+                if (mysqlUsersSlavePillar == '' || mysqlUsersSlavePillar == 'null' || mysqlUsersSlavePillar == null || mysqlUsersSlavePillar.keySet() != mysqlUsersMasterPillar.keySet()) {
+                    common.errorMsg("Mysql user data is different on master and slave node ${galeraSlave}.")
+                    input message: 'Do you want to ignore and continue?'
+                }
+            }
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
+            common.infoMsg('Galera slaves patching is done')
+        } else {
+            common.infoMsg('Galera slaves patching is not required')
         }
     }
 }
@@ -590,6 +662,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     wa33771(cluster_name)
                     wa33867(cluster_name)
                     wa33930_33931(cluster_name)
+                    wa34528(cluster_name)
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
