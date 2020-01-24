@@ -24,6 +24,7 @@ venvPepper = "venvPepper"
 workspace = ""
 def saltMastURL = ''
 def saltMastCreds = ''
+def packageUpgradeMode = ''
 
 def triggerMirrorJob(String jobName, String reclassSystemBranch) {
     params = jenkinsUtils.getJobParameters(jobName)
@@ -353,6 +354,18 @@ def checkDebsums() {
     }
 }
 
+def checkCICDDocker() {
+    common.infoMsg('Perform: Checking if Docker containers are up')
+    try {
+        common.retry(10, 30) {
+            salt.cmdRun(venvPepper, 'I@jenkins:client and I@docker:client', "! docker service ls | tail -n +2 | grep -v -E '\\s([0-9])/\\1\\s'")
+        }
+    }
+    catch (Exception ex) {
+        error("Docker containers for CI/CD services are having troubles with starting.")
+    }
+}
+
 if (common.validInputParam('PIPELINE_TIMEOUT')) {
     try {
         pipelineTimeout = env.PIPELINE_TIMEOUT.toInteger()
@@ -412,6 +425,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 updateLocalRepos = driveTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
                 reclassSystemBranch = driveTrainParams.get('RECLASS_SYSTEM_BRANCH', reclassSystemBranchDefault)
                 batchSize = driveTrainParams.get('BATCH_SIZE', '')
+                if (driveTrainParams.get('OS_DIST_UPGRADE', false).toBoolean() == true) {
+                    packageUpgradeMode = 'dist-upgrade'
+                } else if (driveTrainParams.get('OS_UPGRADE', false).toBoolean() == true) {
+                    packageUpgradeMode = 'upgrade'
+                }
             } else {
                 // backward compatibility for 2018.11.0
                 saltMastURL = env.getProperty('SALT_MASTER_URL')
@@ -696,19 +714,12 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
     // docker.client state may trigger change of jenkins master or jenkins slave services,
     // so we need wait for slave to reconnect and continue pipeline
     sleep(180)
+    def cidNodes = []
     node('python') {
         try {
             stage('Update Drivetrain: Phase 2') {
                 python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
-                common.infoMsg('Perform: Checking if Docker containers are up')
-                try {
-                    common.retry(20, 30) {
-                        salt.cmdRun(venvPepper, 'I@jenkins:client and I@docker:client', "! docker service ls | tail -n +2 | grep -v -E '\\s([0-9])/\\1\\s'")
-                    }
-                }
-                catch (Exception ex) {
-                    error("Docker containers for CI/CD services are having troubles with starting.")
-                }
+                checkCICDDocker()
 
                 // Apply changes for HaProxy on CI/CD nodes
                 salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
@@ -720,11 +731,41 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.enforceState(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit', 'nginx.server', true, true, null, false, 60, 2)
                 }
             }
+            if (packageUpgradeMode) {
+                cidNodes = salt.getMinions(venvPepper, 'I@_param:drivetrain_role:cicd')
+            }
         }
         catch (Throwable e) {
             // If there was an error or exception thrown, the build failed
             currentBuild.result = "FAILURE"
             throw e
+        }
+    }
+
+    stage('Upgrade OS') {
+        if (packageUpgradeMode) {
+            def debian = new com.mirantis.mk.Debian()
+            def statusFile = '/tmp/rebooted_during_upgrade'
+            for(cidNode in cidNodes) {
+                node('python') {
+                    python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
+                    // cmd.run async to prevent connection close in case of slave shutdown, give 5 seconds to handle request response
+                    salt.cmdRun(venvPepper, "I@salt:master", "salt -C '${cidNode}' cmd.run 'sleep 5; touch ${statusFile}; salt-call service.stop docker' --async")
+                }
+                sleep(30)
+                node('python') {
+                    python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
+                    debian.osUpgradeNode(venvPepper, cidNode, packageUpgradeMode, false, 60)
+                    salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': cidNode, wait: 60, timeout: 10])
+                    if (salt.runSaltProcessStep(venvPepper, cidNode, 'file.file_exists', [statusFile], null, true, 5)['return'][0].values()[0].toBoolean()) {
+                        salt.cmdRun(venvPepper, "I@salt:master", "salt -C '${cidNode}' cmd.run 'rm ${statusFile} && salt-call service.start docker'") // in case if node was not rebooted
+                        sleep(10)
+                    }
+                    checkCICDDocker()
+                }
+            }
+        } else {
+            common.infoMsg('Upgrade OS skipped...')
         }
     }
 }
