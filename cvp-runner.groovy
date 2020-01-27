@@ -121,6 +121,18 @@ node (SLAVE_NODE) {
                         url: '',
                         xpath: '/testsuite/testcase[@classname="tests.test_vm2vm"]/properties/property']]
                 }
+                try {
+                    sh """
+                        for i in ${artifacts_dir}/*.xml; do
+                            grep 'failures="0"' \$i
+                            grep 'errors="0"' \$i
+                        done
+                    """
+                } catch(err) {
+                    currentBuild.result = "FAILURE"
+                    common.errorMsg("[ERROR] Failures or errors is not zero in ${artifacts_dir}/*.xml")
+                    throw err
+                }
             }
         }
     }
