@@ -105,9 +105,10 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            // host records for compute nodes are generated dynamically - so apply state after node setup
-            stage('Update Hosts file') {
-                salt.enforceState(pepperEnv, "I@linux:system", 'linux.network.host', true, true, batch_size)
+            // host records and fingerprints for compute nodes are generated dynamically - so apply state after node setup
+            stage('Update Hosts file and fingerprints') {
+                salt.enforceState(pepperEnv, "I@linux:network:host", 'linux.network.host', true, true, batch_size)
+                salt.enforceState(pepperEnv, "I@linux:system", 'openssh', true, true, batch_size)
             }
 
             // discover added compute hosts
