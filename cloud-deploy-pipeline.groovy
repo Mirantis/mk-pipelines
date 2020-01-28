@@ -49,6 +49,7 @@
  *   BATCH_SIZE                 Use batching for states, which may be targeted for huge amount of nodes. Format:
                                 - 10 - number of nodes
                                 - 10% - percentage of all targeted nodes
+ *   DIST_UPGRADE_NODES         Whether to run "apt-get dist-upgrade" on all nodes in cluster before deployment
 
  *
  * Test settings:
@@ -80,6 +81,7 @@ orchestrate = new com.mirantis.mk.Orchestrate()
 python = new com.mirantis.mk.Python()
 salt = new com.mirantis.mk.Salt()
 test = new com.mirantis.mk.Test()
+debian = new com.mirantis.mk.Debian()
 
 _MAX_PERMITTED_STACKS = 2
 overwriteFile = "/srv/salt/reclass/classes/cluster/override.yml"
@@ -111,6 +113,10 @@ if (common.validInputParam('EXTRA_TARGET')) {
 def batch_size = ''
 if (common.validInputParam('BATCH_SIZE')) {
     batch_size = "${BATCH_SIZE}"
+}
+def upgrade_nodes = false
+if (common.validInputParam('DIST_UPGRADE_NODES')) {
+    upgrade_nodes = "${DIST_UPGRADE_NODES}".toBoolean()
 }
 
 timeout(time: 12, unit: 'HOURS') {
@@ -361,11 +367,19 @@ timeout(time: 12, unit: 'HOURS') {
                     orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_tgt, batch_size)
 
                     if (common.checkContains('STACK_INSTALL', 'kvm')) {
+                        if (upgrade_nodes) {
+                            debian.osUpgradeNode(venvPepper, 'I@salt:control', 'dist-upgrade', 30, 20, batch_size)
+                            salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': 'I@salt:control', wait: 60, timeout: 10])
+                        }
                         orchestrate.installInfraKvm(venvPepper, extra_tgt)
-                        orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_tgt)
+                        orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_tgt, batch_size)
                     }
 
                     orchestrate.validateFoundationInfra(venvPepper, extra_tgt)
+                }
+                if (upgrade_nodes) {
+                    debian.osUpgradeNode(venvPepper, 'not ( I@salt:master or I@salt:control )', 'dist-upgrade', false, 30, 10, batch_size)
+                    salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': 'not ( I@salt:master or I@salt:control )', wait: 60, timeout: 10])
                 }
             }
 
