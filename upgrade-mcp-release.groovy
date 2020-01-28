@@ -304,6 +304,44 @@ def wa33930_33931(String cluster_name) {
     }
 }
 
+def wa34245(cluster_name) {
+    def infraInitFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/infra/init.yml"
+    def fixName = 'hosts_wa34245'
+    def fixFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/infra/${fixName}.yml"
+    if (salt.testTarget(venvPepper, 'I@keystone:server')) {
+        def fixApplied = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster.${cluster_name}.infra.${fixName}\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+        if (!fixApplied) {
+            def fixFileContent = []
+            def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.linux\\.network\\.hosts\\.openstack\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+            if (!containsFix) {
+                fixFileContent << '- system.linux.network.hosts.openstack'
+            }
+            if (salt.testTarget(venvPepper, 'I@gnocchi:server')) {
+                containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.linux\\.network\\.hosts\\.openstack\\.telemetry\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if (!containsFix) {
+                    fixFileContent << '- system.linux.network.hosts.openstack.telemetry'
+                }
+            }
+            if (salt.testTarget(venvPepper, 'I@manila:api')) {
+                containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.linux\\.network\\.hosts\\.openstack\\.share\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if (!containsFix) {
+                    fixFileContent << '- system.linux.network.hosts.openstack.share'
+                }
+            }
+            if (salt.testTarget(venvPepper, 'I@barbican:server')) {
+                containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.linux\\.network\\.hosts\\.openstack\\.kmn\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if (!containsFix) {
+                    fixFileContent << '- system.linux.network.hosts.openstack.kmn'
+                }
+            }
+            if (fixFileContent) {
+                salt.cmdRun(venvPepper, 'I@salt:master', "echo 'classes:\n${fixFileContent.join('\n')}' > ${fixFile}")
+                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.infra.${fixName}' ${infraInitFile}")
+            }
+        }
+    }
+}
+
 def archiveReclassInventory(filename) {
     def _tmp_file = '/tmp/' + filename + UUID.randomUUID().toString().take(8)
     // jenkins may fail at overheap. Compress data with gzip like WA
@@ -498,6 +536,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     }
 
                     wa32284(cluster_name)
+                    wa34245(cluster_name)
 
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add kubernetes-extra repo
