@@ -266,9 +266,12 @@ def wa33771(String cluster_name) {
             'classes': [ 'system.apache.server.site.octavia' ],
             'parameters': [
                 '_param': [ 'apache_octavia_api_address' : '${_param:cluster_local_address}' ],
-                'apache': [ 'server': [ 'site': [ 'apache_proxy_openstack_api_octavia': [ 'enabled': false ] ] ] ]
             ]
         ]
+        def openstackHTTPSEnabled = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_internal_protocol").get("return")[0].values()[0]
+        if (openstackHTTPSEnabled == 'https') {
+            octaviaContext['parameters'] << [ 'apache': [ 'server': [ 'site': [ 'apache_proxy_openstack_api_octavia': [ 'enabled': false ] ] ] ] ]
+        }
         def _tempFile = '/tmp/wa33771' + UUID.randomUUID().toString().take(8)
         writeYaml file: _tempFile , data: octaviaContext
         def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
