@@ -160,8 +160,9 @@ timeout(time: 24, unit: 'HOURS') {
           upgrade_mode = 'upgrade'
         }
         if (OS_DIST_UPGRADE.toBoolean() == true || OS_UPGRADE.toBoolean() == true) {
-          debian.osUpgradeNode(env, target, upgrade_mode, false)
+          debian.osUpgradeNode(env, target, upgrade_mode, false, 60, 10)
         }
+        salt.checkTargetMinionsReady(['saltId': env, 'target': target, wait: 60, timeout: 10])
         // Workaround for PROD-31413, install python-tornado from latest release if available and
         // restart minion to apply new code.
         salt.upgradePackageAndRestartSaltMinion(env, target, 'python-tornado')
