@@ -46,6 +46,12 @@ timeout(time: 12, unit: 'HOURS') {
                     salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-mon.target")
                     ceph.waitForHealthy(pepperEnv, tgt, flags)
                 }
+                selMinions = salt.getMinions(pepperEnv, "I@ceph:mgr")
+                for (tgt in selMinions) {
+                    // runSaltProcessStep 'service.restart' don't work for this services
+                    salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-mgr.target")
+                    ceph.waitForHealthy(pepperEnv, tgt, flags)
+                }
                 selMinions = salt.getMinions(pepperEnv, "I@ceph:radosgw")
                 for (tgt in selMinions) {
                     salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-radosgw.target")
