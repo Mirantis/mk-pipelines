@@ -231,17 +231,17 @@ def wa32182(String cluster_name) {
         if (salt.testTarget(venvPepper, "I@kubernetes:master")) {
             contrailFiles.add('kubernetes/compute.yml')
         }
-        for(String contrailFile in contrailFiles) {
+        for (String contrailFile in contrailFiles) {
             contrailFile = "${clusterModelPath}/${contrailFile}"
             def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster\\.${cluster_name}\\.opencontrail\\.common(_wa32182)?\$' ${contrailFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
             if (containsFix) {
                 continue
             } else {
                 salt.cmdRun(venvPepper, 'I@salt:master', "grep -q -E '^parameters:' ${contrailFile} && sed -i '/^parameters:/i - cluster.${cluster_name}.opencontrail.common_wa32182' ${contrailFile} || " +
-                    "echo '- cluster.${cluster_name}.opencontrail.common_wa32182' >> ${contrailFile}")
+                        "echo '- cluster.${cluster_name}.opencontrail.common_wa32182' >> ${contrailFile}")
             }
         }
-        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
+        salt.cmdRun(venvPepper, 'I@salt:master', "test -f ${fixFile} && cd ${clusterModelPath} && git status && git add ${fixFile} || true")
     }
 }
 
