@@ -60,11 +60,11 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Restart OSDs') {
-
+                def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
                 selMinions = salt.getMinions(pepperEnv, "I@ceph:osd")
                 for (tgt in selMinions) {
                     salt.runSaltProcessStep(pepperEnv, tgt, 'saltutil.sync_grains', [], null, true, 5)
-                    def ceph_disks = salt.getGrain(pepperEnv, tgt, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
+                    def ceph_disks = salt.getGrain(pepperEnv, tgt, 'ceph')['return'][0].values()[0].values()[0][device_grain_name]
 
                     def osd_ids = []
                     for (i in ceph_disks) {
