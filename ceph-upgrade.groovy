@@ -187,6 +187,9 @@ timeout(time: 12, unit: 'HOURS') {
                 for (flag in flags) {
                     salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd set ' + flag)
                 }
+                if (ORIGIN_RELEASE == 'jewel') {
+                    salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd set sortbitwise')
+                }
             }
         }
 
@@ -222,7 +225,6 @@ timeout(time: 12, unit: 'HOURS') {
                         common.infoMsg('Removing flag ' + flag)
                         salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd unset ' + flag)
                     }
-
                 }
             }
         }
