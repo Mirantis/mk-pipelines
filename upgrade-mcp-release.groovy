@@ -13,6 +13,9 @@
  *     UPDATE_CLUSTER_MODEL       Update MCP version parameter in cluster model
  *     UPDATE_PIPELINES           Update pipeline repositories on Gerrit
  *     UPDATE_LOCAL_REPOS         Update local repositories
+ *     OS_UPGRADE                 Run apt-get upgrade on Drivetrain nodes
+ *     OS_DIST_UPGRADE            Run apt-get dist-upgrade on Drivetrain nodes and reboot to apply changes
+ *     APPLY_MODEL_WORKAROUNDS    Whether to apply cluster model workarounds from the pipeline
  */
 
 salt = new com.mirantis.mk.Salt()
@@ -25,6 +28,7 @@ workspace = ""
 def saltMastURL = ''
 def saltMastCreds = ''
 def packageUpgradeMode = ''
+batchSize = ''
 
 def triggerMirrorJob(String jobName, String reclassSystemBranch) {
     params = jenkinsUtils.getJobParameters(jobName)
@@ -90,7 +94,7 @@ def wa29352(String cname) {
     def wa29352SecretsFile = "/srv/salt/reclass/classes/cluster/${cname}/infra/secrets.yml"
     def _tempFile = '/tmp/wa29352_' + UUID.randomUUID().toString().take(8)
     try {
-        salt.cmdRun(venvPepper, 'I@salt:master', "grep -qiv root_private_key ${wa29352SecretsFile}", true, null, false)
+        salt.cmdRun(venvPepper, 'I@salt:master', "! grep -qi root_private_key: ${wa29352SecretsFile}", true, null, false)
         salt.cmdRun(venvPepper, 'I@salt:master', "test ! -f ${wa29352File}", true, null, false)
     }
     catch (Exception ex) {
@@ -131,16 +135,25 @@ def wa29352(String cname) {
 def wa29155(ArrayList saltMinions, String cname) {
     // WA for PROD-29155. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/
     // CHeck for existence cmp nodes, and try to render it. Is failed, apply ssh-key wa
-    def ret = ''
     def patched = false
     def wa29155ClassName = 'cluster.' + cname + '.infra.secrets_nova_wa29155'
     def wa29155File = "/srv/salt/reclass/classes/cluster/${cname}/infra/secrets_nova_wa29155.yml"
 
     try {
         salt.cmdRun(venvPepper, 'I@salt:master', "test ! -f ${wa29155File}", true, null, false)
+        def patch_required = false
+        for (String minion in saltMinions) {
+            def nova_key = salt.getPillar(venvPepper, minion, '_param:nova_compute_ssh_private').get("return")[0].values()[0]
+            if (nova_key == '' || nova_key == 'null' || nova_key == null) {
+                patch_required = true
+                break // no exception, proceeding to apply the patch
+            }
+        }
+        if (!patch_required) {
+            error('No need to apply work-around for PROD-29155')
+        }
     }
     catch (Exception ex) {
-        common.infoMsg('Work-around for PROD-29155 already apply, nothing todo')
         return
     }
     salt.fullRefresh(venvPepper, 'I@salt:master')
@@ -151,12 +164,7 @@ def wa29155(ArrayList saltMinions, String cname) {
         } catch (Exception e) {
             common.errorMsg(e.toString())
             if (patched) {
-                error("Node: ${minion} failed to render after reclass-system upgrade!WA29155 probably didn't help.")
-            }
-            // check, that failed exactly by our case,  by key-length check.
-            def missed_key = salt.getPillar(venvPepper, minion, '_param:nova_compute_ssh_private').get("return")[0].values()[0]
-            if (missed_key != '') {
-                error("Node: ${minion} failed to render after reclass-system upgrade!")
+                error("Node: ${minion} failed to render after reclass-system upgrade! WA29155 probably didn't help.")
             }
             common.warningMsg('Perform: Attempt to apply WA for PROD-29155\n' +
                 'See https://gerrit.mcp.mirantis.com/#/c/37932/ for more info')
@@ -257,27 +265,31 @@ def wa33867(String cluster_name) {
 }
 
 def wa33771(String cluster_name) {
-    def octaviaEnabled = salt.getMinions(venvPepper, 'I@octavia:api:enabled')
-    def octaviaWSGI = salt.getMinions(venvPepper, 'I@apache:server:site:octavia_api')
-    if (octaviaEnabled && ! octaviaWSGI) {
-        def openstackControl = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/control.yml"
-        def octaviaFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/octavia_wa33771.yml"
-        def octaviaContext = [
-            'classes': [ 'system.apache.server.site.octavia' ],
-            'parameters': [
-                '_param': [ 'apache_octavia_api_address' : '${_param:cluster_local_address}' ],
+    if (salt.getMinions(venvPepper, 'I@_param:openstack_node_role and I@apache:server')) {
+        def octaviaEnabled = salt.getMinions(venvPepper, 'I@octavia:api:enabled')
+        def octaviaWSGI = salt.getMinions(venvPepper, 'I@apache:server:site:octavia_api')
+        if (octaviaEnabled && !octaviaWSGI) {
+            def openstackControl = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/control.yml"
+            def octaviaFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/octavia_wa33771.yml"
+            def octaviaContext = [
+                    'classes'   : ['system.apache.server.site.octavia'],
+                    'parameters': [
+                            '_param': ['apache_octavia_api_address': '${_param:cluster_local_address}'],
+                    ]
             ]
-        ]
-        def openstackHTTPSEnabled = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_internal_protocol").get("return")[0].values()[0]
-        if (openstackHTTPSEnabled == 'https') {
-            octaviaContext['parameters'] << [ 'apache': [ 'server': [ 'site': [ 'apache_proxy_openstack_api_octavia': [ 'enabled': false ] ] ] ] ]
+            def openstackHTTPSEnabled = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_internal_protocol").get("return")[0].values()[0]
+            if (openstackHTTPSEnabled == 'https') {
+                octaviaContext['parameters'] << ['apache': ['server': ['site': ['apache_proxy_openstack_api_octavia': ['enabled': false]]]]]
+            }
+            def _tempFile = '/tmp/wa33771' + UUID.randomUUID().toString().take(8)
+            writeYaml file: _tempFile, data: octaviaContext
+            def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+            salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.octavia_wa33771' ${openstackControl}")
+            salt.cmdRun(venvPepper, 'I@salt:master', "echo '${octaviaFileContent}' | base64 -d > ${octaviaFile}", false, null, false)
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${octaviaFile}")
         }
-        def _tempFile = '/tmp/wa33771' + UUID.randomUUID().toString().take(8)
-        writeYaml file: _tempFile , data: octaviaContext
-        def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
-        salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.octavia_wa33771' ${openstackControl}")
-        salt.cmdRun(venvPepper, 'I@salt:master', "echo '${octaviaFileContent}' | base64 -d > ${octaviaFile}", false, null, false)
-        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${octaviaFile}")
+    } else {
+        common.warningMsg("Apache server is not defined on controller nodes. Skipping Octavia WSGI workaround");
     }
 }
 
@@ -287,27 +299,80 @@ def wa33930_33931(String cluster_name) {
     def fixFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/${fixName}.yml"
     def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster\\.${cluster_name}\\.openstack\\.${fixName}\$' ${openstackControlFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
     if (! containsFix) {
-        def fixContext = [
-            'classes': [ 'service.nova.client', 'service.glance.client', 'service.neutron.client' ]
-        ]
+        def fixContext = [ 'classes': [ ] ]
+        def novaControllerNodes = salt.getMinions(venvPepper, 'I@nova:controller')
+        for (novaController in novaControllerNodes) {
+            def novaClientPillar = salt.getPillar(venvPepper, novaController, "nova:client").get("return")[0].values()[0]
+            if (novaClientPillar == '' || novaClientPillar == 'null' || novaClientPillar == null) {
+                fixContext['classes'] << 'service.nova.client'
+                break
+            }
+        }
+        def glanceServerNodes = salt.getMinions(venvPepper, 'I@glance:server')
+        for (glanceServer in glanceServerNodes) {
+            def glanceClientPillar = salt.getPillar(venvPepper, glanceServer, "glance:client").get("return")[0].values()[0]
+            if (glanceClientPillar == '' || glanceClientPillar == 'null' || glanceClientPillar == null) {
+                fixContext['classes'] << 'service.glance.client'
+                break
+            }
+        }
+        def neutronServerNodes = salt.getMinions(venvPepper, 'I@neutron:server')
+        for (neutronServer in neutronServerNodes) {
+            def neutronServerPillar = salt.getPillar(venvPepper, neutronServer, "neutron:client").get("return")[0].values()[0]
+            if (neutronServerPillar == '' || neutronServerPillar == 'null' || neutronServerPillar == null) {
+                fixContext['classes'] << 'service.neutron.client'
+                break
+            }
+        }
         if (salt.getMinions(venvPepper, 'I@manila:api:enabled')) {
-            fixContext['classes'] << 'service.manila.client'
+            def manilaApiNodes = salt.getMinions(venvPepper, 'I@manila:api')
+            for (manilaNode in manilaApiNodes) {
+                def manilaNodePillar = salt.getPillar(venvPepper, manilaNode, "manila:client").get("return")[0].values()[0]
+                if (manilaNodePillar == '' || manilaNodePillar == 'null' || manilaNodePillar == null) {
+                    fixContext['classes'] << 'service.manila.client'
+                    break
+                }
+            }
         }
         if (salt.getMinions(venvPepper, 'I@ironic:api:enabled')) {
-            fixContext['classes'] << 'service.ironic.client'
+            def ironicApiNodes = salt.getMinions(venvPepper, 'I@ironic:api')
+            for (ironicNode in ironicApiNodes) {
+                def ironicNodePillar = salt.getPillar(venvPepper, ironicNode, "ironic:client").get("return")[0].values()[0]
+                if (ironicNodePillar == '' || ironicNodePillar == 'null' || ironicNodePillar == null) {
+                    fixContext['classes'] << 'service.ironic.client'
+                    break
+                }
+            }
         }
         if (salt.getMinions(venvPepper, 'I@gnocchi:server:enabled')) {
-            fixContext['classes'] << 'service.gnocchi.client'
+            def gnocchiServerNodes = salt.getMinions(venvPepper, 'I@gnocchi:server')
+            for (gnocchiNode in gnocchiServerNodes) {
+                def gnocchiNodePillar = salt.getPillar(venvPepper, gnocchiNode, "gnocchi:client").get("return")[0].values()[0]
+                if (gnocchiNodePillar == '' || gnocchiNodePillar == 'null' || gnocchiNodePillar == null) {
+                    fixContext['classes'] << 'service.gnocchi.client'
+                    break
+                }
+            }
         }
+
         if (salt.getMinions(venvPepper, 'I@barbican:server:enabled')) {
-            fixContext['classes'] << 'service.barbican.client.single'
+            def barbicanServerNodes = salt.getMinions(venvPepper, 'I@barbican:server')
+            for (barbicanNode in barbicanServerNodes) {
+                def barbicanNodePillar = salt.getPillar(venvPepper, barbicanNode, "barbican:client").get("return")[0].values()[0]
+                if (barbicanNodePillar == '' || barbicanNodePillar == 'null' || barbicanNodePillar == null) {
+                    fixContext['classes'] << 'service.barbican.client.single'
+                    break
+                }
+            }
         }
-        def _tempFile = '/tmp/wa33930_33931' + UUID.randomUUID().toString().take(8)
-        writeYaml file: _tempFile , data: fixContext
-        def fixFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
-        salt.cmdRun(venvPepper, 'I@salt:master', "echo '${fixFileContent}' | base64 -d > ${fixFile}", false, null, false)
-        salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.${fixName}' ${openstackControlFile}")
-        salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
+        if (fixContext['classes'] != []) {
+            def _tempFile = '/tmp/wa33930_33931' + UUID.randomUUID().toString().take(8)
+            writeYaml file: _tempFile, data: fixContext
+            def fixFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+            salt.cmdRun(venvPepper, 'I@salt:master', "echo '${fixFileContent}' | base64 -d > ${fixFile}", false, null, false)
+            salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.${fixName}' ${openstackControlFile}")
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
+        }
     }
 }
 
@@ -498,11 +563,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             common.warningMsg("gitTargetMcpVersion has been changed to:${gitTargetMcpVersion}")
             def upgradeSaltStack = ''
             def updateClusterModel = ''
+            def applyWorkarounds = true
             def updatePipelines = ''
             def updateLocalRepos = ''
             def reclassSystemBranch = ''
             def reclassSystemBranchDefault = gitTargetMcpVersion
-            def batchSize = ''
             if (gitTargetMcpVersion ==~ /^\d\d\d\d\.\d\d?\.\d+$/) {
                 reclassSystemBranchDefault = "tags/${gitTargetMcpVersion}"
             } else if (gitTargetMcpVersion != 'proposed') {
@@ -524,6 +589,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 } else if (driveTrainParams.get('OS_UPGRADE', false).toBoolean() == true) {
                     packageUpgradeMode = 'upgrade'
                 }
+                applyWorkarounds = driveTrainParams.get('APPLY_MODEL_WORKAROUNDS', true).toBoolean()
             } else {
                 // backward compatibility for 2018.11.0
                 saltMastURL = env.getProperty('SALT_MASTER_URL')
@@ -545,7 +611,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // 'SaltReqTimeoutError: Message timed out' issue on Salt targets for large amount of nodes
                 // do not use toDouble/Double as it requires additional approved method
                 def workerThreads = getWorkerThreads(venvPepper).toInteger()
-                batch_size = (workerThreads * 2 / 3).toString().tokenize('.')[0]
+                batchSize = (workerThreads * 2 / 3).toString().tokenize('.')[0]
             }
             def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
 
@@ -610,8 +676,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                             "grep -r --exclude-dir=aptly -l 'jenkins_security_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|jenkins_security_ldap_server: .*|jenkins_security_ldap_server: \"ldaps://${jenkinsldapURI}\"|g'")
                     }
 
-                    wa32284(cluster_name)
-                    wa34245(cluster_name)
+                    if (applyWorkarounds) {
+                        wa32284(cluster_name)
+                        wa34245(cluster_name)
+                    }
 
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add kubernetes-extra repo
@@ -641,11 +709,13 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                             }
                         }
                     }
-                    wa32182(cluster_name)
-                    wa33771(cluster_name)
-                    wa33867(cluster_name)
-                    wa33930_33931(cluster_name)
-                    wa34528(cluster_name)
+                    if (applyWorkarounds) {
+                        wa32182(cluster_name)
+                        wa33771(cluster_name)
+                        wa33867(cluster_name)
+                        wa33930_33931(cluster_name)
+                        wa34528(cluster_name)
+                    }
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
@@ -674,9 +744,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     common.warningMsg('Failed to update Salt Formulas repos/packages. Check current available documentation on https://docs.mirantis.com/mcp/latest/, how to update packages.')
                     input message: 'Continue anyway?'
                 }
-
-                wa29352(cluster_name)
-                wa29155(computeMinions, cluster_name)
+                if (applyWorkarounds) {
+                    wa29352(cluster_name)
+                    wa29155(computeMinions, cluster_name)
+                }
 
                 try {
                     common.infoMsg('Perform: UPDATE Reclass package')
@@ -774,6 +845,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 // update minions certs
                 salt.enforceState(venvPepper, "I@salt:minion", 'salt.minion.cert', true, true, batchSize)
 
+                // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
+                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion', true, true, batchSize, false, 60, 2)
                 // Retry needed only for rare race-condition in user appearance
                 common.infoMsg('Perform: updating users and keys')
                 salt.enforceState(venvPepper, "I@linux:system", 'linux.system.user', true, true, batchSize)
