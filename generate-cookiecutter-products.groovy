@@ -22,6 +22,7 @@ gerritCredentials = env.getProperty('CREDENTIALS_ID') ?: 'gerrit'
 runTestModel = (env.getProperty('TEST_MODEL') ?: true).toBoolean()
 distribRevision = 'proposed'
 gitGuessedVersion = false
+aptlyServerHostname = ''
 
 def GenerateModelToxDocker(Map params) {
     def ccRoot = params['ccRoot']
@@ -386,7 +387,7 @@ timeout(time: 1, unit: 'HOURS') {
                 archiveArtifacts artifacts: "output-${context['cluster_name']}/${context['salt_master_hostname']}.${context['cluster_domain']}-config.iso"
 
                 if (context['local_repositories'] == 'True') {
-                    def aptlyServerHostname = context.aptly_server_hostname
+                    aptlyServerHostname = context.aptly_server_hostname
                     sh "[ -f mcp-common-scripts/config-drive/mirror_config.yaml ] && cp mcp-common-scripts/config-drive/mirror_config.yaml mirror_config || cp mcp-common-scripts/config-drive/mirror_config.sh mirror_config"
 
                     def smc_apt = [:]
