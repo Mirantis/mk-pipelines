@@ -897,6 +897,7 @@ def verifyCephOsds(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
     def targetHosts = salt.getMinionsSorted(pepperEnv, target)
+    def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
     for (t in targetHosts) {
         def osd_ids = []
         // get list of osd disks of the host
@@ -906,7 +907,7 @@ def verifyCephOsds(pepperEnv, target) {
             throw new Exception("Ceph salt grain cannot be found!")
         }
         common.print(cephGrain)
-        def ceph_disks = cephGrain['return'][0].values()[0].values()[0]['ceph_disk']
+        def ceph_disks = cephGrain['return'][0].values()[0].values()[0][device_grain_name]
         for (i in ceph_disks) {
             def osd_id = i.getKey().toString()
             osd_ids.add('osd.' + osd_id)

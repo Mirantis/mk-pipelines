@@ -47,14 +47,13 @@ node (SLAVE_NODE) {
         withEnv(env_vars) {
             stage('Initialization') {
                 def container_workdir = '/var/lib'
-                def workdir = "${container_workdir}/${test_suite_name}"
                 def tests_set = (env.getProperty('tests_set')) ?: ''
                 def script = "pytest --junitxml ${container_workdir}/${artifacts_dir}/${xml_file} -vv ${tests_set}"
 
                 sh "mkdir -p ${artifacts_dir}"
 
                 // Enrichment for docker commands
-                def commands = EXTRA_PARAMS.get("commands") ?: ['010_start_tests': "cd ${workdir} && with_venv.sh ${script}"]
+                def commands = EXTRA_PARAMS.get("commands") ?: ['010_start_tests': "tox -e ${test_suite_name} -- ${script}"]
                 def commands_list = commands.collectEntries{ [ (it.key) : { sh("${it.value}") } ] }
 
                 // Enrichment for env variables
@@ -120,6 +119,18 @@ node (SLAVE_NODE) {
                         nodeType: 'NODESET',
                         url: '',
                         xpath: '/testsuite/testcase[@classname="tests.test_vm2vm"]/properties/property']]
+                }
+                try {
+                    sh """
+                        for i in ${artifacts_dir}/*.xml; do
+                            grep 'failures="0"' \$i
+                            grep 'errors="0"' \$i
+                        done
+                    """
+                } catch(err) {
+                    currentBuild.result = "FAILURE"
+                    common.errorMsg("[ERROR] Failures or errors is not zero in ${artifacts_dir}/*.xml")
+                    throw err
                 }
             }
         }

@@ -128,7 +128,7 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 // Make sure that dedicated opencontrail user is created
-                salt.enforceState(pepperEnv, 'I@keystone:server:role:primary', 'keystone.client.server')
+                salt.enforceState(pepperEnv, 'I@keystone:server:role:primary', 'keystone.client.resources.v3')
 
                 try {
                     controllerImage = getValueForPillarKey(pepperEnv, "I@opencontrail:control:role:primary", "docker:client:compose:opencontrail:service:controller:image")

@@ -13,6 +13,9 @@
  *     UPDATE_CLUSTER_MODEL       Update MCP version parameter in cluster model
  *     UPDATE_PIPELINES           Update pipeline repositories on Gerrit
  *     UPDATE_LOCAL_REPOS         Update local repositories
+ *     OS_UPGRADE                 Run apt-get upgrade on Drivetrain nodes
+ *     OS_DIST_UPGRADE            Run apt-get dist-upgrade on Drivetrain nodes and reboot to apply changes
+ *     APPLY_MODEL_WORKAROUNDS    Whether to apply cluster model workarounds from the pipeline
  */
 
 salt = new com.mirantis.mk.Salt()
@@ -24,6 +27,8 @@ venvPepper = "venvPepper"
 workspace = ""
 def saltMastURL = ''
 def saltMastCreds = ''
+def packageUpgradeMode = ''
+batchSize = ''
 
 def triggerMirrorJob(String jobName, String reclassSystemBranch) {
     params = jenkinsUtils.getJobParameters(jobName)
@@ -89,7 +94,7 @@ def wa29352(String cname) {
     def wa29352SecretsFile = "/srv/salt/reclass/classes/cluster/${cname}/infra/secrets.yml"
     def _tempFile = '/tmp/wa29352_' + UUID.randomUUID().toString().take(8)
     try {
-        salt.cmdRun(venvPepper, 'I@salt:master', "grep -qiv root_private_key ${wa29352SecretsFile}", true, null, false)
+        salt.cmdRun(venvPepper, 'I@salt:master', "! grep -qi root_private_key: ${wa29352SecretsFile}", true, null, false)
         salt.cmdRun(venvPepper, 'I@salt:master', "test ! -f ${wa29352File}", true, null, false)
     }
     catch (Exception ex) {
@@ -130,16 +135,25 @@ def wa29352(String cname) {
 def wa29155(ArrayList saltMinions, String cname) {
     // WA for PROD-29155. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/
     // CHeck for existence cmp nodes, and try to render it. Is failed, apply ssh-key wa
-    def ret = ''
     def patched = false
     def wa29155ClassName = 'cluster.' + cname + '.infra.secrets_nova_wa29155'
     def wa29155File = "/srv/salt/reclass/classes/cluster/${cname}/infra/secrets_nova_wa29155.yml"
 
     try {
         salt.cmdRun(venvPepper, 'I@salt:master', "test ! -f ${wa29155File}", true, null, false)
+        def patch_required = false
+        for (String minion in saltMinions) {
+            def nova_key = salt.getPillar(venvPepper, minion, '_param:nova_compute_ssh_private').get("return")[0].values()[0]
+            if (nova_key == '' || nova_key == 'null' || nova_key == null) {
+                patch_required = true
+                break // no exception, proceeding to apply the patch
+            }
+        }
+        if (!patch_required) {
+            error('No need to apply work-around for PROD-29155')
+        }
     }
     catch (Exception ex) {
-        common.infoMsg('Work-around for PROD-29155 already apply, nothing todo')
         return
     }
     salt.fullRefresh(venvPepper, 'I@salt:master')
@@ -150,12 +164,7 @@ def wa29155(ArrayList saltMinions, String cname) {
         } catch (Exception e) {
             common.errorMsg(e.toString())
             if (patched) {
-                error("Node: ${minion} failed to render after reclass-system upgrade!WA29155 probably didn't help.")
-            }
-            // check, that failed exactly by our case,  by key-length check.
-            def missed_key = salt.getPillar(venvPepper, minion, '_param:nova_compute_ssh_private').get("return")[0].values()[0]
-            if (missed_key != '') {
-                error("Node: ${minion} failed to render after reclass-system upgrade!")
+                error("Node: ${minion} failed to render after reclass-system upgrade! WA29155 probably didn't help.")
             }
             common.warningMsg('Perform: Attempt to apply WA for PROD-29155\n' +
                 'See https://gerrit.mcp.mirantis.com/#/c/37932/ for more info')
@@ -198,22 +207,23 @@ def wa29155(ArrayList saltMinions, String cname) {
 
 }
 
-def wa32284(String clusterName) {
+def wa32284(String cluster_name) {
     def clientGluster = salt.getPillar(venvPepper, 'I@salt:master', "glusterfs:client:enabled").get("return")[0].values()[0]
     def pkiGluster = salt.getPillar(venvPepper, 'I@salt:master', "glusterfs:client:volumes:salt_pki").get("return")[0].values()[0]
     def nginxEnabledAtMaster = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:enabled').get('return')[0].values()[0]
     if (nginxEnabledAtMaster.toString().toLowerCase() == 'true' && clientGluster.toString().toLowerCase() == 'true' && pkiGluster) {
         def nginxRequires = salt.getPillar(venvPepper, 'I@salt:master', 'nginx:server:wait_for_service').get('return')[0].values()[0]
         if (nginxRequires.isEmpty()) {
-            def nginxRequiresClassName = "cluster.${clusterName}.infra.config.nginx_requires_wa32284"
-            def nginxRequiresClassFile = "/srv/salt/reclass/classes/cluster/${clusterName}/infra/config/nginx_requires_wa32284.yml"
+            def nginxRequiresClassName = "cluster.${cluster_name}.infra.config.nginx_requires_wa32284"
+            def nginxRequiresClassFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/infra/config/nginx_requires_wa32284.yml"
             def nginxRequiresBlock = ['parameters': ['nginx': ['server': ['wait_for_service': ['srv-salt-pki.mount'] ] ] ] ]
             def _tempFile = '/tmp/wa32284_' + UUID.randomUUID().toString().take(8)
             writeYaml file: _tempFile , data: nginxRequiresBlock
             def nginxRequiresBlockString = sh(script: "cat ${_tempFile}", returnStdout: true).trim()
-            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${clusterName} && " +
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && " +
                 "sed -i '/^parameters:/i - ${nginxRequiresClassName}' infra/config/init.yml")
             salt.cmdRun(venvPepper, 'I@salt:master', "echo '${nginxRequiresBlockString}'  > ${nginxRequiresClassFile}", false, null, false)
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${nginxRequiresClassFile}")
         }
     }
 }
@@ -229,16 +239,17 @@ def wa32182(String cluster_name) {
         if (salt.testTarget(venvPepper, "I@kubernetes:master")) {
             contrailFiles.add('kubernetes/compute.yml')
         }
-        for(String contrailFile in contrailFiles) {
+        for (String contrailFile in contrailFiles) {
             contrailFile = "${clusterModelPath}/${contrailFile}"
             def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster\\.${cluster_name}\\.opencontrail\\.common(_wa32182)?\$' ${contrailFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
             if (containsFix) {
                 continue
             } else {
                 salt.cmdRun(venvPepper, 'I@salt:master', "grep -q -E '^parameters:' ${contrailFile} && sed -i '/^parameters:/i - cluster.${cluster_name}.opencontrail.common_wa32182' ${contrailFile} || " +
-                    "echo '- cluster.${cluster_name}.opencontrail.common_wa32182' >> ${contrailFile}")
+                        "echo '- cluster.${cluster_name}.opencontrail.common_wa32182' >> ${contrailFile}")
             }
         }
+        salt.cmdRun(venvPepper, 'I@salt:master', "test -f ${fixFile} && cd ${clusterModelPath} && git status && git add ${fixFile} || true")
     }
 }
 
@@ -254,23 +265,31 @@ def wa33867(String cluster_name) {
 }
 
 def wa33771(String cluster_name) {
-    def octaviaEnabled = salt.getMinions(venvPepper, 'I@octavia:api:enabled')
-    def octaviaWSGI = salt.getMinions(venvPepper, 'I@apache:server:site:octavia_api')
-    if (octaviaEnabled && ! octaviaWSGI) {
-        def openstackControl = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/control.yml"
-        def octaviaFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/octavia_wa33771.yml"
-        def octaviaContext = [
-            'classes': [ 'system.apache.server.site.octavia' ],
-            'parameters': [
-                '_param': [ 'apache_octavia_api_address' : '${_param:cluster_local_address}' ],
-                'apache': [ 'server': [ 'site': [ 'apache_proxy_openstack_api_octavia': [ 'enabled': false ] ] ] ]
+    if (salt.getMinions(venvPepper, 'I@_param:openstack_node_role and I@apache:server')) {
+        def octaviaEnabled = salt.getMinions(venvPepper, 'I@octavia:api:enabled')
+        def octaviaWSGI = salt.getMinions(venvPepper, 'I@apache:server:site:octavia_api')
+        if (octaviaEnabled && !octaviaWSGI) {
+            def openstackControl = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/control.yml"
+            def octaviaFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/octavia_wa33771.yml"
+            def octaviaContext = [
+                    'classes'   : ['system.apache.server.site.octavia'],
+                    'parameters': [
+                            '_param': ['apache_octavia_api_address': '${_param:cluster_local_address}'],
+                    ]
             ]
-        ]
-        def _tempFile = '/tmp/wa33771' + UUID.randomUUID().toString().take(8)
-        writeYaml file: _tempFile , data: octaviaContext
-        def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
-        salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.octavia_wa33771' ${openstackControl}")
-        salt.cmdRun(venvPepper, 'I@salt:master', "echo '${octaviaFileContent}' | base64 -d > ${octaviaFile}", false, null, false)
+            def openstackHTTPSEnabled = salt.getPillar(venvPepper, 'I@salt:master', "_param:cluster_internal_protocol").get("return")[0].values()[0]
+            if (openstackHTTPSEnabled == 'https') {
+                octaviaContext['parameters'] << ['apache': ['server': ['site': ['apache_proxy_openstack_api_octavia': ['enabled': false]]]]]
+            }
+            def _tempFile = '/tmp/wa33771' + UUID.randomUUID().toString().take(8)
+            writeYaml file: _tempFile, data: octaviaContext
+            def octaviaFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+            salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.octavia_wa33771' ${openstackControl}")
+            salt.cmdRun(venvPepper, 'I@salt:master', "echo '${octaviaFileContent}' | base64 -d > ${octaviaFile}", false, null, false)
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${octaviaFile}")
+        }
+    } else {
+        common.warningMsg("Apache server is not defined on controller nodes. Skipping Octavia WSGI workaround");
     }
 }
 
@@ -280,26 +299,186 @@ def wa33930_33931(String cluster_name) {
     def fixFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/${fixName}.yml"
     def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster\\.${cluster_name}\\.openstack\\.${fixName}\$' ${openstackControlFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
     if (! containsFix) {
-        def fixContext = [
-            'classes': [ 'service.nova.client', 'service.glance.client', 'service.neutron.client' ]
-        ]
+        def fixContext = [ 'classes': [ ] ]
+        def novaControllerNodes = salt.getMinions(venvPepper, 'I@nova:controller')
+        for (novaController in novaControllerNodes) {
+            def novaClientPillar = salt.getPillar(venvPepper, novaController, "nova:client").get("return")[0].values()[0]
+            if (novaClientPillar == '' || novaClientPillar == 'null' || novaClientPillar == null) {
+                fixContext['classes'] << 'service.nova.client'
+                break
+            }
+        }
+        def glanceServerNodes = salt.getMinions(venvPepper, 'I@glance:server')
+        for (glanceServer in glanceServerNodes) {
+            def glanceClientPillar = salt.getPillar(venvPepper, glanceServer, "glance:client").get("return")[0].values()[0]
+            if (glanceClientPillar == '' || glanceClientPillar == 'null' || glanceClientPillar == null) {
+                fixContext['classes'] << 'service.glance.client'
+                break
+            }
+        }
+        def neutronServerNodes = salt.getMinions(venvPepper, 'I@neutron:server')
+        for (neutronServer in neutronServerNodes) {
+            def neutronServerPillar = salt.getPillar(venvPepper, neutronServer, "neutron:client").get("return")[0].values()[0]
+            if (neutronServerPillar == '' || neutronServerPillar == 'null' || neutronServerPillar == null) {
+                fixContext['classes'] << 'service.neutron.client'
+                break
+            }
+        }
         if (salt.getMinions(venvPepper, 'I@manila:api:enabled')) {
-            fixContext['classes'] << 'service.manila.client'
+            def manilaApiNodes = salt.getMinions(venvPepper, 'I@manila:api')
+            for (manilaNode in manilaApiNodes) {
+                def manilaNodePillar = salt.getPillar(venvPepper, manilaNode, "manila:client").get("return")[0].values()[0]
+                if (manilaNodePillar == '' || manilaNodePillar == 'null' || manilaNodePillar == null) {
+                    fixContext['classes'] << 'service.manila.client'
+                    break
+                }
+            }
         }
         if (salt.getMinions(venvPepper, 'I@ironic:api:enabled')) {
-            fixContext['classes'] << 'service.ironic.client'
+            def ironicApiNodes = salt.getMinions(venvPepper, 'I@ironic:api')
+            for (ironicNode in ironicApiNodes) {
+                def ironicNodePillar = salt.getPillar(venvPepper, ironicNode, "ironic:client").get("return")[0].values()[0]
+                if (ironicNodePillar == '' || ironicNodePillar == 'null' || ironicNodePillar == null) {
+                    fixContext['classes'] << 'service.ironic.client'
+                    break
+                }
+            }
         }
         if (salt.getMinions(venvPepper, 'I@gnocchi:server:enabled')) {
-            fixContext['classes'] << 'service.gnocchi.client'
+            def gnocchiServerNodes = salt.getMinions(venvPepper, 'I@gnocchi:server')
+            for (gnocchiNode in gnocchiServerNodes) {
+                def gnocchiNodePillar = salt.getPillar(venvPepper, gnocchiNode, "gnocchi:client").get("return")[0].values()[0]
+                if (gnocchiNodePillar == '' || gnocchiNodePillar == 'null' || gnocchiNodePillar == null) {
+                    fixContext['classes'] << 'service.gnocchi.client'
+                    break
+                }
+            }
         }
+
         if (salt.getMinions(venvPepper, 'I@barbican:server:enabled')) {
-            fixContext['classes'] << 'service.barbican.client.single'
+            def barbicanServerNodes = salt.getMinions(venvPepper, 'I@barbican:server')
+            for (barbicanNode in barbicanServerNodes) {
+                def barbicanNodePillar = salt.getPillar(venvPepper, barbicanNode, "barbican:client").get("return")[0].values()[0]
+                if (barbicanNodePillar == '' || barbicanNodePillar == 'null' || barbicanNodePillar == null) {
+                    fixContext['classes'] << 'service.barbican.client.single'
+                    break
+                }
+            }
         }
-        def _tempFile = '/tmp/wa33930_33931' + UUID.randomUUID().toString().take(8)
-        writeYaml file: _tempFile , data: fixContext
-        def fixFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
-        salt.cmdRun(venvPepper, 'I@salt:master', "echo '${fixFileContent}' | base64 -d > ${fixFile}", false, null, false)
-        salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.${fixName}' ${openstackControlFile}")
+        if (fixContext['classes'] != []) {
+            def _tempFile = '/tmp/wa33930_33931' + UUID.randomUUID().toString().take(8)
+            writeYaml file: _tempFile, data: fixContext
+            def fixFileContent = sh(script: "cat ${_tempFile} | base64", returnStdout: true).trim()
+            salt.cmdRun(venvPepper, 'I@salt:master', "echo '${fixFileContent}' | base64 -d > ${fixFile}", false, null, false)
+            salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.${fixName}' ${openstackControlFile}")
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
+        }
+    }
+}
+
+def wa34245(cluster_name) {
+    def infraInitFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/infra/init.yml"
+    def fixName = 'hosts_wa34245'
+    def fixFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/infra/${fixName}.yml"
+    if (salt.testTarget(venvPepper, 'I@keystone:server')) {
+        def fixApplied = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- cluster.${cluster_name}.infra.${fixName}\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+        if (!fixApplied) {
+            def fixFileContent = []
+            def containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.linux\\.network\\.hosts\\.openstack\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+            if (!containsFix) {
+                fixFileContent << '- system.linux.network.hosts.openstack'
+            }
+            if (salt.testTarget(venvPepper, 'I@gnocchi:server')) {
+                containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.linux\\.network\\.hosts\\.openstack\\.telemetry\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if (!containsFix) {
+                    fixFileContent << '- system.linux.network.hosts.openstack.telemetry'
+                }
+            }
+            if (salt.testTarget(venvPepper, 'I@manila:api')) {
+                containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.linux\\.network\\.hosts\\.openstack\\.share\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if (!containsFix) {
+                    fixFileContent << '- system.linux.network.hosts.openstack.share'
+                }
+            }
+            if (salt.testTarget(venvPepper, 'I@barbican:server')) {
+                containsFix = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.linux\\.network\\.hosts\\.openstack\\.kmn\$' ${infraInitFile}", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if (!containsFix) {
+                    fixFileContent << '- system.linux.network.hosts.openstack.kmn'
+                }
+            }
+            if (fixFileContent) {
+                salt.cmdRun(venvPepper, 'I@salt:master', "echo 'classes:\n${fixFileContent.join('\n')}' > ${fixFile}")
+                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.infra.${fixName}' ${infraInitFile}")
+                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
+            }
+        }
+    }
+}
+
+def wa34528(String cluster_name) {
+    // Mysql users have to be defined on each Galera node
+    if(salt.getMinions(venvPepper, 'I@galera:master').isEmpty()) {
+        common.errorMsg('No Galera master found in cluster. Skipping')
+        return
+    }
+    def mysqlUsersMasterPillar = salt.getPillar(venvPepper, 'I@galera:master', 'mysql:server:database').get("return")[0].values()[0]
+    if (mysqlUsersMasterPillar == '' || mysqlUsersMasterPillar == 'null' || mysqlUsersMasterPillar == null) {
+        common.errorMsg('Pillar data is broken for Galera master node!')
+        input message: 'Do you want to ignore and continue without Galera pillar patch?'
+        return
+    }
+    def fileToPatch = salt.cmdRun(venvPepper, 'I@salt:master', "ls /srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/init.yml || " +
+            "ls /srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/slave.yml || echo 'File not found'", true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+    if (fileToPatch == 'File not found') {
+        common.errorMsg('Cluster model is old and cannot be patched for PROD-34528. Patching is possible for 2019.2.x cluster models only')
+        return
+    }
+    def patchRequired = false
+    def mysqlUsersSlavePillar = ''
+    def galeraSlaveNodes = salt.getMinions(venvPepper, 'I@galera:slave')
+    if (!galeraSlaveNodes.isEmpty()) {
+        for (galeraSlave in galeraSlaveNodes) {
+            mysqlUsersSlavePillar = salt.getPillar(venvPepper, galeraSlave, 'mysql:server:database').get("return")[0].values()[0]
+            if (mysqlUsersSlavePillar == '' || mysqlUsersSlavePillar == 'null' || mysqlUsersSlavePillar == null) {
+                common.errorMsg('Mysql users data is not defined for Galera slave nodes. Fixing...')
+                patchRequired = true
+                break
+            }
+        }
+        if (patchRequired) {
+            def fixFileContent = []
+            def fixName = 'db_wa34528'
+            def fixFile = "/srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/${fixName}.yml"
+            for (dbName in mysqlUsersMasterPillar.keySet()) {
+                def classIncluded = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.galera\\.server\\.database\\.${dbName}\$'" +
+                        " /srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/master.yml", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if(classIncluded) {
+                    fixFileContent << "- system.galera.server.database.${dbName}"
+                }
+                def sslClassIncluded = salt.cmdRun(venvPepper, 'I@salt:master', "grep -E '^- system\\.galera\\.server\\.database\\.x509\\.${dbName}\$'" +
+                        " /srv/salt/reclass/classes/cluster/${cluster_name}/openstack/database/master.yml", false, null, true).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+                if(sslClassIncluded) {
+                    fixFileContent << "- system.galera.server.database.x509.${dbName}"
+                }
+            }
+            if (fixFileContent) {
+                salt.cmdRun(venvPepper, 'I@salt:master', "echo 'classes:\n${fixFileContent.join('\n')}' > ${fixFile}")
+                salt.cmdRun(venvPepper, 'I@salt:master', "sed -i '/^parameters:/i - cluster.${cluster_name}.openstack.database.${fixName}' ${fileToPatch}")
+            }
+            salt.fullRefresh(venvPepper, 'I@galera:slave')
+            // Verify
+            for (galeraSlave in galeraSlaveNodes) {
+                mysqlUsersSlavePillar = salt.getPillar(venvPepper, galeraSlave, 'mysql:server:database').get("return")[0].values()[0]
+                if (mysqlUsersSlavePillar == '' || mysqlUsersSlavePillar == 'null' || mysqlUsersSlavePillar == null || mysqlUsersSlavePillar.keySet() != mysqlUsersMasterPillar.keySet()) {
+                    common.errorMsg("Mysql user data is different on master and slave node ${galeraSlave}.")
+                    input message: 'Do you want to ignore and continue?'
+                }
+            }
+            salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${fixFile}")
+            common.infoMsg('Galera slaves patching is done')
+        } else {
+            common.infoMsg('Galera slaves patching is not required')
+        }
     }
 }
 
@@ -353,6 +532,18 @@ def checkDebsums() {
     }
 }
 
+def checkCICDDocker() {
+    common.infoMsg('Perform: Checking if Docker containers are up')
+    try {
+        common.retry(10, 30) {
+            salt.cmdRun(venvPepper, 'I@jenkins:client and I@docker:client', "! docker service ls | tail -n +2 | grep -v -E '\\s([0-9])/\\1\\s'")
+        }
+    }
+    catch (Exception ex) {
+        error("Docker containers for CI/CD services are having troubles with starting.")
+    }
+}
+
 if (common.validInputParam('PIPELINE_TIMEOUT')) {
     try {
         pipelineTimeout = env.PIPELINE_TIMEOUT.toInteger()
@@ -391,11 +582,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             common.warningMsg("gitTargetMcpVersion has been changed to:${gitTargetMcpVersion}")
             def upgradeSaltStack = ''
             def updateClusterModel = ''
+            def applyWorkarounds = true
             def updatePipelines = ''
             def updateLocalRepos = ''
             def reclassSystemBranch = ''
             def reclassSystemBranchDefault = gitTargetMcpVersion
-            def batchSize = ''
             if (gitTargetMcpVersion ==~ /^\d\d\d\d\.\d\d?\.\d+$/) {
                 reclassSystemBranchDefault = "tags/${gitTargetMcpVersion}"
             } else if (gitTargetMcpVersion != 'proposed') {
@@ -412,6 +603,12 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 updateLocalRepos = driveTrainParams.get('UPDATE_LOCAL_REPOS', false).toBoolean()
                 reclassSystemBranch = driveTrainParams.get('RECLASS_SYSTEM_BRANCH', reclassSystemBranchDefault)
                 batchSize = driveTrainParams.get('BATCH_SIZE', '')
+                if (driveTrainParams.get('OS_DIST_UPGRADE', false).toBoolean() == true) {
+                    packageUpgradeMode = 'dist-upgrade'
+                } else if (driveTrainParams.get('OS_UPGRADE', false).toBoolean() == true) {
+                    packageUpgradeMode = 'upgrade'
+                }
+                applyWorkarounds = driveTrainParams.get('APPLY_MODEL_WORKAROUNDS', true).toBoolean()
             } else {
                 // backward compatibility for 2018.11.0
                 saltMastURL = env.getProperty('SALT_MASTER_URL')
@@ -429,7 +626,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 error('Pillar data is broken for Salt master node! Please check it manually and re-run pipeline.')
             }
             if (!batchSize) {
-                batchSize = getWorkerThreads(venvPepper)
+                // if no batch size provided get current worker threads and set batch size to 2/3 of it to avoid
+                // 'SaltReqTimeoutError: Message timed out' issue on Salt targets for large amount of nodes
+                // do not use toDouble/Double as it requires additional approved method
+                def workerThreads = getWorkerThreads(venvPepper).toInteger()
+                batchSize = (workerThreads * 2 / 3).toString().tokenize('.')[0]
             }
             def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
 
@@ -452,7 +653,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 if (updateClusterModel) {
                     common.infoMsg('Perform: UPDATE_CLUSTER_MODEL')
                     def dateTime = common.getDatetime()
-                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/ && git submodule foreach git fetch")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git fetch")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'mcp_version: .*' * | xargs --no-run-if-empty sed -i 's|mcp_version: .*|mcp_version: \"$targetMcpVersion\"|g'")
                     // Do the same, for deprecated variable-duplicate
@@ -495,7 +696,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                             "grep -r --exclude-dir=aptly -l 'jenkins_security_ldap_server: .*' * | xargs --no-run-if-empty sed -i 's|jenkins_security_ldap_server: .*|jenkins_security_ldap_server: \"ldaps://${jenkinsldapURI}\"|g'")
                     }
 
-                    wa32284(cluster_name)
+                    if (applyWorkarounds) {
+                        wa32284(cluster_name)
+                        wa34245(cluster_name)
+                    }
 
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout ${reclassSystemBranch}")
                     // Add kubernetes-extra repo
@@ -525,10 +729,13 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                             }
                         }
                     }
-                    wa32182(cluster_name)
-                    wa33771(cluster_name)
-                    wa33867(cluster_name)
-                    wa33930_33931(cluster_name)
+                    if (applyWorkarounds) {
+                        wa32182(cluster_name)
+                        wa33771(cluster_name)
+                        wa33867(cluster_name)
+                        wa33930_33931(cluster_name)
+                        wa34528(cluster_name)
+                    }
                     // Add new defaults
                     common.infoMsg("Add new defaults")
                     salt.cmdRun(venvPepper, 'I@salt:master', "grep '^    mcp_version: ' /srv/salt/reclass/classes/cluster/$cluster_name/infra/init.yml || " +
@@ -557,9 +764,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     common.warningMsg('Failed to update Salt Formulas repos/packages. Check current available documentation on https://docs.mirantis.com/mcp/latest/, how to update packages.')
                     input message: 'Continue anyway?'
                 }
-
-                wa29352(cluster_name)
-                wa29155(computeMinions, cluster_name)
+                if (applyWorkarounds) {
+                    wa29352(cluster_name)
+                    wa29155(computeMinions, cluster_name)
+                }
 
                 try {
                     common.infoMsg('Perform: UPDATE Reclass package')
@@ -662,7 +870,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion.cert', true, true, batchSize, false, 60, 2)
 
                 // run `salt.minion` to refresh all minion configs (for example _keystone.conf)
-                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion', true, true, null, false, 60, 2)
+                salt.enforceState(venvPepper, 'I@salt:minion', 'salt.minion', true, true, batchSize, false, 60, 2)
                 // Retry needed only for rare race-condition in user appearance
                 common.infoMsg('Perform: updating users and keys')
                 salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.user', true, true, batchSize, false, 60, 2)
@@ -680,6 +888,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 def wrongPluginJarName = "${gerritGlusterPath}/plugins/project-download-commands.jar"
                 salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName} || true")
 
+                salt.enforceStateWithTest(venvPepper, 'I@jenkins:client and I@docker:client:images and not I@salt:master', 'docker.client.images', "", true, true, null, true, 60, 2)
                 salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
             }
         }
@@ -692,19 +901,12 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
     // docker.client state may trigger change of jenkins master or jenkins slave services,
     // so we need wait for slave to reconnect and continue pipeline
     sleep(180)
+    def cidNodes = []
     node('python') {
         try {
             stage('Update Drivetrain: Phase 2') {
                 python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
-                common.infoMsg('Perform: Checking if Docker containers are up')
-                try {
-                    common.retry(20, 30) {
-                        salt.cmdRun(venvPepper, 'I@jenkins:client and I@docker:client', "! docker service ls | tail -n +2 | grep -v -E '\\s([0-9])/\\1\\s'")
-                    }
-                }
-                catch (Exception ex) {
-                    error("Docker containers for CI/CD services are having troubles with starting.")
-                }
+                checkCICDDocker()
 
                 // Apply changes for HaProxy on CI/CD nodes
                 salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
@@ -716,11 +918,41 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.enforceState(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit', 'nginx.server', true, true, null, false, 60, 2)
                 }
             }
+            if (packageUpgradeMode) {
+                cidNodes = salt.getMinions(venvPepper, 'I@_param:drivetrain_role:cicd')
+            }
         }
         catch (Throwable e) {
             // If there was an error or exception thrown, the build failed
             currentBuild.result = "FAILURE"
             throw e
+        }
+    }
+
+    stage('Upgrade OS') {
+        if (packageUpgradeMode) {
+            def debian = new com.mirantis.mk.Debian()
+            def statusFile = '/tmp/rebooted_during_upgrade'
+            for(cidNode in cidNodes) {
+                node('python') {
+                    python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
+                    // cmd.run async to prevent connection close in case of slave shutdown, give 5 seconds to handle request response
+                    salt.cmdRun(venvPepper, "I@salt:master", "salt -C '${cidNode}' cmd.run 'sleep 5; touch ${statusFile}; salt-call service.stop docker' --async")
+                }
+                sleep(30)
+                node('python') {
+                    python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
+                    debian.osUpgradeNode(venvPepper, cidNode, packageUpgradeMode, false, 60)
+                    salt.checkTargetMinionsReady(['saltId': venvPepper, 'target': cidNode, wait: 60, timeout: 10])
+                    if (salt.runSaltProcessStep(venvPepper, cidNode, 'file.file_exists', [statusFile], null, true, 5)['return'][0].values()[0].toBoolean()) {
+                        salt.cmdRun(venvPepper, "I@salt:master", "salt -C '${cidNode}' cmd.run 'rm ${statusFile} && salt-call service.start docker'") // in case if node was not rebooted
+                        sleep(10)
+                    }
+                    checkCICDDocker()
+                }
+            }
+        } else {
+            common.infoMsg('Upgrade OS skipped...')
         }
     }
 }

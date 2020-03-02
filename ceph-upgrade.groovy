@@ -112,8 +112,9 @@ def upgrade(master, target) {
             // restart services
             stage("Restart ${target} services on ${minion}") {
                 if (target == 'osd') {
-                    def osds = salt.getGrain(master, "${minion}", 'ceph:ceph_disk').values()[0]
-                    osds[0].values()[0].values()[0].each { osd, param ->
+                    def device_grain_name =  salt.getPillar(master,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
+                    def ceph_disks = salt.getGrain(master, minion, 'ceph')['return'][0].values()[0].values()[0][device_grain_name]
+                    ceph_disks.each { osd, param ->
                         salt.cmdRun(master, "${minion}", "systemctl restart ceph-${target}@${osd}")
                         ceph.waitForHealthy(master, ADMIN_HOST, flags)
                     }
@@ -186,11 +187,18 @@ timeout(time: 12, unit: 'HOURS') {
                 for (flag in flags) {
                     salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd set ' + flag)
                 }
+                if (ORIGIN_RELEASE == 'jewel') {
+                    salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd set sortbitwise')
+                }
             }
         }
 
         if (STAGE_UPGRADE_MON.toBoolean() == true) {
             upgrade(pepperEnv, 'mon')
+
+            if (TARGET_RELEASE == 'nautilus' ) {
+                salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph mon enable-msgr2")
+            }
         }
 
         if (STAGE_UPGRADE_MGR.toBoolean() == true) {
@@ -217,7 +225,6 @@ timeout(time: 12, unit: 'HOURS') {
                         common.infoMsg('Removing flag ' + flag)
                         salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd unset ' + flag)
                     }
-
                 }
             }
         }
