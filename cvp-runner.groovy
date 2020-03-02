@@ -100,7 +100,7 @@ node (SLAVE_NODE) {
                         file: "${artifacts_dir}/${xml_file}",
                         nodeType: 'NODESET',
                         url: '',
-                        xpath: '/testsuite/testcase[@classname="tests.test_glance"]/properties/property']]
+                        xpath: '/testsuites/testsuite/testcase[@classname="tests.test_glance"]/properties/property']]
                     plot csvFileName: 'plot-hw2hw.csv',
                         group: 'SPT',
                         style: 'line',
@@ -109,7 +109,7 @@ node (SLAVE_NODE) {
                         file: "${artifacts_dir}/${xml_file}",
                         nodeType: 'NODESET',
                         url: '',
-                        xpath: '/testsuite/testcase[@classname="tests.test_hw2hw"]/properties/property']]
+                        xpath: '/testsuites/testsuite/testcase[@classname="tests.test_hw2hw"]/properties/property']]
                     plot csvFileName: 'plot-vm2vm.csv',
                         group: 'SPT',
                         style: 'line',
@@ -118,7 +118,7 @@ node (SLAVE_NODE) {
                         file: "${artifacts_dir}/${xml_file}",
                         nodeType: 'NODESET',
                         url: '',
-                        xpath: '/testsuite/testcase[@classname="tests.test_vm2vm"]/properties/property']]
+                        xpath: '/testsuites/testsuite/testcase[@classname="tests.test_vm2vm"]/properties/property']]
                 }
                 try {
                     sh """
