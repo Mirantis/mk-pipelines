@@ -186,25 +186,6 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
 
-        if (STAGE_UPGRADE_SYSTEM_PART.toBoolean() == true && !errorOccured) {
-            upgrade(pepperEnv, "I@telegraf:agent or I@telegraf:remote_agent", "telegraf", "telegraf", "telegraf")
-            upgrade(pepperEnv, "I@fluentd:agent", "td-agent", "td-agent td-agent-additional-plugins", "fluentd")
-            if (salt.testTarget(pepperEnv, "I@prometheus:relay")) {
-                upgrade(pepperEnv, "I@prometheus:relay", "prometheus prometheus-relay", "prometheus-bin prometheus-relay", "prometheus")
-                salt.runSaltProcessStep(pepperEnv, "I@prometheus:relay", "service.restart", "prometheus", null, true)
-            }
-            if (salt.testTarget(pepperEnv, "I@prometheus:exporters:libvirt")) {
-                upgrade(pepperEnv, "I@prometheus:exporters:libvirt", "libvirt-exporter", "libvirt-exporter", "prometheus")
-            }
-            if (salt.testTarget(pepperEnv, "I@prometheus:exporters:jmx")) {
-                upgrade(pepperEnv, "I@prometheus:exporters:jmx", "jmx-exporter", "jmx-exporter", "prometheus")
-            }
-        }
-
-        if (STAGE_UPGRADE_ES_KIBANA.toBoolean() == true && !errorOccured) {
-            upgrade_es_kibana(pepperEnv)
-        }
-
         if (STAGE_UPGRADE_DOCKER_COMPONENTS.toBoolean() == true && !errorOccured) {
             stage('Upgrade docker components') {
                 try {
@@ -228,6 +209,25 @@ timeout(time: 12, unit: 'HOURS') {
                     throw er
                 }
             }
+        }
+
+        if (STAGE_UPGRADE_SYSTEM_PART.toBoolean() == true && !errorOccured) {
+            upgrade(pepperEnv, "I@telegraf:agent or I@telegraf:remote_agent", "telegraf", "telegraf", "telegraf")
+            upgrade(pepperEnv, "I@fluentd:agent", "td-agent", "td-agent td-agent-additional-plugins", "fluentd")
+            if (salt.testTarget(pepperEnv, "I@prometheus:relay")) {
+                upgrade(pepperEnv, "I@prometheus:relay", "prometheus prometheus-relay", "prometheus-bin prometheus-relay", "prometheus")
+                salt.runSaltProcessStep(pepperEnv, "I@prometheus:relay", "service.restart", "prometheus", null, true)
+            }
+            if (salt.testTarget(pepperEnv, "I@prometheus:exporters:libvirt")) {
+                upgrade(pepperEnv, "I@prometheus:exporters:libvirt", "libvirt-exporter", "libvirt-exporter", "prometheus")
+            }
+            if (salt.testTarget(pepperEnv, "I@prometheus:exporters:jmx")) {
+                upgrade(pepperEnv, "I@prometheus:exporters:jmx", "jmx-exporter", "jmx-exporter", "prometheus")
+            }
+        }
+
+        if (STAGE_UPGRADE_ES_KIBANA.toBoolean() == true && !errorOccured) {
+            upgrade_es_kibana(pepperEnv)
         }
         stage('Post upgrade steps') {
             common.infoMsg('Apply workaround for PROD-33878')
