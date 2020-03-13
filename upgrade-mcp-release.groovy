@@ -235,6 +235,14 @@ def wa32284(String cluster_name) {
     }
 }
 
+def check_34406(String cluster_name) {
+    def sphinxpasswordPillar = salt.getPillar(venvPepper, 'I@salt:master', '_param:sphinx_proxy_password_generated').get("return")[0].values()[0]
+    if (sphinxpasswordPillar == '' || sphinxpasswordPillar == 'null' || sphinxpasswordPillar == null) {
+        error('Sphinx password is not defined.\n' +
+        'See https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-9/mu-9-addressed/mu-9-dtrain/mu-9-dt-manual.html#i-34406 for more info')
+    }
+}
+
 def wa32182(String cluster_name) {
     if (salt.testTarget(venvPepper, 'I@opencontrail:control or I@opencontrail:collector')) {
         def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
@@ -626,6 +634,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             stage('Update Reclass and Salt-Formulas') {
                 common.infoMsg('Perform: Full salt sync')
                 fullRefreshOneByOne(venvPepper, allMinions)
+
+                check_34406(cluster_name)
+
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
 
