@@ -888,6 +888,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 def wrongPluginJarName = "${gerritGlusterPath}/plugins/project-download-commands.jar"
                 salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName} || true")
 
+                salt.enforceStateWithTest(venvPepper, 'I@jenkins:client:security and not I@salt:master', 'jenkins.client.security', "", true, true, null, true, 60, 2)
                 salt.enforceStateWithTest(venvPepper, 'I@jenkins:client and I@docker:client:images and not I@salt:master', 'docker.client.images', "", true, true, null, true, 60, 2)
                 salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
             }
