@@ -30,6 +30,14 @@ def saltMastCreds = ''
 def packageUpgradeMode = ''
 batchSize = ''
 
+def fullRefreshOneByOne(venvPepper, minions) {
+    for (minion in minions) {
+        salt.runSaltProcessStep(venvPepper, minion, 'saltutil.refresh_pillar', [], null, true, 60)
+        salt.runSaltProcessStep(venvPepper, minion, 'saltutil.refresh_grains', [], null, true, 60)
+        salt.runSaltProcessStep(venvPepper, minion, 'saltutil.sync_all', [], null, true, 180)
+    }
+}
+
 def triggerMirrorJob(String jobName, String reclassSystemBranch) {
     params = jenkinsUtils.getJobParameters(jobName)
     try {
@@ -125,7 +133,6 @@ def wa29352(String cname) {
 
     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
         "grep -q '${wa29352ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29352ClassName' infra/secrets.yml")
-    salt.fullRefresh(venvPepper, '*')
     sh('rm -fv ' + _tempFile)
     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && git status && " +
             "git add ${wa29352File} && git add -u && git commit --allow-empty -m 'Cluster model updated with WA for PROD-29352. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/ at ${common.getDatetime()}' ")
@@ -195,7 +202,7 @@ def wa29155(ArrayList saltMinions, String cname) {
             salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
                 "grep -q '${wa29155ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29155ClassName' infra/secrets.yml")
             salt.fullRefresh(venvPepper, 'I@salt:master')
-            salt.fullRefresh(venvPepper, saltMinions)
+            salt.runSaltProcessStep(venvPepper, saltMinions, 'saltutil.refresh_pillar', [], null, true, 60)
             patched = true
         }
     }
@@ -614,10 +621,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 batchSize = (workerThreads * 2 / 3).toString().tokenize('.')[0]
             }
             def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
+            def allMinions = salt.getMinions(venvPepper, '*')
 
             stage('Update Reclass and Salt-Formulas') {
                 common.infoMsg('Perform: Full salt sync')
-                salt.fullRefresh(venvPepper, '*')
+                fullRefreshOneByOne(venvPepper, allMinions)
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
 
@@ -734,11 +742,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
                 try {
                     common.infoMsg('Perform: UPDATE Salt Formulas')
-                    salt.fullRefresh(venvPepper, '*')
-                    salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo')
+                    fullRefreshOneByOne(venvPepper, allMinions)
+                    salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo', true, true, null, false, 60, 2)
                     def saltEnv = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_master_base_environment").get("return")[0].values()[0]
                     salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'state.sls_id', ["salt_master_${saltEnv}_pkg_formulas", 'salt.master.env'])
-                    salt.fullRefresh(venvPepper, '*')
+                    fullRefreshOneByOne(venvPepper, allMinions)
                 } catch (Exception updateErr) {
                     common.warningMsg(updateErr)
                     common.warningMsg('Failed to update Salt Formulas repos/packages. Check current available documentation on https://docs.mirantis.com/mcp/latest/, how to update packages.')
@@ -769,7 +777,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     error("Reclass fails rendering. Pay attention to your cluster model.")
                 }
 
-                salt.fullRefresh(venvPepper, '*')
+                fullRefreshOneByOne(venvPepper, allMinions)
                 try {
                     salt.cmdRun(venvPepper, 'I@salt:master', "reclass-salt --top")
                 }
