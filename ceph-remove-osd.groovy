@@ -61,9 +61,10 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
 
-        // wait for healthy cluster
-        if (WAIT_FOR_HEALTHY.toBoolean()) {
-            ceph.waitForHealthy(pepperEnv, ADMIN_HOST)
+        if ( osd_ids == [] )
+        {
+          currentBuild.result = 'SUCCESS'
+          return
         }
 
         // `ceph osd out <id> <id>`
