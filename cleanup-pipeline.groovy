@@ -40,7 +40,7 @@ timeout(time: 12, unit: 'HOURS') {
         stage('Install environment') {
             if (STACK_TYPE == 'heat') {
 
-                def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'liberty'
+                def openstackVersion = OPENSTACK_API_CLIENT ? OPENSTACK_API_CLIENT : 'latest'
                 openstack.setupOpenstackVirtualenv(venv_path, openstackVersion)
 
             } else if (STACK_TYPE == 'aws') {
