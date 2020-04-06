@@ -930,7 +930,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
 
                 // Apply changes for HaProxy on CI/CD nodes
                 salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
-
+                salt.upgradePackageAndRestartSaltMinion(venvPepper, 'I@jenkins:client and not I@salt:master', 'python-jenkins')
                 salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true, true, null, false, 60, 2)
 
                 // update Nginx proxy settings for Jenkins/Gerrit if needed
