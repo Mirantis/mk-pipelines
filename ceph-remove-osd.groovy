@@ -47,8 +47,7 @@ timeout(time: 12, unit: 'HOURS') {
             throw new Exception("Ceph salt grain cannot be found!")
         }
         common.print(cephGrain)
-        def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
-        def ceph_disks = cephGrain['return'][0].values()[0].values()[0][device_grain_name]
+        def ceph_disks = cephGrain['return'][0].values()[0].values()[0]['ceph_disk']
         common.prettyPrint(ceph_disks)
 
         for (i in ceph_disks) {
@@ -154,7 +153,6 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Remove data / block / lockbox partition') {
                 def data_partition_uuid = ""
                 def block_partition_uuid = ""
-                def lockbox_partition_uuid = ""
                 def osd_fsid = ""
                 def lvm = ""
                 def lvm_enabled= salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true)
@@ -178,21 +176,12 @@ timeout(time: 12, unit: 'HOURS') {
                     common.infoMsg(e)
                 }
 
-                try {
-                    lockbox_partition_uuid = data_partition_uuid
-                } catch (Exception e) {
-                    common.infoMsg(e)
-                }
-
                 // remove partition_uuid = 2c76f144-f412-481e-b150-4046212ca932
                 if (block_partition_uuid?.trim()) {
                     ceph.removePartition(pepperEnv, HOST, block_partition_uuid)
                 }
                 if (data_partition_uuid?.trim()) {
                     ceph.removePartition(pepperEnv, HOST, data_partition_uuid, 'data', id)
-                }
-                if (lockbox_partition_uuid?.trim()) {
-                    ceph.removePartition(pepperEnv, HOST, lockbox_partition_uuid, 'lockbox')
                 }
             }
         }
