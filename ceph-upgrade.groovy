@@ -88,12 +88,12 @@ def upgrade(master, target) {
     }
     if (target == 'mgr') {
         stage('Run ceph mgr state') {
-            salt.enforceState(master, "I@ceph:mgr", "ceph.mgr", true)
+            salt.enforceState(master, "I@ceph:mgr", "ceph.mgr", true, failOnError=false, retries=3, retries_wait=10)
         }
     }
     if (target == 'common') {
         stage('Upgrade ceph-common pkgs') {
-            salt.cmdRun(master, "I@ceph:${target}", "apt install ceph-${target} -y")
+            salt.runSaltProcessStep(master, "I@ceph:${target}", 'pkg.install', ["ceph-common"], 'only_upgrade=True')
         }
     } else {
         minions = salt.getMinions(master, "I@ceph:${target}")
@@ -102,18 +102,17 @@ def upgrade(master, target) {
             // upgrade pkgs
             if (target == 'radosgw') {
                 stage('Upgrade radosgw pkgs') {
-                    salt.cmdRun(master, "I@ceph:${target}", "apt install ${target} -y ")
+                    salt.runSaltProcessStep(master, "I@ceph:${target}", 'pkg.install', [target], 'only_upgrade=True')
                 }
             } else {
                 stage("Upgrade ${target} pkgs on ${minion}") {
-                    salt.cmdRun(master, "${minion}", "apt install ceph-${target} -y")
+                    salt.runSaltProcessStep(master, "${minion}", 'pkg.install', ["ceph-${target}"], 'only_upgrade=True')
                 }
             }
             // restart services
             stage("Restart ${target} services on ${minion}") {
                 if (target == 'osd') {
-                    def device_grain_name =  salt.getPillar(master,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
-                    def ceph_disks = salt.getGrain(master, minion, 'ceph')['return'][0].values()[0].values()[0][device_grain_name]
+                    def ceph_disks = salt.getGrain(master, minion, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
                     ceph_disks.each { osd, param ->
                         salt.cmdRun(master, "${minion}", "systemctl restart ceph-${target}@${osd}")
                         ceph.waitForHealthy(master, ADMIN_HOST, flags)
@@ -195,10 +194,6 @@ timeout(time: 12, unit: 'HOURS') {
 
         if (STAGE_UPGRADE_MON.toBoolean() == true) {
             upgrade(pepperEnv, 'mon')
-
-            if (TARGET_RELEASE == 'nautilus' ) {
-                salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph mon enable-msgr2")
-            }
         }
 
         if (STAGE_UPGRADE_MGR.toBoolean() == true) {
@@ -241,6 +236,9 @@ timeout(time: 12, unit: 'HOURS') {
                     salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph osd crush tunables optimal")
                 } catch (Exception e) {
                     common.warningMsg(e)
+                }
+                if (TARGET_RELEASE == 'nautilus' ) {
+                    salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph mon enable-msgr2")
                 }
             }
         }
