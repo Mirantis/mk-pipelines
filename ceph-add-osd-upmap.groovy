@@ -9,6 +9,7 @@
  *
  */
 
+common = new com.mirantis.mk.Common()
 salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 def ceph = new com.mirantis.mk.Ceph()
@@ -42,11 +43,6 @@ timeout(time: 12, unit: 'HOURS') {
         try {
             // create connection to salt master
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
-
-            if (!HOST.toLowerCase().contains("osd")) {
-                common.errorMsg("This pipeline can only be used to add new OSD nodes to an existing Ceph cluster.")
-                throw new InterruptedException()
-            }
 
             stage ("verify client versions")
             {
