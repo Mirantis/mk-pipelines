@@ -18,17 +18,19 @@ python = new com.mirantis.mk.Python()
 command = 'cmd.run'
 pepperEnv = "pepperEnv"
 errorOccured = false
+def packageUpgradeMode = ''
+def forceUpgradeComonents = false
 
-def upgrade(master, target, service, pckg, state) {
+def upgrade(master, target, service, pkg, state) {
     stage("Upgrade ${service}") {
         salt.runSaltProcessStep(master, "${target}", 'saltutil.refresh_pillar', [], null, true)
         salt.enforceState([saltId: master, target: "${target}", state: 'linux.system.repo', output: true, failOnError: true])
         common.infoMsg("Upgrade ${service} package(s)")
         try {
-            salt.runSaltProcessStep(master, "${target}", command, ["apt-get install -y -o Dpkg::Options::=\"--force-confold\" ${pckg}"], null, true)
+            salt.runSaltProcessStep(master, "${target}", command, ["apt-get install -y -o Dpkg::Options::=\"--force-confold\" ${pkg}"], null, true)
         } catch (Exception er) {
             errorOccured = true
-            common.errorMsg("[ERROR] ${pckg} package(s) was not upgraded.")
+            common.errorMsg("[ERROR] ${pkg} package(s) was not upgraded.")
             throw er
         }
         common.infoMsg("Run ${state} state on ${target} nodes")
@@ -169,6 +171,18 @@ def upgrade_es_kibana(master) {
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
 
+        if ((env.getProperty('OS_DIST_UPGRADE') ?: false).toBoolean()) {
+            packageUpgradeMode = 'dist-upgrade'
+            forceUpgradeComonents = true
+        } else if ((env.getProperty('OS_UPGRADE') ?: false).toBoolean()) {
+            packageUpgradeMode = 'upgrade'
+            forceUpgradeComonents = true
+        }
+
+        if(forceUpgradeComonents) {
+            common.infoMsg('Forcing to upgrade all Stacklight components because OS_DIST_UPGRADE or OS_UPGRADE is selected')
+        }
+
         stage('Setup virtualenv for Pepper') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
         }
@@ -186,26 +200,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
 
-        if (STAGE_UPGRADE_SYSTEM_PART.toBoolean() == true && !errorOccured) {
-            upgrade(pepperEnv, "I@telegraf:agent or I@telegraf:remote_agent", "telegraf", "telegraf", "telegraf")
-            upgrade(pepperEnv, "I@fluentd:agent", "td-agent", "td-agent td-agent-additional-plugins", "fluentd")
-            if (salt.testTarget(pepperEnv, "I@prometheus:relay")) {
-                upgrade(pepperEnv, "I@prometheus:relay", "prometheus prometheus-relay", "prometheus-bin prometheus-relay", "prometheus")
-                salt.runSaltProcessStep(pepperEnv, "I@prometheus:relay", "service.restart", "prometheus", null, true)
-            }
-            if (salt.testTarget(pepperEnv, "I@prometheus:exporters:libvirt")) {
-                upgrade(pepperEnv, "I@prometheus:exporters:libvirt", "libvirt-exporter", "libvirt-exporter", "prometheus")
-            }
-            if (salt.testTarget(pepperEnv, "I@prometheus:exporters:jmx")) {
-                upgrade(pepperEnv, "I@prometheus:exporters:jmx", "jmx-exporter", "jmx-exporter", "prometheus")
-            }
-        }
-
-        if (STAGE_UPGRADE_ES_KIBANA.toBoolean() == true && !errorOccured) {
-            upgrade_es_kibana(pepperEnv)
-        }
-
-        if (STAGE_UPGRADE_DOCKER_COMPONENTS.toBoolean() == true && !errorOccured) {
+        if (forceUpgradeComonents || (STAGE_UPGRADE_DOCKER_COMPONENTS.toBoolean() == true && !errorOccured)) {
             stage('Upgrade docker components') {
                 try {
                     common.infoMsg('Disable and remove the previous versions of monitoring services')
@@ -229,6 +224,57 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
         }
+
+        if (forceUpgradeComonents || (STAGE_UPGRADE_SYSTEM_PART.toBoolean() == true && !errorOccured)) {
+            upgrade(pepperEnv, "I@telegraf:agent or I@telegraf:remote_agent", "telegraf", "telegraf", "telegraf")
+            upgrade(pepperEnv, "I@fluentd:agent", "td-agent", "td-agent td-agent-additional-plugins", "fluentd")
+            if (salt.testTarget(pepperEnv, "I@prometheus:relay")) {
+                upgrade(pepperEnv, "I@prometheus:relay", "prometheus prometheus-relay", "prometheus-bin prometheus-relay", "prometheus")
+                salt.runSaltProcessStep(pepperEnv, "I@prometheus:relay", "service.restart", "prometheus", null, true)
+            }
+            if (salt.testTarget(pepperEnv, "I@prometheus:exporters:libvirt")) {
+                upgrade(pepperEnv, "I@prometheus:exporters:libvirt", "libvirt-exporter", "libvirt-exporter", "prometheus")
+            }
+            if (salt.testTarget(pepperEnv, "I@prometheus:exporters:jmx")) {
+                upgrade(pepperEnv, "I@prometheus:exporters:jmx", "jmx-exporter", "jmx-exporter", "prometheus")
+            }
+        }
+
+        if (forceUpgradeComonents || (STAGE_UPGRADE_ES_KIBANA.toBoolean() == true && !errorOccured)) {
+            upgrade_es_kibana(pepperEnv)
+        }
+
+        stage('Upgrade OS') {
+            if (packageUpgradeMode) {
+                def stacklightNodes = salt.getMinions(pepperEnv, 'I@elasticsearch:server or I@prometheus:server')
+                def stacklightNodesWithDocker = salt.getMinions(pepperEnv, 'I@docker:swarm and I@prometheus:server')
+                def elasticSearchNodes = salt.getMinions(pepperEnv, 'I@elasticsearch:server')
+                def debian = new com.mirantis.mk.Debian()
+                for (stacklightNode in stacklightNodes) {
+                    salt.runSaltProcessStep(pepperEnv, stacklightNode, 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState([saltId: pepperEnv, target: stacklightNode, state: 'linux.system.repo', output: true, failOnError: true])
+                    debian.osUpgradeNode(pepperEnv, stacklightNode, packageUpgradeMode, false, 60)
+                    salt.checkTargetMinionsReady(['saltId': pepperEnv, 'target': stacklightNode, wait: 60, timeout: 10])
+                    if (packageUpgradeMode == 'dist-upgrade' && stacklightNode in stacklightNodesWithDocker) {
+                        common.infoMsg('Perform: Checking if Docker containers are up after reboot')
+                        try {
+                            common.retry(10, 30) {
+                                salt.cmdRun(pepperEnv, stacklightNode, "! docker service ls | tail -n +2 | grep -v -E '\\s([0-9])/\\1\\s'")
+                            }
+                        }
+                        catch (Exception ex) {
+                            error("Docker containers for Stacklight services are having troubles with starting.")
+                        }
+                    }
+                    if(stacklightNode in elasticSearchNodes) {
+                        verify_es_is_green(pepperEnv)
+                    }
+                }
+            } else {
+                common.infoMsg('Upgrade OS skipped...')
+            }
+        }
+
         stage('Post upgrade steps') {
             common.infoMsg('Apply workaround for PROD-33878')
             salt.runSaltProcessStep(pepperEnv, "I@fluentd:agent and I@rabbitmq:server", "service.restart", "td-agent", null, true)

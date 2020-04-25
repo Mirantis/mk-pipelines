@@ -30,6 +30,14 @@ def saltMastCreds = ''
 def packageUpgradeMode = ''
 batchSize = ''
 
+def fullRefreshOneByOne(venvPepper, minions) {
+    for (minion in minions) {
+        salt.runSaltProcessStep(venvPepper, minion, 'saltutil.refresh_pillar', [], null, true, 60)
+        salt.runSaltProcessStep(venvPepper, minion, 'saltutil.refresh_grains', [], null, true, 60)
+        salt.runSaltProcessStep(venvPepper, minion, 'saltutil.sync_all', [], null, true, 180)
+    }
+}
+
 def triggerMirrorJob(String jobName, String reclassSystemBranch) {
     params = jenkinsUtils.getJobParameters(jobName)
     try {
@@ -125,7 +133,6 @@ def wa29352(String cname) {
 
     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
         "grep -q '${wa29352ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29352ClassName' infra/secrets.yml")
-    salt.fullRefresh(venvPepper, '*')
     sh('rm -fv ' + _tempFile)
     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && git status && " +
             "git add ${wa29352File} && git add -u && git commit --allow-empty -m 'Cluster model updated with WA for PROD-29352. Issue cause due patch https://gerrit.mcp.mirantis.com/#/c/37932/ at ${common.getDatetime()}' ")
@@ -195,7 +202,7 @@ def wa29155(ArrayList saltMinions, String cname) {
             salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cname && " +
                 "grep -q '${wa29155ClassName}' infra/secrets.yml || sed -i '/classes:/ a - $wa29155ClassName' infra/secrets.yml")
             salt.fullRefresh(venvPepper, 'I@salt:master')
-            salt.fullRefresh(venvPepper, saltMinions)
+            salt.runSaltProcessStep(venvPepper, saltMinions, 'saltutil.refresh_pillar', [], null, true, 60)
             patched = true
         }
     }
@@ -225,6 +232,14 @@ def wa32284(String cluster_name) {
             salt.cmdRun(venvPepper, 'I@salt:master', "echo '${nginxRequiresBlockString}'  > ${nginxRequiresClassFile}", false, null, false)
             salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${nginxRequiresClassFile}")
         }
+    }
+}
+
+def check_34406(String cluster_name) {
+    def sphinxpasswordPillar = salt.getPillar(venvPepper, 'I@salt:master', '_param:sphinx_proxy_password_generated').get("return")[0].values()[0]
+    if (sphinxpasswordPillar == '' || sphinxpasswordPillar == 'null' || sphinxpasswordPillar == null) {
+        error('Sphinx password is not defined.\n' +
+        'See https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-9/mu-9-addressed/mu-9-dtrain/mu-9-dt-manual.html#i-34406 for more info')
     }
 }
 
@@ -633,10 +648,14 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 batchSize = (workerThreads * 2 / 3).toString().tokenize('.')[0]
             }
             def computeMinions = salt.getMinions(venvPepper, 'I@nova:compute')
+            def allMinions = salt.getMinions(venvPepper, '*')
 
             stage('Update Reclass and Salt-Formulas') {
                 common.infoMsg('Perform: Full salt sync')
-                salt.fullRefresh(venvPepper, '*')
+                fullRefreshOneByOne(venvPepper, allMinions)
+
+                check_34406(cluster_name)
+
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
 
@@ -754,11 +773,11 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
                 try {
                     common.infoMsg('Perform: UPDATE Salt Formulas')
-                    salt.fullRefresh(venvPepper, '*')
+                    fullRefreshOneByOne(venvPepper, allMinions)
                     salt.enforceState(venvPepper, 'I@salt:master', 'linux.system.repo', true, true, null, false, 60, 2)
                     def saltEnv = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_master_base_environment").get("return")[0].values()[0]
                     salt.runSaltProcessStep(venvPepper, 'I@salt:master', 'state.sls_id', ["salt_master_${saltEnv}_pkg_formulas", 'salt.master.env'])
-                    salt.fullRefresh(venvPepper, '*')
+                    fullRefreshOneByOne(venvPepper, allMinions)
                 } catch (Exception updateErr) {
                     common.warningMsg(updateErr)
                     common.warningMsg('Failed to update Salt Formulas repos/packages. Check current available documentation on https://docs.mirantis.com/mcp/latest/, how to update packages.')
@@ -790,7 +809,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     error('Reclass fails rendering. Pay attention to your cluster model.')
                 }
 
-                salt.fullRefresh(venvPepper, '*')
+                fullRefreshOneByOne(venvPepper, allMinions)
                 try {
                     salt.cmdRun(venvPepper, 'I@salt:master', "reclass-salt --top")
                 }
@@ -888,6 +907,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 def wrongPluginJarName = "${gerritGlusterPath}/plugins/project-download-commands.jar"
                 salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName} || true")
 
+                salt.enforceStateWithTest(venvPepper, 'I@jenkins:client:security and not I@salt:master', 'jenkins.client.security', "", true, true, null, true, 60, 2)
                 salt.enforceStateWithTest(venvPepper, 'I@jenkins:client and I@docker:client:images and not I@salt:master', 'docker.client.images', "", true, true, null, true, 60, 2)
                 salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
             }
@@ -910,7 +930,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
 
                 // Apply changes for HaProxy on CI/CD nodes
                 salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
-
+                salt.upgradePackageAndRestartSaltMinion(venvPepper, 'I@jenkins:client and not I@salt:master', 'python-jenkins')
                 salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true, true, null, false, 60, 2)
 
                 // update Nginx proxy settings for Jenkins/Gerrit if needed
