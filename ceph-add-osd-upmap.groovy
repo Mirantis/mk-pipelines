@@ -44,17 +44,16 @@ timeout(time: 12, unit: 'HOURS') {
             // create connection to salt master
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
-            stage ("verify client versions")
-            {
+            stage ("verification of supported features") {
                 // I@docker:swarm and I@prometheus:server - mon* nodes
                 def nodes = salt.getMinions(pepperEnv, "I@ceph:common and not ( I@docker:swarm and I@prometheus:server )")
                 for ( node in nodes )
                 {
-                    def versions = salt.cmdRun(pepperEnv, node, "ceph features --format json", checkResponse=true, batch=null, output=false).values()[0]
-                    versions = new groovy.json.JsonSlurperClassic().parseText(versions[0][node])
-                    if ( versions['client']['group']['release'] != 'luminous' )
+                    def features = salt.cmdRun(pepperEnv, node, "ceph features --format json", checkResponse=true, batch=null, output=false).values()[0]
+                    features = new groovy.json.JsonSlurperClassic().parseText(features[0][node])
+                    if ( fetures['client']['group']['release'] != 'luminous' )
                     {
-                        throw new Exception("client installed on " + node + " is not luminous. Update all clients to luminous before using this pipeline")
+                        throw new Exception("client installed on " + node + " does not support upmap. Update all clients to luminous or newer before using this pipeline")
                     }
                 }
             }
