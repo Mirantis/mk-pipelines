@@ -39,6 +39,12 @@ timeout(time: 12, unit: 'HOURS') {
 
         def osd_ids = []
 
+        def checknode = salt.runSaltProcessStep(pepperEnv, HOST, 'test.ping')
+        if (checknode['return'][0].values().isEmpty()) {
+            common.errorMsg("Host not found")
+            throw new InterruptedException()
+        }
+
         // get list of osd disks of the host
         salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.sync_grains', [], null, true, 5)
         def cephGrain = salt.getGrain(pepperEnv, HOST, 'ceph')
