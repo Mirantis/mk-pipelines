@@ -15,6 +15,7 @@ def command
 def commandKwargs
 def selMinions = []
 def flags = CLUSTER_FLAGS ? CLUSTER_FLAGS.tokenize(',') : []
+def runHighState = RUNHIGHSTATE
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -27,7 +28,6 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Apply package upgrades on all nodes') {
-
                 targets.each { key, value ->
                     salt.enforceState(pepperEnv, "I@ceph:${key}", 'linux.system.repo', true)
                     command = "pkg.install"
@@ -39,23 +39,34 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            stage("Restart MONs and RGWs") {
+            stage('Set cluster flags') {
+                if (flags.size() > 0) {
+                    stage('Set cluster flags') {
+                        for (flag in flags) {
+                            salt.cmdRun(pepperEnv, "I@ceph:mon and I@ceph:common:keyring:admin", 'ceph osd set ' + flag)
+                        }
+                    }
+                }
+            }
+
+            stage("Restart MONs") {
                 selMinions = salt.getMinions(pepperEnv, "I@ceph:mon")
                 for (tgt in selMinions) {
                     // runSaltProcessStep 'service.restart' don't work for this services
                     salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-mon.target")
                     ceph.waitForHealthy(pepperEnv, tgt, flags)
+                    if (runHighState) {
+                        salt.enforceHighstate(pepperEnv, tgt)
+                    }
                 }
                 selMinions = salt.getMinions(pepperEnv, "I@ceph:mgr")
                 for (tgt in selMinions) {
                     // runSaltProcessStep 'service.restart' don't work for this services
                     salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-mgr.target")
                     ceph.waitForHealthy(pepperEnv, tgt, flags)
-                }
-                selMinions = salt.getMinions(pepperEnv, "I@ceph:radosgw")
-                for (tgt in selMinions) {
-                    salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-radosgw.target")
-                    ceph.waitForHealthy(pepperEnv, tgt, flags)
+                    if (runHighState) {
+                        salt.enforceHighstate(pepperEnv, tgt)
+                    }
                 }
             }
 
@@ -81,11 +92,24 @@ timeout(time: 12, unit: 'HOURS') {
                         ceph.waitForHealthy(pepperEnv, tgt, flags, 0, 100)
                     }
 
+                    if (runHighState) {
+                        salt.enforceHighstate(pepperEnv, tgt)
+                    }
+
                     salt.cmdRun(pepperEnv, tgt, 'ceph osd unset noout')
                 }
             }
 
-
+            stage('Restart RGWs') {
+                selMinions = salt.getMinions(pepperEnv, "I@ceph:radosgw")
+                for (tgt in selMinions) {
+                    salt.cmdRun(pepperEnv, tgt, "systemctl restart ceph-radosgw.target")
+                    ceph.waitForHealthy(pepperEnv, tgt, flags)
+                    if (runHighState) {
+                        salt.enforceHighstate(pepperEnv, tgt)
+                    }
+                }
+            }
         } catch (Throwable e) {
             // If there was an error or exception thrown, the build failed
             if (flags.size() > 0) {
