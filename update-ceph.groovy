@@ -88,6 +88,13 @@ timeout(time: 12, unit: 'HOURS') {
 
         } catch (Throwable e) {
             // If there was an error or exception thrown, the build failed
+            if (flags.size() > 0) {
+                stage('Unset cluster flags') {
+                    for (flag in flags) {
+                        salt.cmdRun(pepperEnv, "I@ceph:mon and I@ceph:common:keyring:admin", 'ceph osd unset ' + flag)
+                    }
+                }
+            }
             currentBuild.result = "FAILURE"
             currentBuild.description = currentBuild.description ? e.message + " " + currentBuild.description : e.message
             throw e
