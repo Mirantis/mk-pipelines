@@ -38,6 +38,12 @@ timeout(time: 12, unit: 'HOURS') {
             throw new InterruptedException()
         }
 
+        def checknode = salt.runSaltProcessStep(pepperEnv, HOST, 'test.ping')
+        if (checknode['return'][0].values().isEmpty()) {
+            common.errorMsg("Host not found")
+            throw new InterruptedException()
+        }
+
         stage('Refresh_pillar') {
             salt.runSaltProcessStep(pepperEnv, '*', 'saltutil.refresh_pillar', [], null, true, 5)
         }
