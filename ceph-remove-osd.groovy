@@ -22,6 +22,7 @@ def python = new com.mirantis.mk.Python()
 def pepperEnv = "pepperEnv"
 def flags = CLUSTER_FLAGS.tokenize(',')
 def osds = OSD.tokenize(',')
+def cleanDisk = CLEANDISK
 
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
@@ -122,18 +123,21 @@ timeout(time: 12, unit: 'HOURS') {
                 def block_wal_partition_uuid = ""
                 try {
                     journal_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/journal_uuid")['return'][0].values()[0].split("\n")[0]
-                } catch (Exception e) {
+                }
+                 catch (Exception e) {
                     common.infoMsg(e)
                 }
                 try {
                     block_db_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/block.db_uuid")['return'][0].values()[0].split("\n")[0]
-                } catch (Exception e) {
+                }
+                catch (Exception e) {
                     common.infoMsg(e)
                 }
 
                 try {
                     block_wal_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/block.wal_uuid")['return'][0].values()[0].split("\n")[0]
-                } catch (Exception e) {
+                }
+                catch (Exception e) {
                     common.infoMsg(e)
                 }
 
@@ -150,44 +154,54 @@ timeout(time: 12, unit: 'HOURS') {
 
                 try {
                     salt.cmdRun(pepperEnv, HOST, "partprobe")
-                } catch (Exception e) {
+                }
+                catch (Exception e) {
                     common.warningMsg(e)
                 }
             }
-
-            // remove data / block / lockbox partition `parted /dev/sdj rm 3`
-            stage('Remove data / block / lockbox partition') {
-                def data_partition_uuid = ""
-                def block_partition_uuid = ""
-                def osd_fsid = ""
-                def lvm = ""
-                def lvm_enabled= salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true)
-                try {
-                    osd_fsid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/fsid")['return'][0].values()[0].split("\n")[0]
-                    if (lvm_enabled) {
-                        lvm = salt.runSaltCommand(pepperEnv, 'local', ['expression': HOST, 'type': 'compound'], 'cmd.run', null, "salt-call lvm.lvdisplay --output json -l quiet")['return'][0].values()[0]
-                        lvm = new groovy.json.JsonSlurperClassic().parseText(lvm)
-                        lvm["local"].each { lv, params ->
-                            if (params["Logical Volume Name"].contains(osd_fsid)) {
-                                data_partition_uuid = params["Logical Volume Name"].minus("/dev/")
+            if (cleanDisk) {
+                // remove data / block / lockbox partition `parted /dev/sdj rm 3`
+                stage('Remove data / block / lockbox partition') {
+                    def data_partition_uuid = ""
+                    def block_partition_uuid = ""
+                    def osd_fsid = ""
+                    def lvm = ""
+                    def lvm_enabled= salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true)
+                    try {
+                        osd_fsid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/fsid")['return'][0].values()[0].split("\n")[0]
+                        if (lvm_enabled) {
+                            lvm = salt.runSaltCommand(pepperEnv, 'local', ['expression': HOST, 'type': 'compound'], 'cmd.run', null, "salt-call lvm.lvdisplay --output json -l quiet")['return'][0].values()[0]
+                            lvm = new groovy.json.JsonSlurperClassic().parseText(lvm)
+                            lvm["local"].each { lv, params ->
+                                if (params["Logical Volume Name"].contains(osd_fsid)) {
+                                    data_partition_uuid = params["Logical Volume Name"].minus("/dev/")
+                                }
                             }
                         }
                     }
-                } catch (Exception e) {
-                    common.infoMsg(e)
-                }
-                try {
-                    block_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/block_uuid")['return'][0].values()[0].split("\n")[0]
-                } catch (Exception e) {
-                    common.infoMsg(e)
-                }
+                    catch (Exception e) {
+                        common.infoMsg(e)
+                    }
+                    try {
+                        block_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/block_uuid")['return'][0].values()[0].split("\n")[0]
+                    }
+                    catch (Exception e) {
+                        common.infoMsg(e)
+                    }
 
-                // remove partition_uuid = 2c76f144-f412-481e-b150-4046212ca932
-                if (block_partition_uuid?.trim()) {
-                    ceph.removePartition(pepperEnv, HOST, block_partition_uuid)
-                }
-                if (data_partition_uuid?.trim()) {
-                    ceph.removePartition(pepperEnv, HOST, data_partition_uuid, 'data', id)
+                    // remove partition_uuid = 2c76f144-f412-481e-b150-4046212ca932
+                    if (block_partition_uuid?.trim()) {
+                        ceph.removePartition(pepperEnv, HOST, block_partition_uuid)
+                        try{
+                            salt.cmdRun(pepperEnv, HOST, "ceph-volume lvm zap `readlink /var/lib/ceph/osd/ceph-${id}/block` --destroy")
+                        }
+                        catch (Exception e) {
+                            common.infoMsg(e)
+                        }
+                    }
+                    if (data_partition_uuid?.trim()) {
+                        ceph.removePartition(pepperEnv, HOST, data_partition_uuid, 'data', id)
+                    }
                 }
             }
         }
