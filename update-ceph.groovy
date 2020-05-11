@@ -29,7 +29,7 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Apply package upgrades on all nodes') {
 
                 targets.each { key, value ->
-                    // try {
+                    salt.enforceState(pepperEnv, "I@ceph:${key}", 'linux.system.repo', true)
                     command = "pkg.install"
                     packages = value
                     commandKwargs = ['only_upgrade': 'true', 'force_yes': 'true']
