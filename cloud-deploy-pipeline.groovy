@@ -50,6 +50,7 @@
                                 - 10 - number of nodes
                                 - 10% - percentage of all targeted nodes
  *   DIST_UPGRADE_NODES         Whether to run "apt-get dist-upgrade" on all nodes in cluster before deployment
+ *   UPGRADE_SALTSTACK          Whether to install recent versions of saltstack packages
 
  *
  * Test settings:
@@ -117,6 +118,10 @@ if (common.validInputParam('BATCH_SIZE')) {
 def upgrade_nodes = false
 if (common.validInputParam('DIST_UPGRADE_NODES')) {
     upgrade_nodes = "${DIST_UPGRADE_NODES}".toBoolean()
+}
+def upgrade_salt = false
+if (common.validInputParam('UPGRADE_SALTSTACK')){
+    upgrade_salt = "${UPGRADE_SALTSTACK}".toBoolean()
 }
 
 timeout(time: 12, unit: 'HOURS') {
@@ -365,6 +370,11 @@ timeout(time: 12, unit: 'HOURS') {
                         staticMgmtNetwork = STATIC_MGMT_NETWORK.toBoolean()
                     }
                     orchestrate.installFoundationInfra(venvPepper, staticMgmtNetwork, extra_tgt, batch_size)
+
+                    if (upgrade_salt) {
+                        debian.upgradeSaltPackages(venvPepper, 'I@salt:master')
+                        debian.upgradeSaltPackages(venvPepper, 'I@salt:minion and not I@salt:master')
+                    }
 
                     if (common.checkContains('STACK_INSTALL', 'kvm')) {
                         if (upgrade_nodes) {
