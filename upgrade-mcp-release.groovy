@@ -848,6 +848,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             }
 
             stage('Update Drivetrain') {
+                salt.enforceState(venvPepper, '*', 'linux.system.package', true, true, batchSize, false, 60, 2)
+
                 if (upgradeSaltStack) {
                     updateSaltStack("I@salt:master", '["salt-master", "salt-common", "salt-api", "salt-minion"]')
 
