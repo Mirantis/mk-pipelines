@@ -63,6 +63,10 @@ def updateSaltStack(target, pkgs) {
     salt.cmdRun(venvPepper, "I@salt:master", "salt -C '${target}' --async pkg.install force_yes=True pkgs='$pkgs'")
     // can't use same function from pipeline lib, as at the moment of running upgrade pipeline Jenkins
     // still using pipeline lib from current old mcp-version
+
+    // sleep to make sure package update started, otherwise checks will pass on still running old instance
+    sleep(120)
+
     common.retry(20, 60) {
         salt.minionsReachable(venvPepper, 'I@salt:master', '*')
         def running = salt.runSaltProcessStep(venvPepper, target, 'saltutil.running', [], null, true, 5)
