@@ -14,7 +14,9 @@ def dockerLib = new com.mirantis.mk.Docker()
 def gerritRef = env.GERRIT_REFSPEC ?: null
 def defaultGitRef = env.DEFAULT_GIT_REF ?: null
 def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
-def slaveNode = env.SLAVE_NODE ?: 'virtual'
+// vkhlyunev: New slaves breaks old jobs, sticking to ols slaves until fixed
+//def slaveNode = env.SLAVE_NODE ?: 'virtual'
+def slaveNode = env.SLAVE_NODE ?: 'old16.04'
 def saltVersion = env.SALT_VERSION ?: ""
 
 gerritBranch = 'master'
