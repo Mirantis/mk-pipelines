@@ -45,8 +45,13 @@ timeout(time: 12, unit: 'HOURS') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
             stage ("verification of supported features") {
+                def checknode = salt.runSaltProcessStep(pepperEnv, HOST, 'test.ping')
+                if (checknode['return'][0].values().isEmpty()) {
+                    common.errorMsg("Host not found")
+                    throw new InterruptedException()
+                }
                 // I@docker:swarm and I@prometheus:server - mon* nodes
-                def nodes = salt.getMinions(pepperEnv, "I@ceph:common and not ( I@docker:swarm and I@prometheus:server )")
+                def nodes = salt.getMinions(pepperEnv, "I@ceph:common and not ( I@docker:swarm and I@prometheus:server ) and not " + HOST)
                 for ( node in nodes )
                 {
                     def features = salt.cmdRun(pepperEnv, node, "ceph features --format json", checkResponse=true, batch=null, output=false).values()[0]
