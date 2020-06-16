@@ -91,7 +91,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             def target_hosts = salt.getMinions(pepperEnv, TARGET)
-            def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
+            def device_grain_name =  "ceph_disk"
             for (tgt in target_hosts) {
                 def osd_ids = []
 

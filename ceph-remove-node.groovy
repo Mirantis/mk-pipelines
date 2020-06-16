@@ -75,7 +75,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
         } else if (HOST_TYPE.toLowerCase() == 'osd') {
             def osd_ids = []
-            def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
+            def device_grain_name =  "ceph_disk"
             // get list of osd disks of the host
             salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.sync_grains', [], null, true, 5)
             def ceph_disks = salt.getGrain(pepperEnv, HOST, 'ceph')['return'][0].values()[0].values()[0][device_grain_name]
