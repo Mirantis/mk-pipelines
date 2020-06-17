@@ -37,7 +37,7 @@ kitchenFileName = ''
 
 throttle(['test-formula']) {
   timeout(time: 1, unit: 'HOURS') {
-    node("old16.04") {
+    node("python&&docker") {
       try {
         stage("checkout") {
           if (defaultGitRef && defaultGitUrl) {
