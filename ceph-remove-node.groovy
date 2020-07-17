@@ -19,6 +19,8 @@ def ceph = new com.mirantis.mk.Ceph()
 def python = new com.mirantis.mk.Python()
 def pepperEnv = "pepperEnv"
 
+def cleanDisk = CLEANDISK
+
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
 
@@ -35,6 +37,12 @@ timeout(time: 12, unit: 'HOURS') {
 
         if (!found) {
             common.errorMsg("No such HOST_TYPE was found. Please insert one of the following types: mon/osd/rgw")
+            throw new InterruptedException()
+        }
+
+        def checknode = salt.runSaltProcessStep(pepperEnv, HOST, 'test.ping')
+        if (checknode['return'][0].values().isEmpty()) {
+            common.errorMsg("Host not found")
             throw new InterruptedException()
         }
 
@@ -73,9 +81,10 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.cmdRun(pepperEnv, "${targetProvider}", "virsh destroy ${target}.${domain}")
                 salt.cmdRun(pepperEnv, "${targetProvider}", "virsh undefine ${target}.${domain}")
             }
-        } else if (HOST_TYPE.toLowerCase() == 'osd') {
+        }
+        else if (HOST_TYPE.toLowerCase() == 'osd') {
             def osd_ids = []
-            def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
+            def device_grain_name =  "ceph_disk"
             // get list of osd disks of the host
             salt.runSaltProcessStep(pepperEnv, HOST, 'saltutil.sync_grains', [], null, true, 5)
             def ceph_disks = salt.getGrain(pepperEnv, HOST, 'ceph')['return'][0].values()[0].values()[0][device_grain_name]
@@ -126,64 +135,106 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             for (osd_id in osd_ids) {
-
                 id = osd_id.replaceAll('osd.', '')
-                def dmcrypt = ""
-                try {
-                    dmcrypt = salt.cmdRun(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep dmcrypt")['return'][0].values()[0]
-                } catch (Exception e) {
-                    common.warningMsg(e)
-                }
 
-                if (dmcrypt?.trim()) {
-                    mount = salt.cmdRun(pepperEnv, HOST, "lsblk -rp | grep /var/lib/ceph/osd/ceph-${id} -B1")['return'][0].values()[0]
-                    dev = mount.split()[0].replaceAll("[0-9]", "")
-
-                    // remove partition tables
-                    stage("dd part table on ${dev}") {
-                        salt.cmdRun(pepperEnv, HOST, "dd if=/dev/zero of=${dev} bs=512 count=1 conv=notrunc")
-                    }
-
-                }
                 // remove journal, block_db, block_wal partition `parted /dev/sdj rm 3`
                 stage('Remove journal / block_db / block_wal partition') {
                     def partition_uuid = ""
                     def journal_partition_uuid = ""
                     def block_db_partition_uuid = ""
                     def block_wal_partition_uuid = ""
-                    try {
-                        journal_partition_uuid = salt.cmdRun(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep journal | grep partuuid")
-                        journal_partition_uuid = journal_partition_uuid.toString().trim().split("\n")[0].substring(journal_partition_uuid.toString().trim().lastIndexOf("/") + 1)
-                    } catch (Exception e) {
-                        common.infoMsg(e)
+                    def ceph_version = salt.getPillar(pepperEnv, HOST, 'ceph:common:ceph_version').get('return')[0].values()[0]
+
+                    if (ceph_version == "luminous") {
+                        try {
+                            journal_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/journal_uuid")['return'][0].values()[0].split("\n")[0]
+                        }
+                        catch(Exception e) {
+                            common.infoMsg(e)
+                        }
+                        try {
+                            block_db_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/block.db_uuid")['return'][0].values()[0].split("\n")[0]
+                        }
+                        catch(Exception e) {
+                            common.infoMsg(e)
+                        }
+                        try {
+                            block_wal_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/block.wal_uuid")['return'][0].values()[0].split("\n")[0]
+                        }
+                        catch(Exception e) {
+                            common.infoMsg(e)
+                        }
                     }
-                    try {
-                        block_db_partition_uuid = salt.cmdRun(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.db' | grep partuuid")
-                        block_db_partition_uuid = block_db_partition_uuid.toString().trim().split("\n")[0].substring(block_db_partition_uuid.toString().trim().lastIndexOf("/") + 1)
-                    } catch (Exception e) {
-                        common.infoMsg(e)
+                    else {
+                        def volumes = salt.cmdRun(pepperEnv, HOST, "ceph-volume lvm list --format=json", checkResponse=true, batch=null, output=false)
+                        volumes = new groovy.json.JsonSlurperClassic().parseText(volumes['return'][0].values()[0])
+
+                        block_db_partition_uuid = volumes[id][0]['tags'].get('ceph.db_uuid')
+                        block_wal_partition_uuid = volumes[id][0]['tags'].get('ceph.wal_uuid')
                     }
 
-                    try {
-                        block_wal_partition_uuid = salt.cmdRun(pepperEnv, HOST, "ls -la /var/lib/ceph/osd/ceph-${id}/ | grep 'block.wal' | grep partuuid")
-                        block_wal_partition_uuid = block_wal_partition_uuid.toString().trim().split("\n")[0].substring(block_wal_partition_uuid.toString().trim().lastIndexOf("/") + 1)
-                    } catch (Exception e) {
-                        common.infoMsg(e)
-                    }
 
-                    // set partition_uuid = 2c76f144-f412-481e-b150-4046212ca932
                     if (journal_partition_uuid?.trim()) {
-                        partition_uuid = journal_partition_uuid
-                    } else if (block_db_partition_uuid?.trim()) {
-                        partition_uuid = block_db_partition_uuid
+                        ceph.removePartition(pepperEnv, HOST, journal_partition_uuid)
                     }
-
-                    // if disk has journal, block_db or block_wal on different disk, then remove the partition
-                    if (partition_uuid?.trim()) {
-                        ceph.removePartition(pepperEnv, HOST, partition_uuid)
+                    if (block_db_partition_uuid?.trim()) {
+                        ceph.removePartition(pepperEnv, HOST, block_db_partition_uuid)
                     }
                     if (block_wal_partition_uuid?.trim()) {
                         ceph.removePartition(pepperEnv, HOST, block_wal_partition_uuid)
+                    }
+
+                    try {
+                        salt.cmdRun(pepperEnv, HOST, "partprobe")
+                    } catch (Exception e) {
+                        common.warningMsg(e)
+                    }
+                }
+
+                if (cleanDisk) {
+                // remove data / block / lockbox partition `parted /dev/sdj rm 3`
+                    stage('Remove data / block / lockbox partition') {
+                        def data_partition_uuid = ""
+                        def block_partition_uuid = ""
+                        def osd_fsid = ""
+                        def lvm = ""
+                        def lvm_enabled= salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true)
+                        try {
+                            osd_fsid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/fsid")['return'][0].values()[0].split("\n")[0]
+                            if (lvm_enabled) {
+                                lvm = salt.runSaltCommand(pepperEnv, 'local', ['expression': HOST, 'type': 'compound'], 'cmd.run', null, "salt-call lvm.lvdisplay --output json -l quiet")['return'][0].values()[0]
+                                lvm = new groovy.json.JsonSlurperClassic().parseText(lvm)
+                                lvm["local"].each { lv, params ->
+                                    if (params["Logical Volume Name"].contains(osd_fsid)) {
+                                        data_partition_uuid = params["Logical Volume Name"].minus("/dev/")
+                                    }
+                                }
+                            } else {
+                                data_partition_uuid = osd_fsid
+                            }
+                        } catch (Exception e) {
+                            common.infoMsg(e)
+                        }
+                        try {
+                            block_partition_uuid = salt.cmdRun(pepperEnv, HOST, "cat /var/lib/ceph/osd/ceph-${id}/block_uuid")['return'][0].values()[0].split("\n")[0]
+                        }
+                        catch (Exception e) {
+                            common.infoMsg(e)
+                        }
+
+                        // remove partition_uuid = 2c76f144-f412-481e-b150-4046212ca932
+                        if (block_partition_uuid?.trim()) {
+                            ceph.removePartition(pepperEnv, HOST, block_partition_uuid)
+                            try {
+                                salt.cmdRun(pepperEnv, HOST, "ceph-volume lvm zap `readlink /var/lib/ceph/osd/ceph-${id}/block` --destroy")
+                            }
+                            catch (Exception e) {
+                                common.infoMsg(e)
+                            }
+                        }
+                        if (data_partition_uuid?.trim()) {
+                            ceph.removePartition(pepperEnv, HOST, data_partition_uuid, 'data', id)
+                        }
                     }
                 }
             }
@@ -207,37 +258,18 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.cmdRun(pepperEnv, HOST, "mv /etc/salt/minion.d/minion.conf minion.conf")
                 salt.runSaltProcessStep(pepperEnv, HOST, 'service.stop', ['salt-minion'], [], null, true, 5)
             }
-        }
 
-        stage('Remove salt-key') {
-            try {
-                salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ${target}.${domain} -y")
-            } catch (Exception e) {
-                common.warningMsg(e)
-            }
-            try {
-                salt.cmdRun(pepperEnv, 'I@salt:master', "rm /srv/salt/reclass/nodes/_generated/${target}.${domain}.yml")
-            } catch (Exception e) {
-                common.warningMsg(e)
-            }
-        }
-
-        stage('Remove keyring') {
-            def keyring = ""
-            def keyring_lines = ""
-            try {
-                keyring_lines = salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph auth list | grep ${target}")['return'][0].values()[0].split('\n')
-            } catch (Exception e) {
-                common.warningMsg(e)
-            }
-            for (line in keyring_lines) {
-                if (line.toLowerCase().contains(target.toLowerCase())) {
-                    keyring = line
-                    break
+            stage('Remove salt-key') {
+                try {
+                    salt.cmdRun(pepperEnv, 'I@salt:master', "salt-key -d ${target}.${domain} -y")
+                } catch (Exception e) {
+                    common.warningMsg(e)
                 }
-            }
-            if (keyring?.trim()) {
-                salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph auth del ${keyring}")
+                try {
+                    salt.cmdRun(pepperEnv, 'I@salt:master', "rm /srv/salt/reclass/nodes/_generated/${target}.${domain}.yml")
+                } catch (Exception e) {
+                    common.warningMsg(e)
+                }
             }
         }
 
@@ -254,7 +286,6 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             def target_hosts = salt.getMinions(pepperEnv, 'I@ceph:common')
-            print target_hosts
 
             // Update configs
             stage('Update Ceph configs') {

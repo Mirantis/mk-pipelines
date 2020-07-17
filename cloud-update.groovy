@@ -897,7 +897,7 @@ def verifyCephOsds(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
     def targetHosts = salt.getMinionsSorted(pepperEnv, target)
-    def device_grain_name =  salt.getPillar(pepperEnv,"I@ceph:osd","ceph:osd:lvm_enabled")['return'].first().containsValue(true) ? "ceph_volume" : "ceph_disk"
+    def device_grain_name =  "ceph_disk"
     for (t in targetHosts) {
         def osd_ids = []
         // get list of osd disks of the host

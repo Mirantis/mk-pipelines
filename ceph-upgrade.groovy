@@ -30,6 +30,8 @@ ceph = new com.mirantis.mk.Ceph()
 def pepperEnv = "pepperEnv"
 flags = CLUSTER_FLAGS.tokenize(',')
 
+def runHighState = RUNHIGHSTATE
+
 def backup(master, target) {
     stage("backup ${target}") {
 
@@ -111,15 +113,19 @@ def upgrade(master, target) {
             }
             // restart services
             stage("Restart ${target} services on ${minion}") {
-                if (target == 'osd') {
+                if(target == 'osd') {
                     def ceph_disks = salt.getGrain(master, minion, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
                     ceph_disks.each { osd, param ->
                         salt.cmdRun(master, "${minion}", "systemctl restart ceph-${target}@${osd}")
-                        ceph.waitForHealthy(master, ADMIN_HOST, flags)
                     }
-                } else {
+                }
+                else {
                     salt.cmdRun(master, "${minion}", "systemctl restart ceph-${target}.target")
-                    ceph.waitForHealthy(master, ADMIN_HOST, flags)
+                }
+
+                ceph.waitForHealthy(master, ADMIN_HOST, flags)
+                if(runHighState) {
+                    salt.enforceHighstate(pepperEnv, tgt)
                 }
             }
 
