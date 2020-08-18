@@ -27,7 +27,7 @@ salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 ceph = new com.mirantis.mk.Ceph()
 
-def pepperEnv = "pepperEnv"
+pepperEnv = "pepperEnv"
 flags = CLUSTER_FLAGS.tokenize(',')
 
 def runHighState = RUNHIGHSTATE
@@ -125,7 +125,7 @@ def upgrade(master, target) {
 
                 ceph.waitForHealthy(master, ADMIN_HOST, flags)
                 if(runHighState) {
-                    salt.enforceHighstate(pepperEnv, tgt)
+                    salt.enforceHighstate(master, "I@ceph:${target}")
                 }
             }
 
