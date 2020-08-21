@@ -201,6 +201,9 @@ timeout(time: 12, unit: 'HOURS') {
                         if (data_partition_uuid?.trim()) {
                             ceph.removePartition(pepperEnv, HOST, data_partition_uuid, 'data', id)
                         }
+                        else {
+                            ceph.removePartition(pepperEnv, HOST, osd_fsid, 'data', id)
+                        }
                     }
                 }
             }

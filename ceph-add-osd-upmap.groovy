@@ -28,7 +28,7 @@ def getpgmap() {
 def generatemapping(master,pgmap,map) {
     def pg_new
     def pg_old
-    for (pg in pgmap) {
+    for (pg in pgmap.get('pg_stats',[])) {
         pg_new = pg["up"].minus(pg["acting"])
         pg_old = pg["acting"].minus(pg["up"])
         for (i = 0; i < pg_new.size(); i++) {
@@ -50,15 +50,13 @@ timeout(time: 12, unit: 'HOURS') {
                     common.errorMsg("Host not found")
                     throw new InterruptedException()
                 }
-                // I@docker:swarm and I@prometheus:server - mon* nodes
-                def nodes = salt.getMinions(pepperEnv, "I@ceph:common and not ( I@docker:swarm and I@prometheus:server ) and not " + HOST)
-                for ( node in nodes )
-                {
-                    def features = salt.cmdRun(pepperEnv, node, "ceph features --format json", checkResponse=true, batch=null, output=false).values()[0]
-                    features = new groovy.json.JsonSlurperClassic().parseText(features[0][node])
-                    if ( fetures['client']['group']['release'] != 'luminous' )
-                    {
-                        throw new Exception("client installed on " + node + " does not support upmap. Update all clients to luminous or newer before using this pipeline")
+                def cmn = salt.getFirstMinion(pepperEnv, "I@ceph:mon")
+                def features = salt.cmdRun(pepperEnv, cmn, "ceph features --format json", checkResponse=true, batch=null, output=false).values()[0]
+
+                features = new groovy.json.JsonSlurperClassic().parseText(features[0][cmn])
+                for ( group in features['client'] ) {
+                    if ( group['release'] != 'luminous' ) {
+                        throw new Exception("Some of installed clients does not support upmap. Update all clients to luminous or newer before using this pipeline")
                     }
                 }
             }
@@ -81,6 +79,7 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Install Ceph OSD') {
+                salt.enforceState(pepperEnv, HOST, 'linux.storage')
                 orchestrate.installCephOsd(pepperEnv, HOST)
             }
 
@@ -103,7 +102,6 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.enforceState(pepperEnv, '*', 'linux.network.host')
             }
 
-            def mapping = []
 
             stage("update mappings") {
                 def pgmap
@@ -112,6 +110,7 @@ timeout(time: 12, unit: 'HOURS') {
                     if (pgmap == '') {
                         return 1
                     } else {
+                        def mapping = []
                         pgmap = new groovy.json.JsonSlurperClassic().parseText(pgmap)
                         generatemapping(pepperEnv, pgmap, mapping)
                         mapping.each(this.&runCephCommand)
