@@ -11,6 +11,8 @@
  *  ADMIN_HOST                  Host (minion id) with admin keyring
  *  CLUSTER_FLAGS               Comma separated list of tags to apply to cluster
  *  WAIT_FOR_HEALTHY            Wait for cluster rebalance before stoping daemons
+ *  CLEANDISK                   Wipe data disk of removed osd
+ *  CLEAN_ORPHANS               Wipe partition left over after unknown osd
  *
  */
 
@@ -22,7 +24,8 @@ def python = new com.mirantis.mk.Python()
 def pepperEnv = "pepperEnv"
 def flags = CLUSTER_FLAGS.tokenize(',')
 def osds = OSD.tokenize(',')
-def cleanDisk = CLEANDISK
+def cleanDisk = CLEANDISK.toBoolean()
+def cleanOrphans = CLEAN_ORPHANS.toBoolean()
 
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
@@ -204,6 +207,22 @@ timeout(time: 12, unit: 'HOURS') {
                         else {
                             ceph.removePartition(pepperEnv, HOST, osd_fsid, 'data', id)
                         }
+                    }
+                }
+            }
+            if (cleanOrphans) {
+                stage('Remove orphan partitions') {
+                    def orphans = []
+                    def disks = salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph-disk list --format json")['return'][0].values()[0]
+                    for (disk in disks) {
+                        for (partition in disk.get('partitions')) {
+                            if (partition.get('type') == 'block.db' && !partition.containsKey('block.db_for')) {
+                                orphans.add(partition['uuid'])
+                            }
+                        }
+                    }
+                    for (orphan in orphans) {
+                        ceph.removePartition(pepperEnv, HOST, orphan)
                     }
                 }
             }
