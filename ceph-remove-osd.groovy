@@ -66,15 +66,11 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
-            if ( osd_ids == [] )
-            {
-              currentBuild.result = 'SUCCESS'
-              return
-            }
-
             // `ceph osd out <id> <id>`
             stage('Set OSDs out') {
-                salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd out ' + osd_ids.join(' '))
+                if ( !osd_ids.isEmpty() ) {
+                    salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd out ' + osd_ids.join(' '))
+                }
             }
 
             // wait for healthy cluster
