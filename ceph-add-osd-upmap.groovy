@@ -128,10 +128,8 @@ timeout(time: 12, unit: 'HOURS') {
                 ceph.waitForHealthy(pepperEnv, "I@ceph:mon and I@ceph:common:keyring:admin", flags)
             }
         }
-        catch (Throwable e) {
-            // There was an error or exception thrown. Unset norebalance.
+        finally {
             runCephCommand('ceph osd unset norebalance')['return'][0].values()[0]
-            throw e
         }
     }
 }
