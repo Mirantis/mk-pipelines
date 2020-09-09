@@ -241,11 +241,7 @@ timeout(time: 12, unit: 'HOURS') {
                 if (TARGET_RELEASE == 'nautilus' ) {
                     salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph mon enable-msgr2")
                 }
-                if(RUNHIGHSTATE.toBoolean()) {
-                    salt.enforceHighstate(pepperEnv, "I@ceph:mon or I@ceph:mgr", '', false, true, 1)
-                    salt.enforceHighstate(pepperEnv, "I@ceph:radosgw", '', false, true, 1)
-                    salt.enforceHighstate(pepperEnv, "I@ceph:osd", '', false, true, 1)
-                }
+                salt.enforceState(master, "I@ceph:common", "ceph.common")
             }
         }
 
