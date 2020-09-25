@@ -27,10 +27,8 @@ salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 ceph = new com.mirantis.mk.Ceph()
 
-def pepperEnv = "pepperEnv"
+pepperEnv = "pepperEnv"
 flags = CLUSTER_FLAGS.tokenize(',')
-
-def runHighState = RUNHIGHSTATE
 
 def backup(master, target) {
     stage("backup ${target}") {
@@ -124,9 +122,6 @@ def upgrade(master, target) {
                 }
 
                 ceph.waitForHealthy(master, ADMIN_HOST, flags)
-                if(runHighState) {
-                    salt.enforceHighstate(pepperEnv, tgt)
-                }
             }
 
             stage("Verify services for ${minion}") {
@@ -246,6 +241,7 @@ timeout(time: 12, unit: 'HOURS') {
                 if (TARGET_RELEASE == 'nautilus' ) {
                     salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph mon enable-msgr2")
                 }
+                salt.enforceState(pepperEnv, "I@ceph:common", "ceph.common")
             }
         }
 

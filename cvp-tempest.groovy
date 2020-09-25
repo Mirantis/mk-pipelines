@@ -129,7 +129,7 @@ node() {
             SKIP_LIST_PATH = (env.SKIP_LIST_PATH) ?: salt.getPillar(saltMaster, SERVICE_NODE, '_param:tempest_skip_list_path')['return'][0].values()[0]
             if (SKIP_LIST_PATH) {
                 mounts = ["${runtest_tempest_cfg_dir}/skip.list": "/var/lib/tempest/skiplists/skip.list"]
-                salt.cmdRun(saltMaster, SERVICE_NODE, "salt-cp ${TARGET_NODE} ${SKIP_LIST_PATH} ${runtest_tempest_cfg_dir}/skip.list")
+                salt.cmdRun(saltMaster, SERVICE_NODE, "salt-cp '${TARGET_NODE}' ${SKIP_LIST_PATH} ${runtest_tempest_cfg_dir}/skip.list")
             }
         }
         else {
