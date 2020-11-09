@@ -89,7 +89,7 @@ timeout(time: 12, unit: 'HOURS') {
                     for (i in osd_ids) {
                         salt.runSaltProcessStep(pepperEnv, tgt, 'service.restart', ['ceph-osd@' + i.replaceAll('osd.', '')], null, true)
                         // wait for healthy cluster
-                        ceph.waitForHealthy(pepperEnv, tgt, flags, 0, 100)
+                        ceph.waitForHealthy(pepperEnv, tgt, flags, 100)
                     }
 
                     if (runHighState) {
