@@ -5,6 +5,7 @@ def pepperEnv = "pepperEnv"
 def maasNodes = []
 def restoreSaltMasterAndMaas = (env.getProperty('RESTORE_SALTMASTER_AND_MAAS') ?: true).toBoolean()
 def restoreDogtag = (env.getProperty('RESTORE_DOGTAG') ?: true).toBoolean()
+def restoreKeystone = (env.getProperty('RESTORE_KEYSTONE_CREDENTIAL_KEYS') ?: true).toBoolean()
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
@@ -89,6 +90,9 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.runSaltProcessStep(pepperEnv, 'I@dogtag:server:role:slave', 'service.stop', ['dirsrv@pki-tomcat.service'])
                 salt.enforceState(['saltId': pepperEnv, 'target': 'I@dogtag:server:role:master', 'state': 'dogtag.server.restore'])
                 salt.runSaltProcessStep(pepperEnv, 'I@dogtag:server:role:slave', 'service.start', ['dirsrv@pki-tomcat.service'])
+            }
+            if (restoreKeystone) {
+                salt.enforceState(['saltId': pepperEnv, 'target': 'I@keystone:server:role:primary', 'state': 'keystone.restore'])
             }
         }
         stage('After restore steps') {
