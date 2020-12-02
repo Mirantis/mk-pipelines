@@ -255,6 +255,16 @@ def check_35705(String cluster_name) {
     }
 }
 
+def check_35884(String cluster_name) {
+    def alertaApiKeyGenPillar = salt.getPillar(venvPepper, 'I@salt:master', '_param:alerta_admin_api_key_generated').get("return")[0].values()[0]
+    def alertaApiKeyPillar = salt.getPillar(venvPepper, 'I@prometheus:alerta or I@prometheus:alertmanager', '_param:alerta_admin_key').get("return")[0].values()[0]
+
+    if (alertaApiKeyGenPillar == '' || alertaApiKeyGenPillar == 'null' || alertaApiKeyGenPillar == null || alertaApiKeyPillar == '' || alertaApiKeyPillar == 'null' || alertaApiKeyPillar == null) {
+        error('Alerta admin API key not defined.\n' +
+        'See https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-12/mu-12-addressed/mu-12-dtrain/mu-12-dt-manual.html#i-35884 for more info')
+    }
+}
+
 def wa32182(String cluster_name) {
     if (salt.testTarget(venvPepper, 'I@opencontrail:control or I@opencontrail:collector')) {
         def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
@@ -649,6 +659,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
 
                 check_34406(cluster_name)
                 check_35705(cluster_name)
+                check_35884(cluster_name)
 
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
