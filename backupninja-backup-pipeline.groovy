@@ -5,8 +5,10 @@ def pepperEnv = "pepperEnv"
 def askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 def backupSaltMasterAndMaas = (env.getProperty('BACKUP_SALTMASTER_AND_MAAS') ?: true).toBoolean()
 def backupDogtag = (env.getProperty('BACKUP_DOGTAG') ?: true).toBoolean()
+def backupKeystone = (env.getProperty('BACKUP_KEYSTONE_CREDENTIAL_KEYS') ?: true).toBoolean()
 def saltMasterTargetMatcher = "I@backupninja:client and I@salt:master"
 def dogtagTagetMatcher = "I@backupninja:client and I@dogtag:server"
+def keystoneTargetMatcher = "I@backupninja:client and I@keystone:server"
 logBackupSuccess = []
 logBackupFailure = []
 
@@ -37,6 +39,7 @@ timeout(time: 12, unit: 'HOURS') {
     node() {
         def saltMasterBackupNode = ''
         def dogtagBackupNode = ''
+        def keystoneBackupNode = ''
         def backupServer = ''
         stage('Setup virtualenv for Pepper') {
             python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
@@ -144,6 +147,29 @@ timeout(time: 12, unit: 'HOURS') {
                 currentBuild.result = "FAILURE"
                 throw e
             }
+            if (backupKeystone) {
+                try {
+                    keystoneBackupNode = salt.getMinionsSorted(pepperEnv, keystoneTargetMatcher)[0]
+                    salt.minionsReachable(pepperEnv, "I@salt:master", keystoneBackupNode)
+                }
+                catch (Exception e) {
+                    common.errorMsg(e.getMessage())
+                    common.errorMsg("Pipeline wasn't able to detect node with backupninja:client and keystone:server pillars defined or the minion is not reachable")
+                    currentBuild.result = "FAILURE"
+                    throw e
+                }
+            }
+
+            try {
+                backupServer = salt.getMinions(pepperEnv, "I@backupninja:server")[0]
+                salt.minionsReachable(pepperEnv, "I@salt:master", backupServer)
+            }
+            catch (Exception e) {
+                common.errorMsg(e.getMessage())
+                common.errorMsg("Pipeline wasn't able to detect backupninja:server pillar or the minion is not reachable")
+                currentBuild.result = "FAILURE"
+                throw e
+            }
         }
         stage('Prepare for backup') {
             if (backupSaltMasterAndMaas) {
@@ -167,6 +193,10 @@ timeout(time: 12, unit: 'HOURS') {
                 salt.enforceState(['saltId': pepperEnv, 'target': 'I@backupninja:server', 'state': 'backupninja'])
                 salt.enforceState(['saltId': pepperEnv, 'target': dogtagTagetMatcher, 'state': 'backupninja'])
             }
+            if (backupKeystone) {
+                salt.enforceState(['saltId': pepperEnv, 'target': keystoneTargetMatcher, 'state': 'backupninja'])
+                salt.enforceState(['saltId': pepperEnv, 'target': 'I@backupninja:server', 'state': 'backupninja'])
+            }
         }
         stage('Backup') {
             if (backupSaltMasterAndMaas) {
@@ -176,6 +206,10 @@ timeout(time: 12, unit: 'HOURS') {
             if (backupDogtag) {
                 def output = salt.getReturnValues(salt.cmdRun(pepperEnv, dogtagBackupNode, "su root -c 'backupninja --now -d'")).readLines()[-2]
                 checkBackupninjaLog(output, "Dogtag")
+            }
+            if (backupKeystone) {
+                def output = salt.getReturnValues(salt.cmdRun(pepperEnv, keystoneBackupNode, "su root -c 'backupninja --now -d'")).readLines()[-2]
+                checkBackupninjaLog(output, "Keystone")
             }
         }
         stage('Results') {
