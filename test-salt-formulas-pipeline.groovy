@@ -188,15 +188,13 @@ timeout(time: 4, unit: 'HOURS') {
               common.infoMsg("Openstack Kitchen test configuration found, running Openstack kitchen tests.")
               kitchenFileName = ".kitchen.openstack.yml"
               envOverrides.add("KITCHEN_YAML=${kitchenFileName}")
-              rubyVersion = '2.5.0'
             } else if (fileExists(".kitchen.yml")) {
               common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
               kitchenFileName = ".kitchen.yml"
-              rubyVersion = '2.4.1'
             }
             if (kitchenFileName) {
               def kitchenEnvs = []
-              ruby.ensureRubyEnv(rubyVersion)
+              ruby.ensureRubyEnv()
               if (!fileExists("Gemfile")) {
                 sh("curl -s -o ./Gemfile 'https://gerrit.mcp.mirantis.com/gitweb?p=salt-formulas/salt-formulas-scripts.git;a=blob_plain;f=Gemfile;hb=refs/heads/master'")
                 ruby.installKitchen()
