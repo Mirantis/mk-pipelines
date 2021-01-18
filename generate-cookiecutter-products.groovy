@@ -479,7 +479,7 @@ timeout(time: 1, unit: 'HOURS') {
                 }
                 def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory([
                     'artifactory'    : 'mcp-ci',
-                    'artifactoryRepo': "drivetrain-local/${JOB_NAME}/${context['cluster_name']}-${BUILD_NUMBER}",
+                    'artifactoryRepo': "artifactory/drivetrain-local/${JOB_NAME}/${context['cluster_name']}-${BUILD_NUMBER}",
                     'buildProps'     : buildProps,
                 ])
                 currentBuild.description += "<br/>${artifactoryLink}"
