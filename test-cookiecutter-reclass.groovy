@@ -489,7 +489,7 @@ timeout(time: 1, unit: 'HOURS') {
         } finally {
             stage('Save artifacts to Artifactory') {
                 def artifactory = new com.mirantis.mcp.MCPArtifactory()
-                def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory(['artifactory': 'mcp-ci', 'artifactoryRepo': "drivetrain-local/${JOB_NAME}/${BUILD_NUMBER}"])
+                def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory(['artifactory': 'mcp-ci', 'artifactoryRepo': "artifactory/drivetrain-local/${JOB_NAME}/${BUILD_NUMBER}"])
                 currentBuild.description += "<br/>${artifactoryLink}"
             }
         }

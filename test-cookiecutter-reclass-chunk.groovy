@@ -57,7 +57,7 @@ timeout(time: 1, unit: 'HOURS') {
                                          "GERRIT_PATCHSET_NUMBER=${extraVars.get('GERRIT_PATCHSET_NUMBER', '')}", "GERRIT_CHANGE_ID=${extraVars.get('GERRIT_CHANGE_ID', '')}",
                                          "GERRIT_PATCHSET_REVISION=${extraVars.get('GERRIT_PATCHSET_REVISION', '')}"]
                     withEnv(envGerritVars) {
-                        def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory(['artifactory': 'mcp-ci', 'artifactoryRepo': "drivetrain-local/${JOB_NAME}/${BUILD_NUMBER}"])
+                        def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory(['artifactory': 'mcp-ci', 'artifactoryRepo': "artifactory/drivetrain-local/${JOB_NAME}/${BUILD_NUMBER}"])
                         currentBuild.description += "<br/>${artifactoryLink}"
                     }
                 }
