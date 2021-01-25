@@ -205,7 +205,7 @@ timeout(time: 1, unit: 'HOURS') {
                             sh "gpg --export-secret-key -a ${secretKeyID} > gpgkey.asc"
                         } else {
                             writeFile file: 'gpgkey.asc', text: context['secrets_encryption_private_key']
-                            sh "gpg --import gpgkey.asc"
+                            sh "gpg --batch --import gpgkey.asc"
                             secretKeyID = sh(returnStdout: true, script: 'gpg --list-secret-keys --with-colons | grep -E "^sec" | awk -F: \'{print \$5}\'').trim()
                         }
                         context['secrets_encryption_key_id'] = secretKeyID
