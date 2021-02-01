@@ -28,9 +28,11 @@ def defaultGitUrl = env.DEFAULT_GIT_URL ?: null
 def distribRevision = env.DISTRIB_REVISION ?: 'nightly'
 def checkouted = false
 
+def nodeLabel = 'old16.04'
+
 throttle(['test-model']) {
   timeout(time: 1, unit: 'HOURS') {
-    node("python&&docker") {
+    node(nodeLabel) {
       try{
         stage("checkout") {
           if(defaultGitRef != "" && defaultGitUrl != "") {

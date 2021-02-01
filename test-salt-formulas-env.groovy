@@ -27,6 +27,8 @@ if (common.validInputParam('GERRIT_PARENT_BRANCH')) {
   env.GERRIT_BRANCH = GERRIT_PARENT_BRANCH
 }
 
+def nodeLabel = 'old16.04'
+
 def checkouted = false
 def openstackTest = false
 def travisLess = false      /** TODO: Remove once formulas are witched to new config */
@@ -37,7 +39,7 @@ kitchenFileName = ''
 
 throttle(['test-formula']) {
   timeout(time: 1, unit: 'HOURS') {
-    node("python&&docker") {
+    node(nodeLabel) {
       try {
         stage("checkout") {
           if (defaultGitRef && defaultGitUrl) {
