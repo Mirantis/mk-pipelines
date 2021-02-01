@@ -86,8 +86,10 @@ def _clusterTestEnabled(infraYMLConfig){
   return true;
 }
 
+def nodeLabel = 'old16.04'
+
 timeout(time: 12, unit: 'HOURS') {
-  node("python") {
+  node(nodeLabel) {
     try{
       stage("checkout") {
         if (gerritRef) {

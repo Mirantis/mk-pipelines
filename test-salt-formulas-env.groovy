@@ -22,6 +22,8 @@ if (env.OPENSTACK_API_CREDENTIALS) {
   openstack_credentials_id = OPENSTACK_API_CREDENTIALS
 }
 
+def nodeLabel = 'old16.04'
+
 def checkouted = false
 def openstackTest = false
 def travisLess = false      /** TODO: Remove once formulas are witched to new config */
@@ -30,7 +32,7 @@ def testSuite = ''
 
 throttle(['test-formula']) {
   timeout(time: 1, unit: 'HOURS') {
-    node("python&&docker") {
+    node(nodeLabel) {
       try {
         stage("checkout") {
           if (defaultGitRef && defaultGitUrl) {
