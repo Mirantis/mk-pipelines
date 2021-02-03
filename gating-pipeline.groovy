@@ -12,6 +12,7 @@ def ssh = new com.mirantis.mk.Ssh()
 
 slaveNode = env.SLAVE_NODE ?: 'virtual'
 giveVerify = false
+doSubmit = false
 defGerritPort = env.GERRIT_PORT ?: '29418'
 
 @NonCPS
@@ -33,65 +34,68 @@ def callJobWithExtraVars(String jobName) {
 
 timeout(time: 12, unit: 'HOURS') {
     node(slaveNode) {
+        def sshGerritConnectCmd = "ssh -p ${defGerritPort} ${GERRIT_NAME}@${GERRIT_HOST}"
+        def sshGerritQueryCmd = "${sshGerritConnectCmd} gerrit query --current-patch-set --format=JSON change:${GERRIT_CHANGE_NUMBER}"
+        def sshGerritReviewCmd = "${sshGerritConnectCmd} gerrit review ${GERRIT_CHANGE_NUMBER},${GERRIT_PATCHSET_NUMBER}"
+        def gerritChange = ''
         try {
-            // test if change is not already merged
-            ssh.prepareSshAgentKey(env.CREDENTIALS_ID)
-            // TODO: those should be refactored, and covered in gerrit module.
-            ssh.ensureKnownHosts("${env.GERRIT_HOST}:${defGerritPort}")
-            def gerritChange = gerrit.getGerritChange(GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, CREDENTIALS_ID, true)
-            def doSubmit = false
-            def skipProjectsVerify = ['mk/docker-jnlp-slave']
+            sshagent (credentials: [env.CREDENTIALS_ID]) {
+                // test if change is not already merged
+                ssh.ensureKnownHosts("${env.GERRIT_HOST}:${defGerritPort}")
+                gerritChange = common.parseJSON(sh(script: sshGerritQueryCmd, returnStdout: true))
+                def skipProjectsVerify = ['mk/docker-jnlp-slave']
 
-            stage("test") {
-                //notification about Start job
-                ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review %s,%s -m \"'Build Started %s'\"", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER, BUILD_URL))
-                //check Code-Review
-                if (!gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Code-Review", "+")) {
-                    throw new Exception('Change don\'t have a CodeReview+1, reject gate')
-                }
-                //check Verify
-                if (!gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")) {
-                    throw new Exception('Change don\'t have initial Verify+1, reject gate')
-                } else if (gerritChange.status != "MERGED" && !env.SKIP_TEST.toBoolean()) {
-                    //Verify-label off
-                    ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review %s,%s --verified 0", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
-                    //Do stage (test)
-                    doSubmit = true
-                    def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
-                    def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
-                    if (gerritProject in skipProjectsVerify) {
-                        common.successMsg("Project ${gerritProject} doesn't require verify, skipping...")
-                        giveVerify = true
-                    } else {
-                        def jobsNamespace = JOBS_NAMESPACE
-                        def plural_namespaces = ['salt-formulas', 'salt-models']
-                        // remove plural s on the end of job namespace
-                        if (JOBS_NAMESPACE in plural_namespaces) {
-                            jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
-                        }
-                        // salt-formulas tests have -latest on end of the name
-                        if (JOBS_NAMESPACE.equals("salt-formulas")) {
-                            gerritProject = gerritProject + "-latest"
-                        }
-                        def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
-                        if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates' || env.GERRIT_PROJECT == 'salt-models/reclass-system') {
-                            callJobWithExtraVars('test-salt-model-ci-wrapper')
+                stage("test") {
+                    //notification about Start job
+                    sh "${sshGerritReviewCmd} -m \"'Build Started $BUILD_URL'\""
+                    //check Code-Review
+                    if (!gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Code-Review", "+")) {
+                        throw new Exception('Change don\'t have a CodeReview+1, reject gate')
+                    }
+                    //check Verify
+                    if (!gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")) {
+                        throw new Exception('Change don\'t have initial Verify+1, reject gate')
+                    } else if (gerritChange.status != "MERGED" && !env.SKIP_TEST.toBoolean()) {
+                        //Verify-label off
+                        sh "$sshGerritReviewCmd --verified 0"
+                        //Do stage (test)
+                        doSubmit = true
+                        def gerritProjectArray = GERRIT_PROJECT.tokenize("/")
+                        def gerritProject = gerritProjectArray[gerritProjectArray.size() - 1]
+                        if (gerritProject in skipProjectsVerify) {
+                            common.successMsg("Project ${gerritProject} doesn't require verify, skipping...")
+                            giveVerify = true
                         } else {
-                            if (isJobExists(testJob)) {
-                                common.infoMsg("Test job ${testJob} found, running")
-                                def patchsetVerified = gerrit.patchsetHasApproval(gerritChange.currentPatchSet, "Verified", "+")
-                                build job: testJob, parameters: [
-                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
-                                    [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
-                                ]
-                                giveVerify = true
+                            def jobsNamespace = JOBS_NAMESPACE
+                            def plural_namespaces = ['salt-formulas', 'salt-models']
+                            // remove plural s on the end of job namespace
+                            if (JOBS_NAMESPACE in plural_namespaces) {
+                                jobsNamespace = JOBS_NAMESPACE.substring(0, JOBS_NAMESPACE.length() - 1)
+                            }
+                            // salt-formulas tests have -latest on end of the name
+                            if (JOBS_NAMESPACE.equals("salt-formulas")) {
+                                gerritProject = gerritProject + "-latest"
+                            }
+                            def testJob = String.format("test-%s-%s", jobsNamespace, gerritProject)
+                            if (env.GERRIT_PROJECT == 'mk/cookiecutter-templates' || env.GERRIT_PROJECT == 'salt-models/reclass-system') {
+                                callJobWithExtraVars('test-salt-model-ci-wrapper')
                             } else {
-                                common.infoMsg("Test job ${testJob} not found")
+                                if (isJobExists(testJob)) {
+                                    common.infoMsg("Test job ${testJob} found, running")
+                                    build job: testJob, parameters: [
+                                        [$class: 'StringParameterValue', name: 'DEFAULT_GIT_URL', value: "${GERRIT_SCHEME}://${GERRIT_NAME}@${GERRIT_HOST}:${GERRIT_PORT}/${GERRIT_PROJECT}"],
+                                        [$class: 'StringParameterValue', name: 'DEFAULT_GIT_REF', value: GERRIT_REFSPEC]
+                                    ]
+                                    giveVerify = true
+                                } else {
+                                    common.infoMsg("Test job ${testJob} not found")
+                                }
                             }
                         }
                     }
-                } else {
-                    common.infoMsg('Test job skipped')
+                    else {
+                        common.infoMsg('Test job skipped')
+                    }
                 }
             }
 
@@ -99,13 +103,15 @@ timeout(time: 12, unit: 'HOURS') {
                 if (gerritChange.status == "MERGED") {
                     common.successMsg("Change ${GERRIT_CHANGE_NUMBER} is already merged, no need to gate them")
                 } else if (doSubmit) {
-                    if (giveVerify) {
-                        common.warningMsg("Change ${GERRIT_CHANGE_NUMBER} don't have a Verified, but tests were successful, so adding Verified and submitting")
-                        ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review --verified +1 --submit %s,%s", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
-                    } else {
-                        ssh.agentSh(String.format("ssh -p %s %s@%s gerrit review --submit %s,%s", defGerritPort, GERRIT_NAME, GERRIT_HOST, GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
+                    sshagent (credentials: [env.CREDENTIALS_ID]) {
+                        if (giveVerify) {
+                            common.warningMsg("Change ${GERRIT_CHANGE_NUMBER} don't have a Verified, but tests were successful, so adding Verified and submitting")
+                            sh "${sshGerritReviewCmd} --verified +1 --submit"
+                        } else {
+                            sh "${sshGerritReviewCmd} --submit"
+                        }
+                        common.infoMsg(String.format("Gerrit review %s,%s submitted", GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
                     }
-                    common.infoMsg(String.format("Gerrit review %s,%s submitted", GERRIT_CHANGE_NUMBER, GERRIT_PATCHSET_NUMBER))
                 }
             }
         } catch (Throwable e) {
