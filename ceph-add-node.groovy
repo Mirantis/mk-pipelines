@@ -71,7 +71,7 @@ timeout(time: 12, unit: 'HOURS') {
             stage('Launch VMs') {
                 if(salt.testTarget(pepperEnv, "$HOST and not I@ceph:osd")) {
                     // launch VMs
-                    salt.enforceState([saltId: pepperEnv, target: "I@salt:control $extra_tgt", state: 'salt.control'])
+                    salt.enforceState([saltId: pepperEnv, target: "I@salt:control", state: 'salt.control'])
 
                     // wait till the HOST appears in salt-key on salt-master
                     salt.minionPresent(pepperEnv, 'I@salt:master', HOST)
