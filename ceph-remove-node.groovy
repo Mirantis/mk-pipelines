@@ -63,8 +63,8 @@ timeout(time: 12, unit: 'HOURS') {
                         throw new Exception("Ceph salt grains cannot be found on $HOST")
                     }
 
-                    // glob for OSD input
-                    if(OSD == '*') {
+                    // glob for OSD input or whole node is going to be removed
+                    if(OSD == '*' || !osdOnly) {
                         osds = cephDisks
                     }
 
