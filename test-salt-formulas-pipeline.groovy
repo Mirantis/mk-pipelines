@@ -185,7 +185,7 @@ timeout(time: 4, unit: 'HOURS') {
               def kitchenEnvs = []
               ruby.ensureRubyEnv()
               if (!fileExists("Gemfile")) {
-                sh("curl -s -o ./Gemfile 'https://gerrit.mcp.mirantis.com/gitweb?p=salt-formulas/salt-formulas-scripts.git;a=blob_plain;f=Gemfile;hb=refs/heads/master'")
+                sh("curl -s 'https://gerrit.mcp.mirantis.com/projects/salt-formulas%2Fsalt-formulas-scripts/branches/master/files/Gemfile/content' | base64 -d > ./Gemfile")
                 ruby.installKitchen()
               } else {
                 common.infoMsg("Override Gemfile found in the kitchen directory, using it.")
