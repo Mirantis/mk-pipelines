@@ -139,7 +139,7 @@ timeout(time: 12, unit: 'HOURS') {
                 }
 
                 if(!osdOnly) {
-                    salt.runSaltProcessStep(pepperEnv, HOST, 'pkg.purge', pkgs)
+                    salt.runSaltProcessStep(pepperEnv, HOST, 'pkg.purge', "pkgs='$pkgs'")
                 }
                 else {
                     common.infoMsg('Stage skipped.')
