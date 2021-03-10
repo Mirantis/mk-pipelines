@@ -9,6 +9,7 @@
  *  ADMIN_HOST                      Host (minion id) with admin keyring and /etc/crushmap file present
  *  CLUSTER_FLAGS                   Comma separated list of tags to apply to cluster
  *  WAIT_FOR_HEALTHY                Wait for cluster rebalance before stoping daemons
+ *  ASK_CONFIRMATION                Ask for manual confirmation
  *  ORIGIN_RELEASE                  Ceph release version before upgrade
  *  TARGET_RELEASE                  Ceph release version after upgrade
  *  STAGE_UPGRADE_MON               Set to True if Ceph mon nodes upgrade is desired
@@ -26,6 +27,7 @@ common = new com.mirantis.mk.Common()
 salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 ceph = new com.mirantis.mk.Ceph()
+askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 
 pepperEnv = "pepperEnv"
 flags = CLUSTER_FLAGS.tokenize(',')
@@ -129,8 +131,10 @@ def upgrade(master, target) {
                 salt.cmdRun(master, "${minion}", "systemctl status ceph-${target}.target")
             }
 
-            stage('Ask for manual confirmation') {
-                input message: "From the verification command above, please check Ceph ${target} joined the cluster correctly. If so, Do you want to continue to upgrade next node?"
+            if (askConfirmation) {
+                stage('Ask for manual confirmation') {
+                    input message: "From the verification command above, please check Ceph ${target} joined the cluster correctly. If so, Do you want to continue to upgrade next node?"
+                }
             }
         }
     }
