@@ -11,6 +11,7 @@
  *  FAST_WIPE                   Clean only partition table insted of full wipe
  *  CLEAN_ORPHANS               Clean ceph partition which are no longer part of the cluster
  *  OSD                         Coma separated list of OSDs to remove while keep the rest intact
+ *  OSD_NODE_IS_DOWN            Remove unavailable (offline) osd node from cluster, provided in HOST parameter
  *  GENERATE_CRUSHMAP           Generate new crush map. Excludes OSD
  *
  */
@@ -30,12 +31,40 @@ def safeRemove = WAIT_FOR_HEALTHY.toBoolean()
 
 def osdOnly = OSD.trim() as Boolean
 def generateCrushmap = osdOnly ? false : GENERATE_CRUSHMAP.toBoolean()
+def osdNodeUnavailable = OSD_NODE_IS_DOWN.toBoolean()
 
 timeout(time: 12, unit: 'HOURS') {
     node("python") {
 
         // create connection to salt master
         python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+
+        if (osdNodeUnavailable) {
+            stage('Remove unavailable OSD node') {
+                osdHostName = salt.stripDomainName("${HOST}")
+                osdTreeString = ceph.cmdRun(pepperEnv, "ceph osd tree --format json-pretty")
+                osdTree = common.parseJSON(osdTreeString)
+                osdIDs = []
+                for(osd in osdTree["nodes"]) {
+                    if (osd["type"] == "host" && osd["name"] == osdHostName) {
+                        osdIDs = osd["children"]
+                        break
+                    }
+                }
+                if (osdIDs.size() == 0) {
+                    common.warningMsg("Can't find any OSDs placed on host ${HOST} (${osdHostName}). Is it correct name?")
+                    currentBuild.result = "UNSTABLE"
+                } else {
+                    common.infoMsg("Found next OSDs for host ${HOST} (${osdHostName}): ${osdIDs}")
+                    input message: "Do you want to continue node remove?"
+                    for (osdId in osdIDs) {
+                        ceph.cmdRun(master, "ceph osd purge ${osdId} --yes-i-really-mean-it", true, true)
+                    }
+                    salt.cmdRun(pepperEnv, "I@salt:master", "salt-key -d ${HOST} --include-all -y")
+                }
+            }
+            return
+        }
 
         def target = salt.getMinions(pepperEnv, HOST)
         if(target.isEmpty()) {
