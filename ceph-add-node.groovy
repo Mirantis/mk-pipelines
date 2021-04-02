@@ -125,11 +125,13 @@ timeout(time: 12, unit: 'HOURS') {
                         if (pgmap.trim()) {
                             pgmap = "{\"pgs\":$pgmap}" // common.parseJSON() can't parse a list of maps
                             pgmap = common.parseJSON(pgmap)['pgs']
-                            ceph.generateMapping(pgmap, mapping)
-                            for(map in mapping) {
-                                ceph.cmdRun(pepperEnv, map)
+                            if (!pgmap.get('pg_ready', false)) {
+                                ceph.generateMapping(pgmap, mapping)
+                                for(map in mapping) {
+                                    ceph.cmdRun(pepperEnv, map)
+                                }
+                                sleep(30)
                             }
-                            sleep(30)
                         }
                     }
                 }
