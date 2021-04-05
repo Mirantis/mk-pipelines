@@ -133,7 +133,6 @@ timeout(time: 12, unit: 'HOURS') {
                     def hostname = ceph.getGrain(pepperEnv, HOST, 'host')
                     ceph.cmdRun(pepperEnv, 'ceph mon getmap -o monmap.backup')
                     ceph.cmdRun(pepperEnv, "ceph mon remove $hostname")
-                    salt.cmdRun(pepperEnv, 'I@ceph:mon', "monmaptool /tmp/monmap --rm $hostname")
                 }
                 else {
                     common.infoMsg('Stage skipped.')
