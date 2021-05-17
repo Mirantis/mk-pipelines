@@ -39,9 +39,19 @@ timeout(time: 12, unit: 'HOURS') {
         // create connection to salt master
         python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
+        def target = salt.getMinions(pepperEnv, HOST)
+        if(target.isEmpty()) {
+            common.errorMsg("Host not found")
+            throw new InterruptedException()
+        }
+        else if(target.size() > 1) {
+            common.errorMsg("$HOST targeted more than one minion")
+            throw new InterruptedException()
+        }
+
         if (osdNodeUnavailable) {
             stage('Remove unavailable OSD node') {
-                osdHostName = salt.stripDomainName("${HOST}")
+                osdHostName = salt.stripDomainName("${target[0]}")
                 osdTreeString = ceph.cmdRun(pepperEnv, "ceph osd tree --format json-pretty")
                 osdTree = common.parseJSON(osdTreeString)
                 osdIDs = []
@@ -58,22 +68,16 @@ timeout(time: 12, unit: 'HOURS') {
                     common.infoMsg("Found next OSDs for host ${HOST} (${osdHostName}): ${osdIDs}")
                     input message: "Do you want to continue node remove?"
                     for (osdId in osdIDs) {
-                        ceph.cmdRun(master, "ceph osd purge ${osdId} --yes-i-really-mean-it", true, true)
+                        ceph.cmdRun(pepperEnv, "ceph osd purge ${osdId} --yes-i-really-mean-it", true, true)
                     }
                     salt.cmdRun(pepperEnv, "I@salt:master", "salt-key -d ${HOST} --include-all -y")
+
+                    if(safeRemove) {
+                        ceph.waitForHealthy(pepperEnv, flags)
+                    }
                 }
             }
             return
-        }
-
-        def target = salt.getMinions(pepperEnv, HOST)
-        if(target.isEmpty()) {
-            common.errorMsg("Host not found")
-            throw new InterruptedException()
-        }
-        else if(target.size() > 1) {
-            common.errorMsg("$HOST targeted more than one minion")
-            throw new InterruptedException()
         }
 
         salt.fullRefresh(pepperEnv, HOST)
