@@ -1,7 +1,7 @@
 apply plugin: 'groovy'
 apply plugin: 'codenarc'
 
-def jcenterRepo = System.getenv('ARTIFACTORY_URL') ?: 'https://artifactory.mcp.mirantis.net/jcenter'
+def jcenterRepo = System.getenv('ARTIFACTORY_URL') ?: 'https://artifactory.mcp.mirantis.net/artifactory/jcenter'
 
 dependencies{
   compile 'org.codehaus.groovy:groovy-all:2.3.6'
