@@ -8,6 +8,8 @@ backupNode = "none"
 primaryNodes = []
 syncedNodes = []
 galeraMembers = []
+maxValue = 0
+masterNode = "none"
 
 if (common.validInputParam('OVERRIDE_BACKUP_NODE')) {
     backupNode = OVERRIDE_BACKUP_NODE
@@ -37,8 +39,29 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
             stage('Choose backup node') {
-                backupNode = primaryNodes.sort()[0]                      // STEP 2 - Use node with lowest hostname number (last option if everything previous fails)
-            }
+                primaryNodes = primaryNodes.sort()
+                for (node in primaryNodes.reverse()) {       // Looking for the node with the highest mysql_queries value
+                    try {
+                        queriesValue = galera.getWsrepParameters(pepperEnv, node, "Queries", false).get('Queries')
+                        common.infoMsg("Queries for ${node} - ${queriesValue}")
+                        if (queriesValue >= maxValue) {
+                            maxValue = queriesValue
+                            masterNode = node
+                            common.infoMsg("Current main node in galera cluster: ${masterNode}")
+                        }
+                    } catch (Exception e) {
+                        common.warningMsg("Minion '${node}' unavailable.")
+                    }
+                }
+                if (masterNode.equals("none")) {
+                    backupNode = primaryNodes[-1]                      // STEP 2 - Use node with highest hostname number (last option if everything previous fails)
+                } else {
+                    common.infoMsg("Master node is ${masterNode}.")
+                    primaryNodes = primaryNodes.minus(masterNode)
+                    backupNode = primaryNodes[-1]
+                }
+                common.infoMsg("Choose backup node as ${backupNode}.")
+            }            
         } else {
             stage('Choose backup node') {
                 common.infoMsg("Backup node backup was overriden to ${backupNode}.")
