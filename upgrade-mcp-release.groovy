@@ -714,7 +714,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.contrail' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.contrail/system.linux.system.repo.mcp.apt_mirantis.contrail/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                        "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.updates' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.updates/system.linux.system.repo.mcp.apt_mirantis.update/g'")
+                        "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.updates\$' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.updates\$/system.linux.system.repo.mcp.apt_mirantis.update/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.extra' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.extra/system.linux.system.repo.mcp.apt_mirantis.extra/g'")
 
