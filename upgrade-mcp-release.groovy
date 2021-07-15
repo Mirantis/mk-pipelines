@@ -267,6 +267,54 @@ def check_35884(String cluster_name) {
     }
 }
 
+// ceph cluster class ordering for radosgw
+def check_36461(String cluster_name){
+    if (!salt.testTarget(venvPepper, 'I@ceph:radosgw')) {
+        return
+    }
+    def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
+    def checkFile = "${clusterModelPath}/ceph/rgw.yml"
+    def saltTarget = "I@salt:master"
+    try {
+        salt.cmdRun(venvPepper, saltTarget, "test -f ${checkFile}")
+    }
+    catch (Exception e) {
+        common.warningMsg("Unable to check ordering of RadosGW imports, file ${checkFile} not found, skipping")
+        return
+    }
+    def fileContent = salt.cmdRun(venvPepper, saltTarget, "cat ${checkFile}").get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+    def yamlData = readYaml text: fileContent
+    def infraClassImport = "cluster.${cluster_name}.infra"
+    def cephClassImport = "cluster.${cluster_name}.ceph"
+    def cephCommonClassImport = "cluster.${cluster_name}.ceph.common"
+    def infraClassFound = false
+    def importErrorDetected = false
+    def importErrorMessage = """Ceph classes in '${checkFile}' are used in wrong order! Please reorder it:
+'${infraClassImport}' should be placed before '${cephClassImport}' and '${cephCommonClassImport}'.
+For additional information please see %INSERT_DOC_LINK_HERE%"""
+    for (yamlClass in yamlData.classes) {
+        switch(yamlClass){
+          case infraClassImport:
+            infraClassFound = true;
+            break;
+          case cephClassImport:
+            if (!infraClassFound) {
+              importErrorDetected = true
+            };
+            break;
+          case cephCommonClassImport:
+            if (!infraClassFound) {
+              importErrorDetected = true
+            };
+            break;
+        }
+    }
+    if (importErrorDetected) {
+        common.errorMsg(importErrorMessage)
+        error(importErrorMessage)
+    }
+}
+
 def wa32182(String cluster_name) {
     if (salt.testTarget(venvPepper, 'I@opencontrail:control or I@opencontrail:collector')) {
         def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
@@ -681,6 +729,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 check_34406(cluster_name)
                 check_35705(cluster_name)
                 check_35884(cluster_name)
+                check_36461(cluster_name)
 
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
