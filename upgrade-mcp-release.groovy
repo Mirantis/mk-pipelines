@@ -291,7 +291,7 @@ def check_36461(String cluster_name){
     def importErrorDetected = false
     def importErrorMessage = """Ceph classes in '${checkFile}' are used in wrong order! Please reorder it:
 '${infraClassImport}' should be placed before '${cephClassImport}' and '${cephCommonClassImport}'.
-For additional information please see %INSERT_DOC_LINK_HERE%"""
+For additional information please see https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-15/mu-15-addressed/mu-15-dtrain/mu-15-dtrain-manual.html"""
     for (yamlClass in yamlData.classes) {
         switch(yamlClass){
           case infraClassImport:
