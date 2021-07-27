@@ -267,6 +267,54 @@ def check_35884(String cluster_name) {
     }
 }
 
+// ceph cluster class ordering for radosgw
+def check_36461(String cluster_name){
+    if (!salt.testTarget(venvPepper, 'I@ceph:radosgw')) {
+        return
+    }
+    def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
+    def checkFile = "${clusterModelPath}/ceph/rgw.yml"
+    def saltTarget = "I@salt:master"
+    try {
+        salt.cmdRun(venvPepper, saltTarget, "test -f ${checkFile}")
+    }
+    catch (Exception e) {
+        common.warningMsg("Unable to check ordering of RadosGW imports, file ${checkFile} not found, skipping")
+        return
+    }
+    def fileContent = salt.cmdRun(venvPepper, saltTarget, "cat ${checkFile}").get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
+    def yamlData = readYaml text: fileContent
+    def infraClassImport = "cluster.${cluster_name}.infra"
+    def cephClassImport = "cluster.${cluster_name}.ceph"
+    def cephCommonClassImport = "cluster.${cluster_name}.ceph.common"
+    def infraClassFound = false
+    def importErrorDetected = false
+    def importErrorMessage = """Ceph classes in '${checkFile}' are used in wrong order! Please reorder it:
+'${infraClassImport}' should be placed before '${cephClassImport}' and '${cephCommonClassImport}'.
+For additional information please see https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-15/mu-15-addressed/mu-15-dtrain/mu-15-dtrain-manual.html"""
+    for (yamlClass in yamlData.classes) {
+        switch(yamlClass){
+          case infraClassImport:
+            infraClassFound = true;
+            break;
+          case cephClassImport:
+            if (!infraClassFound) {
+              importErrorDetected = true
+            };
+            break;
+          case cephCommonClassImport:
+            if (!infraClassFound) {
+              importErrorDetected = true
+            };
+            break;
+        }
+    }
+    if (importErrorDetected) {
+        common.errorMsg(importErrorMessage)
+        error(importErrorMessage)
+    }
+}
+
 def wa32182(String cluster_name) {
     if (salt.testTarget(venvPepper, 'I@opencontrail:control or I@opencontrail:collector')) {
         def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
@@ -681,6 +729,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 check_34406(cluster_name)
                 check_35705(cluster_name)
                 check_35884(cluster_name)
+                check_36461(cluster_name)
 
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
@@ -714,7 +763,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.contrail' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.contrail/system.linux.system.repo.mcp.apt_mirantis.contrail/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
-                        "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.updates' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.updates/system.linux.system.repo.mcp.apt_mirantis.update/g'")
+                        "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.updates\$' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.updates\$/system.linux.system.repo.mcp.apt_mirantis.update/g'")
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && " +
                         "grep -r --exclude-dir=aptly -l 'system.linux.system.repo.mcp.extra' * | xargs --no-run-if-empty sed -i 's/system.linux.system.repo.mcp.extra/system.linux.system.repo.mcp.apt_mirantis.extra/g'")
 
@@ -894,7 +943,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 }
             }
 
-            stage('Update Drivetrain') {
+            stage('Update Drivetrain: Part 1') {
                 salt.enforceState(venvPepper, 'I@linux:system', 'linux.system.repo', true, true, batchSize, false, 60, 2)
                 salt.enforceState(venvPepper, '*', 'linux.system.package', true, true, batchSize, false, 60, 2)
 
@@ -928,15 +977,6 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 if (nginxAtMaster.toString().toLowerCase() == 'true') {
                     salt.enforceState(venvPepper, 'I@salt:master', 'nginx', true, true, null, false, 60, 2)
                 }
-
-                // Gerrit 2019.2.0 (2.13.6) version has wrong file name for download-commands plugin and was not loaded, let's remove if still there before upgrade
-                def gerritGlusterPath = salt.getPillar(venvPepper, 'I@gerrit:client', 'glusterfs:client:volumes:gerrit:path').get('return')[0].values()[0]
-                def wrongPluginJarName = "${gerritGlusterPath}/plugins/project-download-commands.jar"
-                salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName} || true")
-
-                salt.enforceStateWithTest(venvPepper, 'I@jenkins:client:security and not I@salt:master', 'jenkins.client.security', "", true, true, null, true, 60, 2)
-                salt.enforceStateWithTest(venvPepper, 'I@jenkins:client and I@docker:client:images and not I@salt:master', 'docker.client.images', "", true, true, null, true, 60, 2)
-                salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
             }
         }
         catch (Throwable e) {
@@ -945,39 +985,13 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             throw e
         }
     }
-    // docker.client state may trigger change of jenkins master or jenkins slave services,
-    // so we need wait for slave to reconnect and continue pipeline
-    sleep(180)
-    def cidNodes = []
-    node('python') {
-        try {
-            stage('Update Drivetrain: Phase 2') {
-                python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
-                checkCICDDocker()
-
-                // Apply changes for HaProxy on CI/CD nodes
-                salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
-                salt.upgradePackageAndRestartSaltMinion(venvPepper, 'I@jenkins:client and not I@salt:master', 'python-jenkins')
-                salt.enforceState(venvPepper, 'I@jenkins:client and not I@salt:master', 'jenkins.client', true, true, null, false, 60, 2)
-
-                // update Nginx proxy settings for Jenkins/Gerrit if needed
-                if (salt.testTarget(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit')) {
-                    salt.enforceState(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit', 'nginx.server', true, true, null, false, 60, 2)
-                }
-            }
-            if (packageUpgradeMode) {
-                cidNodes = salt.getMinions(venvPepper, 'I@_param:drivetrain_role:cicd')
-            }
-        }
-        catch (Throwable e) {
-            // If there was an error or exception thrown, the build failed
-            currentBuild.result = "FAILURE"
-            throw e
-        }
-    }
-
     stage('Upgrade OS') {
         if (packageUpgradeMode) {
+            def cidNodes = []
+            node('python') {
+                python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
+                cidNodes = salt.getMinions(venvPepper, 'I@_param:drivetrain_role:cicd')
+            }
             def debian = new com.mirantis.mk.Debian()
             def statusFile = '/tmp/rebooted_during_upgrade'
             for(cidNode in cidNodes) {
@@ -1000,6 +1014,45 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             }
         } else {
             common.infoMsg('Upgrade OS skipped...')
+        }
+    }
+
+    node('python') {
+        stage('Update Drivetrain: Part 2') {
+            python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
+            // Gerrit 2019.2.0 (2.13.6) version has wrong file name for download-commands plugin and was not loaded, let's remove if still there before upgrade
+            def gerritGlusterPath = salt.getPillar(venvPepper, 'I@gerrit:client', 'glusterfs:client:volumes:gerrit:path').get('return')[0].values()[0]
+            def wrongPluginJarName = "${gerritGlusterPath}/plugins/project-download-commands.jar"
+            salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName} || true")
+
+            salt.enforceStateWithTest(venvPepper, 'I@jenkins:client:security and not I@salt:master', 'jenkins.client.security', "", true, true, null, true, 60, 2)
+            salt.enforceStateWithTest(venvPepper, 'I@jenkins:client and I@docker:client:images and not I@salt:master', 'docker.client.images', "", true, true, null, true, 60, 2)
+            salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
+        }
+    }
+    // docker.client state may trigger change of jenkins master or jenkins slave services,
+    // so we need wait for slave to reconnect and continue pipeline
+    sleep(180)
+    node('python') {
+        stage('Update Drivetrain: Part 3') {
+            python.setupPepperVirtualenv(venvPepper, saltMastURL, saltMastCreds)
+            checkCICDDocker()
+
+            // update Nginx proxy settings for Jenkins/Gerrit if needed
+            if (salt.testTarget(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit')) {
+                salt.enforceState(venvPepper, 'I@nginx:server:site:nginx_proxy_jenkins and I@nginx:server:site:nginx_proxy_gerrit', 'nginx.server', true, true, null, false, 60, 2)
+            }
+            // Apply changes for HaProxy on CI/CD nodes
+            salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
+            salt.upgradePackageAndRestartSaltMinion(venvPepper, 'I@jenkins:client and not I@salt:master', 'python-jenkins')
+            salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and not I@salt:master' state.sls jenkins.client --async")
+
+            common.warningMsg("Jenkins update started in background in order to handle plugin post-install issues.")
+            common.warningMsg("Please wait until it finished. Jenkins could be restarted during this procedure.")
+            common.warningMsg("You can monitor job progress by running 'salt-run jobs.active' on master node")
+            common.warningMsg("For ensuring that upgrade is done and there are no errors you can run the following command on salt master node")
+            common.warningMsg("salt-run jobs.lookup_jid %salt_job_id%")
+            common.warningMsg("Salt job ID could be found in the log above.")
         }
     }
 }
