@@ -167,6 +167,9 @@ timeout(time: 12, unit: 'HOURS') {
       }
     }
 
+    common.infoMsg("Refreshing haproxy config for mysql proxies")
+    salt.enforceState(env, 'I@haproxy:proxy:listen:mysql_cluster', ['haproxy.proxy'])
+
     for (target in upgradeTargets) {
       common.stageWrapper(upgradeStageMap, "Upgrade OS", target, interactive) {
         if (OS_DIST_UPGRADE.toBoolean() == true){
