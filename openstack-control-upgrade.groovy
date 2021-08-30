@@ -151,6 +151,8 @@ timeout(time: 12, unit: 'HOURS') {
         "Above you can find detailed info this pipeline will execute.\nThe info provides brief description of each stage, actions that will be performed and service/workload impact during each stage.\nPlease read it carefully.", "yellow")
     }
 
+    common.infoMsg("Refreshing haproxy config for mysql proxies")
+    salt.enforceState(env, 'I@haproxy:proxy:listen:mysql_cluster', ['haproxy.proxy'])
 
     for (target in upgradeTargets){
       common.stageWrapper(upgradeStageMap, "Pre upgrade", target, interactive) {
@@ -166,9 +168,6 @@ timeout(time: 12, unit: 'HOURS') {
         stopOpenStackServices(env, target)
       }
     }
-
-    common.infoMsg("Refreshing haproxy config for mysql proxies")
-    salt.enforceState(env, 'I@haproxy:proxy:listen:mysql_cluster', ['haproxy.proxy'])
 
     for (target in upgradeTargets) {
       common.stageWrapper(upgradeStageMap, "Upgrade OS", target, interactive) {
