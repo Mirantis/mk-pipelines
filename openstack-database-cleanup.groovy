@@ -13,7 +13,7 @@ def common = new com.mirantis.mk.Common()
 def salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 
-def os_services = [ 'nova:controller', 'heat:server', 'cinder:controller' ]
+def os_services = [ 'nova:controller', 'heat:server', 'cinder:controller', 'glance:server' ]
 
 def slave_node = 'python'
 
