@@ -20,6 +20,7 @@ updateSaltFormulasDuringTest = true
 slaveNode = env.getProperty('SLAVE_NODE') ?: 'virtual'
 gerritCredentials = env.getProperty('CREDENTIALS_ID') ?: 'gerrit'
 runTestModel = (env.getProperty('TEST_MODEL') ?: true).toBoolean()
+saveToArtifactory = (env.getProperty('SAVE_TO_ARTIFACTORY') ?: true).toBoolean()
 distribRevision = 'proposed'
 gitGuessedVersion = false
 aptlyServerHostname = ''
@@ -472,17 +473,19 @@ timeout(time: 1, unit: 'HOURS') {
             }
             // common.sendNotification(currentBuild.result,"",["slack"])
             stage('Save artifacts to Artifactory') {
-                def artifactory = new com.mirantis.mcp.MCPArtifactory()
-                def buildProps = ["context=${context['cluster_name']}"]
-                if (RequesterEmail != '' && !RequesterEmail.contains('example')) {
-                    buildProps.add("emailTo=${RequesterEmail}")
+                if (saveToArtifactory) {
+                    def artifactory = new com.mirantis.mcp.MCPArtifactory()
+                    def buildProps = ["context=${context['cluster_name']}"]
+                    if (RequesterEmail != '' && !RequesterEmail.contains('example')) {
+                        buildProps.add("emailTo=${RequesterEmail}")
+                    }
+                        def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory([
+                            'artifactory'    : 'mcp-ci',
+                            'artifactoryRepo': "artifactory/drivetrain-local/${JOB_NAME}/${context['cluster_name']}-${BUILD_NUMBER}",
+                            'buildProps'     : buildProps,
+                        ])
+                        currentBuild.description += "<br/>${artifactoryLink}"
                 }
-                def artifactoryLink = artifactory.uploadJobArtifactsToArtifactory([
-                    'artifactory'    : 'mcp-ci',
-                    'artifactoryRepo': "artifactory/drivetrain-local/${JOB_NAME}/${context['cluster_name']}-${BUILD_NUMBER}",
-                    'buildProps'     : buildProps,
-                ])
-                currentBuild.description += "<br/>${artifactoryLink}"
             }
         }
     }
