@@ -247,6 +247,14 @@ def check_34406(String cluster_name) {
     }
 }
 
+def check_34645(String cluster_name) {
+    def updatecellsPillar = salt.getPillar(venvPepper, 'I@nova:controller', 'nova:controller:update_cells').get("return")[0].values()[0]
+    if (updatecellsPillar.toString().toLowerCase() == 'false') {
+        error('Update cells disabled.\n' +
+        'See https://docs.mirantis.com/mcp/q4-18/mcp-operations-guide/openstack-operations/disable-nova-cell-mapping.html')
+    }
+}
+
 def check_35705(String cluster_name) {
     def galeracheckpasswordPillar = salt.getPillar(venvPepper, 'I@salt:master', '_param:galera_clustercheck_password').get("return")[0].values()[0]
     if (galeracheckpasswordPillar == '' || galeracheckpasswordPillar == 'null' || galeracheckpasswordPillar == null) {
@@ -660,6 +668,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 fullRefreshOneByOne(venvPepper, allMinions)
 
                 check_34406(cluster_name)
+                check_34645(cluster_name)
                 check_35705(cluster_name)
                 check_35884(cluster_name)
 
