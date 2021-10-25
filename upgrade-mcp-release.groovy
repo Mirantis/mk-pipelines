@@ -637,6 +637,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     packageUpgradeMode = 'upgrade'
                 }
                 applyWorkarounds = driveTrainParams.get('APPLY_MODEL_WORKAROUNDS', true).toBoolean()
+                archiveInventory = driveTrainParams.get('ARCHIVE_RECLASS_INVENTORY', false).toBoolean()
             } else {
                 // backward compatibility for 2018.11.0
                 saltMastURL = env.getProperty('SALT_MASTER_URL')
@@ -674,9 +675,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
 
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
-
-                common.infoMsg('Perform: archiveReclassInventory before upgrade')
-                archiveReclassInventory(inventoryBeforeFilename)
+                if (archiveInventory) {
+                    common.infoMsg('Perform: archiveReclassInventory before upgrade')
+                    archiveReclassInventory(inventoryBeforeFilename)
+                }
 
                 try {
                     salt.cmdRun(venvPepper, 'I@salt:master', 'cd /srv/salt/reclass/ && git status && git diff-index --quiet HEAD --')
@@ -832,9 +834,10 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                     error('Reclass fails rendering. Pay attention to your cluster model.' +
                         'ErrorMessage:' + ex.toString())
                 }
-
-                common.infoMsg('Perform: archiveReclassInventory AFTER upgrade')
-                archiveReclassInventory(inventoryAfterFilename)
+                if (archiveInventory) {
+                    common.infoMsg('Perform: archiveReclassInventory AFTER upgrade')
+                    archiveReclassInventory(inventoryAfterFilename)
+                }
 
                 sh "diff -u $inventoryBeforeFilename $inventoryAfterFilename > reclass-inventory-diff.out || true"
                 archiveArtifacts artifacts: "reclass-inventory-diff.out"
