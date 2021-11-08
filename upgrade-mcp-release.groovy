@@ -29,6 +29,7 @@ def saltMastURL = ''
 def saltMastCreds = ''
 def packageUpgradeMode = ''
 batchSize = ''
+upgradeChecks = new com.mirantis.mcp.UpgradeChecks()
 
 def fullRefreshOneByOne(venvPepper, minions) {
     for (minion in minions) {
@@ -236,90 +237,6 @@ def wa32284(String cluster_name) {
             salt.cmdRun(venvPepper, 'I@salt:master', "echo '${nginxRequiresBlockString}'  > ${nginxRequiresClassFile}", false, null, false)
             salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/${cluster_name} && git status && git add ${nginxRequiresClassFile}")
         }
-    }
-}
-
-def check_34406(String cluster_name) {
-    def sphinxpasswordPillar = salt.getPillar(venvPepper, 'I@salt:master', '_param:sphinx_proxy_password_generated').get("return")[0].values()[0]
-    if (sphinxpasswordPillar == '' || sphinxpasswordPillar == 'null' || sphinxpasswordPillar == null) {
-        error('Sphinx password is not defined.\n' +
-        'See https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-9/mu-9-addressed/mu-9-dtrain/mu-9-dt-manual.html#i-34406 for more info')
-    }
-}
-
-def check_34645(String cluster_name) {
-    def updatecellsPillar = salt.getPillar(venvPepper, 'I@nova:controller', 'nova:controller:update_cells').get("return")[0].values()[0]
-    if (updatecellsPillar.toString().toLowerCase() == 'false') {
-        error('Update cells disabled.\n' +
-        'See https://docs.mirantis.com/mcp/q4-18/mcp-operations-guide/openstack-operations/disable-nova-cell-mapping.html')
-    }
-}
-
-def check_35705(String cluster_name) {
-    def galeracheckpasswordPillar = salt.getPillar(venvPepper, 'I@salt:master', '_param:galera_clustercheck_password').get("return")[0].values()[0]
-    if (galeracheckpasswordPillar == '' || galeracheckpasswordPillar == 'null' || galeracheckpasswordPillar == null) {
-        error('Galera clustercheck password is not defined.\n' +
-        'See https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-12/mu-12-addressed/mu-12-dtrain/mu-12-dt-manual.html#improper-operation-of-galera-ha for more info')
-    }
-}
-
-def check_35884(String cluster_name) {
-    if (salt.getMinions(venvPepper, 'I@prometheus:alerta or I@prometheus:alertmanager')) {
-        def alertaApiKeyGenPillar = salt.getPillar(venvPepper, 'I@salt:master', '_param:alerta_admin_api_key_generated').get("return")[0].values()[0]
-        def alertaApiKeyPillar = salt.getPillar(venvPepper, 'I@prometheus:alerta or I@prometheus:alertmanager', '_param:alerta_admin_key').get("return")[0].values()[0]
-
-        if (alertaApiKeyGenPillar == '' || alertaApiKeyGenPillar == 'null' || alertaApiKeyGenPillar == null || alertaApiKeyPillar == '' || alertaApiKeyPillar == 'null' || alertaApiKeyPillar == null) {
-            error('Alerta admin API key not defined.\n' +
-            'See https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-12/mu-12-addressed/mu-12-dtrain/mu-12-dt-manual.html#i-35884 for more info')
-        }
-    }
-}
-
-// ceph cluster class ordering for radosgw
-def check_36461(String cluster_name){
-    if (!salt.testTarget(venvPepper, 'I@ceph:radosgw')) {
-        return
-    }
-    def clusterModelPath = "/srv/salt/reclass/classes/cluster/${cluster_name}"
-    def checkFile = "${clusterModelPath}/ceph/rgw.yml"
-    def saltTarget = "I@salt:master"
-    try {
-        salt.cmdRun(venvPepper, saltTarget, "test -f ${checkFile}")
-    }
-    catch (Exception e) {
-        common.warningMsg("Unable to check ordering of RadosGW imports, file ${checkFile} not found, skipping")
-        return
-    }
-    def fileContent = salt.cmdRun(venvPepper, saltTarget, "cat ${checkFile}").get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
-    def yamlData = readYaml text: fileContent
-    def infraClassImport = "cluster.${cluster_name}.infra"
-    def cephClassImport = "cluster.${cluster_name}.ceph"
-    def cephCommonClassImport = "cluster.${cluster_name}.ceph.common"
-    def infraClassFound = false
-    def importErrorDetected = false
-    def importErrorMessage = """Ceph classes in '${checkFile}' are used in wrong order! Please reorder it:
-'${infraClassImport}' should be placed before '${cephClassImport}' and '${cephCommonClassImport}'.
-For additional information please see https://docs.mirantis.com/mcp/q4-18/mcp-release-notes/mu/mu-15/mu-15-addressed/mu-15-dtrain/mu-15-dtrain-manual.html"""
-    for (yamlClass in yamlData.classes) {
-        switch(yamlClass){
-          case infraClassImport:
-            infraClassFound = true;
-            break;
-          case cephClassImport:
-            if (!infraClassFound) {
-              importErrorDetected = true
-            };
-            break;
-          case cephCommonClassImport:
-            if (!infraClassFound) {
-              importErrorDetected = true
-            };
-            break;
-        }
-    }
-    if (importErrorDetected) {
-        common.errorMsg(importErrorMessage)
-        error(importErrorMessage)
     }
 }
 
@@ -734,11 +651,12 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 common.infoMsg('Perform: Full salt sync')
                 fullRefreshOneByOne(venvPepper, allMinions)
 
-                check_34406(cluster_name)
-                check_34645(cluster_name)
-                check_35705(cluster_name)
-                check_35884(cluster_name)
-                check_36461(cluster_name)
+                upgradeChecks.check_34406(salt, venvPepper, cluster_name, true)
+                upgradeChecks.check_34645(salt, venvPepper, cluster_name, true)
+                upgradeChecks.check_35705(salt, venvPepper, cluster_name, true)
+                upgradeChecks.check_35884(salt, venvPepper, cluster_name, true)
+                upgradeChecks.check_36461(salt, venvPepper, cluster_name, true)
+                upgradeChecks.check_36461_2(salt, venvPepper, cluster_name, true)
 
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
