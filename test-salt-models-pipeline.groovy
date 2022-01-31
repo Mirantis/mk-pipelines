@@ -86,7 +86,7 @@ def _clusterTestEnabled(infraYMLConfig){
   return true;
 }
 
-def nodeLabel = 'old16.04'
+def nodeLabel = 'docker'
 
 timeout(time: 12, unit: 'HOURS') {
   node(nodeLabel) {

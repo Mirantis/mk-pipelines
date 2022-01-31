@@ -27,7 +27,7 @@ if (common.validInputParam('GERRIT_PARENT_BRANCH')) {
   env.GERRIT_BRANCH = GERRIT_PARENT_BRANCH
 }
 
-def nodeLabel = 'old16.04'
+def nodeLabel = 'docker'
 
 def checkouted = false
 def openstackTest = false
