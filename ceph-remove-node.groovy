@@ -108,7 +108,8 @@ timeout(time: 12, unit: 'HOURS') {
                         common.infoMsg("The following osds will be removed: ${osds.join(', ')}")
                     }
                     if(osds != cephDisks) {
-                        common.infoMsg("The following osds will be skiped: ${cephDisks.removeAll(osds).join(', ')}")
+                        cephDisks.removeAll(osds)
+                        common.infoMsg("The following osds will be skiped: ${cephDisks.join(', ')}")
                     }
 
                     ceph.removeOsd(pepperEnv, HOST, osds, flags, safeRemove, fullWipe)
