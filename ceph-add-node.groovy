@@ -118,20 +118,21 @@ timeout(time: 12, unit: 'HOURS') {
 
             if(useUpmap) {
                 stage("update mappings") {
-                    def mapping = []
                     def pgmap
                     for (int x = 1; x <= 3; x++) {
                         pgmap = ceph.cmdRun(pepperEnv, 'ceph pg ls remapped --format=json', false)
                         if (pgmap.trim()) {
                             pgmap = "{\"pgs\":$pgmap}" // common.parseJSON() can't parse a list of maps
                             pgmap = common.parseJSON(pgmap)['pgs']
-                            if (!pgmap.get('pg_ready', false)) {
-                                ceph.generateMapping(pgmap, mapping)
-                                for(map in mapping) {
-                                    ceph.cmdRun(pepperEnv, map)
-                                }
-                                sleep(30)
+                            if (pgmap instanceof java.util.Map && pgmap.get('pg_ready', false)) {
+                                continue
                             }
+                            def mapping = []
+                            ceph.generateMapping(pgmap, mapping)
+                            for(map in mapping) {
+                                ceph.cmdRun(pepperEnv, map)
+                            }
+                            sleep(30)
                         }
                     }
                 }
