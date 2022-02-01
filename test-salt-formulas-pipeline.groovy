@@ -194,7 +194,7 @@ timeout(time: 4, unit: 'HOURS') {
             }
             if (kitchenFileName) {
               def kitchenEnvs = []
-              ruby.ensureRubyEnv(host_to_lock=env.NODE_NAME)
+              ruby.ensureRubyEnv('2.6.6', "${env.NODE_NAME}")
               if (!fileExists("Gemfile")) {
                 sh("curl -s 'https://gerrit.mcp.mirantis.com/projects/salt-formulas%2Fsalt-formulas-scripts/branches/master/files/Gemfile/content' | base64 -d > ./Gemfile")
                 ruby.installKitchen()

@@ -66,7 +66,7 @@ throttle(['test-formula']) {
                 } else {
                   common.infoMsg("Docker Kitchen test configuration found, running Docker kitchen tests.")
                 }
-                ruby.ensureRubyEnv(host_to_lock=env.NODE_NAME)
+                ruby.ensureRubyEnv('2.6.6', "${env.NODE_NAME}")
                 if (fileExists(".travis.yml")) {
                   common.infoMsg(".travis.yml found, running custom kitchen init")
                   def kitchenConfigYML = readYaml(file: ".travis.yml")
@@ -141,7 +141,7 @@ throttle(['test-formula']) {
                 kitchenFileName = ".kitchen.yml"
               }
               if (kitchenFileName) {
-                ruby.ensureRubyEnv(host_to_lock=env.NODE_NAME)
+                ruby.ensureRubyEnv('2.6.6', "${env.NODE_NAME}")
                 if (!fileExists("Gemfile")) {
                   sh("curl -s 'https://gerrit.mcp.mirantis.com/projects/salt-formulas%2Fsalt-formulas-scripts/branches/master/files/Gemfile/content' | base64 -d > ./Gemfile")
                   ruby.installKitchen()
