@@ -180,7 +180,7 @@ timeout(time: 12, unit: 'HOURS') {
 
     if (shutdownCluster) {
       openstack.runOpenStackUpgradePhase(env, masterNode, 'render_config')
-      salt.cmdRun(env, masterNode, "service mysql reload")
+      salt.cmdRun(env, masterNode, "systemctl restart mysql")
       openstack.runOpenStackUpgradePhase(env, masterNode, 'verify')
     }
 
