@@ -10,6 +10,7 @@
  *   OS_UPGRADE                         Upgrade all installed applications (apt-get upgrade)
  *   TARGET_SERVERS                     Comma separated list of salt compound definitions to upgrade.
  *   INTERACTIVE                        Ask interactive questions during pipeline run (bool).
+ *   UPDATE_TO_MYSQL57                  Set this flag if you are updating MySQL from 5.6 to 5.7
  *
 **/
 
@@ -22,6 +23,7 @@ def galera = new com.mirantis.mk.Galera()
 def shutdownCluster = SHUTDOWN_CLUSTER.toBoolean()
 def interactive = INTERACTIVE.toBoolean()
 def LinkedHashMap upgradeStageMap = [:]
+def updateToMysql57 = UPDATE_TO_MYSQL57.toBoolean()
 
 upgradeStageMap.put('Pre upgrade',
   [
@@ -118,11 +120,29 @@ timeout(time: 12, unit: 'HOURS') {
 
     for (target in upgradeTargets) {
       salt.runSaltProcessStep(env, target, 'saltutil.refresh_pillar', [], null, true)
+      mysqlPillarVersion = salt.getPillar(env, target, "galera:version:mysql").get("return")[0].values()[0].toString().toLowerCase()
+      mysql56InstalledVersion = salt.getReturnValues(salt.runSaltProcessStep(env, target, 'pkg.version', 'mysql-wsrep-server-5.6', null, true)).toString().toLowerCase().take(3)
+      mysql57InstalledVersion = salt.getReturnValues(salt.runSaltProcessStep(env, target, 'pkg.version', 'mysql-wsrep-server-5.7', null, true)).toString().toLowerCase().take(3)
+
+      if (mysqlPillarVersion == '5.6' && mysql57InstalledVersion == '5.7') {
+        error("""Pre upgrade check failed. You are trying to downgrade MySQL package from 5.7 version to 5.6.
+                 Check value for galera_mysql_version variable in your model.""")
+      }
+      if (mysqlPillarVersion == '5.7' && mysql56InstalledVersion == '5.6' && updateToMysql57 != true) {
+        error("""Pre upgrade check failed. You are trying to update MySQL package from version 5.6 to version 5.7 the wrong way.
+                  If you want to update from 5.6 version to 5.7 set flag UPDATE_TO_MYSQL57 in the current job.
+                  If you don't want to update from 5.6 version to 5.7 you need to change the value for galera_mysql_version to 5.6 in your model.""")
+      }
+
       salt.enforceState(env, target, ['linux.system.repo'])
       common.stageWrapper(upgradeStageMap, "Pre upgrade", target, interactive) {
         openstack.runOpenStackUpgradePhase(env, target, 'pre')
         openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
+    }
+
+    if (updateToMysql57 == true) {
+      shutdownCluster = true
     }
 
     if (shutdownCluster){
@@ -169,8 +189,18 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         common.stageWrapper(upgradeStageMap, "Upgrade MySQL server", target, interactive) {
-          openstack.runOpenStackUpgradePhase(env, target, 'pkgs_latest')
-          openstack.runOpenStackUpgradePhase(env, target, 'render_config')
+          if (updateToMysql57 == true) {
+            if (target == masterNode) {
+              openstack.runOpenStackUpgradePhase(env, target, 'update_master')
+            }
+            else {
+              openstack.runOpenStackUpgradePhase(env, target, 'update_slave')
+            }
+          }
+          else {
+            openstack.runOpenStackUpgradePhase(env, target, 'pkgs_latest')
+            openstack.runOpenStackUpgradePhase(env, target, 'render_config')
+          }
         }
 
         if (shutdownCluster && target == masterNode){
