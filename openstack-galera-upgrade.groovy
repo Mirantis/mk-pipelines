@@ -133,6 +133,11 @@ timeout(time: 12, unit: 'HOURS') {
                   If you want to update from 5.6 version to 5.7 set flag UPDATE_TO_MYSQL57 in the current job.
                   If you don't want to update from 5.6 version to 5.7 you need to change the value for galera_mysql_version to 5.6 in your model.""")
       }
+      if (mysqlPillarVersion == '5.6' && updateToMysql57 == true) {
+        error("""Pre upgrade check failed. You are trying to update MySQL package from version 5.6 to version 5.7 the wrong way.
+                  If you want to update from 5.6 version to 5.7 you need to set galera_mysql_version variable in your model to 5.7 value.
+                  If you don't want to update from 5.6 version to 5.7 you need to unset flag UPDATE_TO_MYSQL57""")
+      }
 
       salt.enforceState(env, target, ['linux.system.repo'])
       common.stageWrapper(upgradeStageMap, "Pre upgrade", target, interactive) {
