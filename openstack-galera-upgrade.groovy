@@ -153,17 +153,7 @@ timeout(time: 12, unit: 'HOURS') {
       }
     }
 
-    for (target in upgradeTargets) {
-         out = salt.cmdRun(env, target,  'cat /var/lib/mysql/grastate.dat | grep "seqno" | cut -d ":" -f2', true, null, false).get('return')[0].values()[0].replaceAll('Salt command execution success', '').trim()
-         common.infoMsg("Get seqno: ${out} for node ${target}")
-         if (!out.isNumber()){
-             out = -2
-         }
-        targetSecMapping[out.toInteger()] = target
-        secNoList.add(out.toInteger())
-    }
-
-    def masterNode = targetSecMapping[secNoList.max()]
+    def masterNode = salt.getMinionsSorted(env, galera.getGaleraLastShutdownNode(env))[0]
     common.infoMsg("Master node is: ${masterNode}")
 
     // Make sure we start upgrade always from master node
