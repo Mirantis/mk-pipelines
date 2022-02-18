@@ -6,7 +6,6 @@
  *  SALT_MASTER_URL                 URL of Salt master
  *  SALT_MASTER_CREDENTIALS         Credentials to the Salt API
  *
- *  ADMIN_HOST                      Host (minion id) with admin keyring and /etc/crushmap file present
  *  CLUSTER_FLAGS                   Comma separated list of tags to apply to cluster
  *  WAIT_FOR_HEALTHY                Wait for cluster rebalance before stoping daemons
  *  ASK_CONFIRMATION                Ask for manual confirmation
@@ -31,14 +30,17 @@ askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 
 pepperEnv = "pepperEnv"
 flags = CLUSTER_FLAGS.tokenize(',')
+// sortbitwise is set by default on version >jewel.
+// For jewel upgrade we will set and keep it while for other cases shouldn't be there
+flags.removeElement('sortbitwise')
 
 def backup(master, target) {
-    stage("backup ${target}") {
+    stage("backup $target") {
 
         if (target == 'osd') {
             try {
                 salt.enforceState(master, "I@ceph:${target}", "ceph.backup", true)
-                salt.cmdRun(master, "I@ceph:${target}", "su root -c '/usr/local/bin/ceph-backup-runner-call.sh'")
+                ceph.cmdRunOnTarget(master, "I@ceph:${target}", "su root -c '/usr/local/bin/ceph-backup-runner-call.sh'")
             } catch (Exception e) {
                 common.errorMsg(e)
                 common.errorMsg("Make sure Ceph backup on OSD nodes is enabled")
@@ -58,24 +60,24 @@ def backup(master, target) {
                 def provider_pillar = salt.getPillar(master, "${kvm01}", "salt:control:cluster:internal:node:${minion_name}:provider")
                 def minionProvider = provider_pillar['return'][0].values()[0]
 
-                ceph.waitForHealthy(master, ADMIN_HOST, flags)
+                ceph.waitForHealthy(master, flags)
                 try {
-                    salt.cmdRun(master, "${minionProvider}", "[ ! -f ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak ] && virsh destroy ${minion_name}.${domain}")
+                    ceph.cmdRunOnTarget(master, minionProvider, "[ ! -f ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak ] && virsh destroy ${minion_name}.${domain}")
                 } catch (Exception e) {
                     common.warningMsg('Backup already exists')
                 }
                 try {
-                    salt.cmdRun(master, "${minionProvider}", "[ ! -f ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/${minion_name}.${domain}/system.qcow2 ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak")
+                    ceph.cmdRunOnTarget(master, minionProvider, "[ ! -f ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak ] && cp /var/lib/libvirt/images/${minion_name}.${domain}/system.qcow2 ${BACKUP_DIR}/${minion_name}.${domain}.qcow2.bak")
                 } catch (Exception e) {
                     common.warningMsg('Backup already exists')
                 }
                 try {
-                    salt.cmdRun(master, "${minionProvider}", "virsh start ${minion_name}.${domain}")
+                    ceph.cmdRunOnTarget(master, minionProvider, "virsh start ${minion_name}.${domain}")
                 } catch (Exception e) {
                     common.warningMsg(e)
                 }
                 salt.minionsReachable(master, 'I@salt:master', "${minion_name}*")
-                ceph.waitForHealthy(master, ADMIN_HOST, flags)
+                ceph.waitForHealthy(master, flags)
             }
         }
     }
@@ -84,7 +86,7 @@ def backup(master, target) {
 
 def upgrade(master, target) {
 
-    stage("Change ${target} repos") {
+    stage("Change $target repos") {
         salt.runSaltProcessStep(master, "I@ceph:${target}", 'saltutil.refresh_pillar', [], null, true, 5)
         salt.enforceState(master, "I@ceph:${target}", 'linux.system.repo', true)
     }
@@ -95,20 +97,34 @@ def upgrade(master, target) {
     }
     if (target == 'common') {
         stage('Upgrade ceph-common pkgs') {
-            salt.runSaltProcessStep(master, "I@ceph:${target}", 'pkg.install', ["ceph-common"], 'only_upgrade=True')
+            salt.runSaltProcessStep(master, "I@ceph:common", 'pkg.install', ["ceph-common"], 'only_upgrade=True')
         }
     } else {
         minions = salt.getMinions(master, "I@ceph:${target}")
 
+        def  ignoreDifferentSubversions = false
         for (minion in minions) {
             // upgrade pkgs
             if (target == 'radosgw') {
-                stage('Upgrade radosgw pkgs') {
-                    salt.runSaltProcessStep(master, "I@ceph:${target}", 'pkg.install', [target], 'only_upgrade=True')
+                stage("Upgrade radosgw pkgs on $minion") {
+                    salt.runSaltProcessStep(master, minion, 'pkg.install', [target], 'only_upgrade=True')
                 }
             } else {
-                stage("Upgrade ${target} pkgs on ${minion}") {
-                    salt.runSaltProcessStep(master, "${minion}", 'pkg.install', ["ceph-${target}"], 'only_upgrade=True')
+                stage("Upgrade $target pkgs on $minion") {
+                    salt.runSaltProcessStep(master, minion, 'pkg.install', ["ceph-${target}"], 'only_upgrade=True')
+                }
+            }
+            // check for subversion difference before restart
+            if (ignoreDifferentSubversions) {
+                targetVersion = ceph.cmdRun(master, "ceph versions | grep $TARGET_RELEASE | awk '{print \$3}' | sort -V | tail -1")
+                updatedVersion = ceph.cmdRunOnTarget(master, minion, "ceph version | awk '{print \$3}'")
+                if (targetVersion != updatedVersion) {
+                    stage('Version differnce warning') {
+                        common.warningMsg("A potential problem has been spotted.")
+                        common.warningMsg("Some components already have $targetVersion version while ceph-$target has just been updated to $updatedVersion")
+                        input message: "Do you want to proceed with restarts and silence this warning?"
+                        ignoreDifferentSubversions = true
+                    }
                 }
             }
             // restart services
@@ -116,29 +132,30 @@ def upgrade(master, target) {
                 if(target == 'osd') {
                     def ceph_disks = salt.getGrain(master, minion, 'ceph')['return'][0].values()[0].values()[0]['ceph_disk']
                     ceph_disks.each { osd, param ->
-                        salt.cmdRun(master, "${minion}", "systemctl restart ceph-${target}@${osd}")
+                        ceph.cmdRunOnTarget(master, minion, "systemctl restart ceph-${target}@${osd}")
                     }
                 }
                 else {
-                    salt.cmdRun(master, "${minion}", "systemctl restart ceph-${target}.target")
+                    ceph.cmdRunOnTarget(master, minion, "systemctl restart ceph-${target}.target")
                 }
 
-                ceph.waitForHealthy(master, ADMIN_HOST, flags)
+                ceph.waitForHealthy(master, flags)
             }
 
-            stage("Verify services for ${minion}") {
+            stage("Verify services for $minion") {
                 sleep(10)
-                salt.cmdRun(master, "${minion}", "systemctl status ceph-${target}.target")
+                ceph.cmdRunOnTarget(master, minion, "systemctl status ceph-${target}.target")
             }
 
-            if (askConfirmation) {
-                stage('Ask for manual confirmation') {
-                    input message: "From the verification command above, please check Ceph ${target} joined the cluster correctly. If so, Do you want to continue to upgrade next node?"
+            stage('Verify Ceph status') {
+                ceph.cmdRun(master, "ceph -s", true, true)
+                if (askConfirmation) {
+                    input message: "From the verification command above, please check Ceph $target joined the cluster correctly. If so, Do you want to continue to upgrade next node?"
                 }
             }
         }
     }
-    salt.cmdRun(master, ADMIN_HOST, "ceph versions")
+    ceph.cmdRun(master, "ceph versions")
     sleep(5)
     return
 }
@@ -150,21 +167,21 @@ timeout(time: 12, unit: 'HOURS') {
         python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
         stage('Check user choices') {
-            if (STAGE_UPGRADE_RGW.toBoolean() == true) {
+            if (STAGE_UPGRADE_RGW.toBoolean()) {
                 // if rgw, check if other stuff has required version
                 def mon_ok = true
-                if (STAGE_UPGRADE_MON.toBoolean() == false) {
-                    def mon_v = salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph mon versions")['return'][0].values()[0]
+                if (!STAGE_UPGRADE_MON.toBoolean()) {
+                    def mon_v = ceph.cmdRun(pepperEnv, "ceph mon versions")
                     mon_ok = mon_v.contains("${TARGET_RELEASE}") && !mon_v.contains("${ORIGIN_RELEASE}")
                 }
                 def mgr_ok = true
-                if (STAGE_UPGRADE_MGR.toBoolean() == false) {
-                    def mgr_v = salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph mgr versions")['return'][0].values()[0]
+                if (!STAGE_UPGRADE_MGR.toBoolean()) {
+                    def mgr_v = ceph.cmdRun(pepperEnv, "ceph mgr versions")
                     mgr_ok = mgr_v.contains("${TARGET_RELEASE}") && !mgr_v.contains("${ORIGIN_RELEASE}")
                 }
                 def osd_ok = true
-                if (STAGE_UPGRADE_OSD.toBoolean() == false) {
-                    def osd_v = salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph osd versions")['return'][0].values()[0]
+                if (!STAGE_UPGRADE_OSD.toBoolean()) {
+                    def osd_v = ceph.cmdRun(pepperEnv, "ceph osd versions")
                     osd_ok = osd_v.contains("${TARGET_RELEASE}") && !osd_v.contains("${ORIGIN_RELEASE}")
                 }
                 if (!mon_ok || !osd_ok || !mgr_ok) {
@@ -186,14 +203,10 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
 
-        if (flags.size() > 0) {
-            stage('Set cluster flags') {
-                for (flag in flags) {
-                    salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd set ' + flag)
-                }
-                if (ORIGIN_RELEASE == 'jewel') {
-                    salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd set sortbitwise')
-                }
+        stage('Set cluster flags') {
+            ceph.setFlags(pepperEnv, flags)
+            if (ORIGIN_RELEASE == 'jewel') {
+                ceph.setFlags('sortbitwise')
             }
         }
 
@@ -218,32 +231,25 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         // remove cluster flags
-        if (flags.size() > 0) {
-            stage('Unset cluster flags') {
-                for (flag in flags) {
-                    if (!flag.contains('sortbitwise')) {
-                        common.infoMsg('Removing flag ' + flag)
-                        salt.cmdRun(pepperEnv, ADMIN_HOST, 'ceph osd unset ' + flag)
-                    }
-                }
-            }
+        stage('Unset cluster flags') {
+            ceph.unsetFlags(flags)
         }
 
         if (STAGE_FINALIZE.toBoolean() == true) {
             stage("Finalize ceph version upgrade") {
-                salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph osd require-osd-release ${TARGET_RELEASE}")
+                ceph.cmdRun(pepperEnv, "ceph osd require-osd-release ${TARGET_RELEASE}")
                 try {
-                    salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph osd set-require-min-compat-client ${ORIGIN_RELEASE}")
+                    ceph.cmdRun(pepperEnv, "ceph osd set-require-min-compat-client ${ORIGIN_RELEASE}")
                 } catch (Exception e) {
                     common.warningMsg(e)
                 }
                 try {
-                    salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph osd crush tunables optimal")
+                    ceph.cmdRun(pepperEnv, "ceph osd crush tunables optimal")
                 } catch (Exception e) {
                     common.warningMsg(e)
                 }
                 if (TARGET_RELEASE == 'nautilus' ) {
-                    salt.cmdRun(pepperEnv, ADMIN_HOST, "ceph mon enable-msgr2")
+                    ceph.cmdRun(pepperEnv, "ceph mon enable-msgr2")
                 }
                 salt.enforceState(pepperEnv, "I@ceph:common", "ceph.common")
             }
@@ -251,7 +257,7 @@ timeout(time: 12, unit: 'HOURS') {
 
         // wait for healthy cluster
         if (WAIT_FOR_HEALTHY.toBoolean()) {
-            ceph.waitForHealthy(pepperEnv, ADMIN_HOST, flags)
+            ceph.waitForHealthy(pepperEnv, flags)
         }
     }
 }
