@@ -88,6 +88,7 @@ timeout(time: 12, unit: 'HOURS') {
                         [$class: 'BooleanParameterValue', name: 'ASK_CONFIRMATION', value: "false"],
                         [$class: 'BooleanParameterValue', name: 'BACKUP_SALTMASTER_AND_MAAS', value: "false"],
                         [$class: 'BooleanParameterValue', name: 'BACKUP_DOGTAG', value: "true"],
+                        [$class: 'BooleanParameterValue', name: 'BACKUP_KEYSTONE_CREDENTIAL_KEYS', value: "false"]
                 ]
                 )
             } else {

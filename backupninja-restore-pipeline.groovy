@@ -5,7 +5,7 @@ def pepperEnv = "pepperEnv"
 def maasNodes = []
 def restoreSaltMasterAndMaas = (env.getProperty('RESTORE_SALTMASTER_AND_MAAS') ?: true).toBoolean()
 def restoreDogtag = (env.getProperty('RESTORE_DOGTAG') ?: true).toBoolean()
-def restoreKeystone = (env.getProperty('RESTORE_KEYSTONE_CREDENTIAL_KEYS') ?: true).toBoolean()
+def restoreKeystone = (env.getProperty('RESTORE_KEYSTONE_CREDENTIAL_KEYS') ?: false).toBoolean()
 
 timeout(time: 12, unit: 'HOURS') {
     node() {
