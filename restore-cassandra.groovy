@@ -104,12 +104,9 @@ timeout(time: 12, unit: 'HOURS') {
                     throw err
                 }
                 // contrail-control service needs to be restart after db sync to re-initialize with recovered data
-                try {
+                common.retry(6,20) {
                     common.infoMsg("Restart contrail-control services on control nodes")
                     salt.cmdRun(pepperEnv, 'I@opencontrail:control', 'doctrail controller service contrail-control restart')
-                } catch (Exception err) {
-                    common.errorMsg('An error has been occurred during contrail-control services restart: ' + err.getMessage())
-                    throw err
                 }
             } else {
                 try {
@@ -174,7 +171,7 @@ timeout(time: 12, unit: 'HOURS') {
         }
 
         stage('Opencontrail controllers health check') {
-            common.retry(9, 20){
+            common.retry(9, 60){
                 salt.enforceState(pepperEnv, 'I@opencontrail:control or I@opencontrail:collector', 'opencontrail.upgrade.verify', true, true)
             }
         }
