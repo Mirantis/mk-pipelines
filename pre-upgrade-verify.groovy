@@ -39,7 +39,7 @@ timeout(time: PIPELINE_TIMEOUT, unit: 'HOURS') {
       <tr>
         <th class='row'>Prod id</th>
         <th class='row'>Status</th>
-        <th class='row'>Doc link</th>
+        <th class='row'>Comment</th>
       </tr>"""
                 def reportTail = """
     </table>
