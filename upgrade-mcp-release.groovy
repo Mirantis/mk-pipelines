@@ -657,6 +657,7 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
                 upgradeChecks.check_35884(salt, venvPepper, cluster_name, true)
                 upgradeChecks.check_36461(salt, venvPepper, cluster_name, true)
                 upgradeChecks.check_36461_2(salt, venvPepper, cluster_name, true)
+                upgradeChecks.check_36960(salt, venvPepper, cluster_name, true)
 
                 common.infoMsg('Perform: Validate reclass medata before processing')
                 validateReclassModel(minions, 'before')
