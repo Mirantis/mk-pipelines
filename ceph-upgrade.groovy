@@ -26,6 +26,7 @@ common = new com.mirantis.mk.Common()
 salt = new com.mirantis.mk.Salt()
 def python = new com.mirantis.mk.Python()
 ceph = new com.mirantis.mk.Ceph()
+upgradeChecks = new com.mirantis.mcp.UpgradeChecks()
 askConfirmation = (env.getProperty('ASK_CONFIRMATION') ?: true).toBoolean()
 
 pepperEnv = "pepperEnv"
@@ -191,6 +192,10 @@ timeout(time: 12, unit: 'HOURS') {
             }
         }
 
+        stage('Pre-validate cluster model settings'){
+            upgradeChecks.check_36461_2(salt, pepperEnv, "", true)
+        }
+
         if (BACKUP_ENABLED.toBoolean() == true) {
             if (STAGE_UPGRADE_MON.toBoolean() == true) {
                 backup(pepperEnv, 'mon')
@@ -258,6 +263,13 @@ timeout(time: 12, unit: 'HOURS') {
         // wait for healthy cluster
         if (WAIT_FOR_HEALTHY.toBoolean()) {
             ceph.waitForHealthy(pepperEnv, flags)
+        }
+        stage('Post-upgrade cluster model settings validation'){
+            def checkResult = upgradeChecks.check_36461_2(salt, pepperEnv, "", false)
+            common.warningMsg(checkResult.isFixed)
+            if ( checkResult.waInfo != '') {
+                common.warningMsg(checkResult.waInfo)
+            }
         }
     }
 }

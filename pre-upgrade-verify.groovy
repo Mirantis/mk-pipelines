@@ -5,7 +5,7 @@ venvPepper = "venvPepper"
 upgradeChecks = new com.mirantis.mcp.UpgradeChecks()
 
 reportDir = 'reportDir/'
-waList =['check_34406', 'check_34645', 'check_35705', 'check_35884', 'check_36461', 'check_36461_2']
+waList =['check_34406', 'check_34645', 'check_35705', 'check_35884', 'check_36461', 'check_36461_2', 'check_36960']
 
 timeout(time: PIPELINE_TIMEOUT, unit: 'HOURS') {
     node('python') {
@@ -39,7 +39,7 @@ timeout(time: PIPELINE_TIMEOUT, unit: 'HOURS') {
       <tr>
         <th class='row'>Prod id</th>
         <th class='row'>Status</th>
-        <th class='row'>Doc link</th>
+        <th class='row'>Comment</th>
       </tr>"""
                 def reportTail = """
     </table>
