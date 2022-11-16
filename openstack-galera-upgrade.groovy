@@ -179,7 +179,13 @@ timeout(time: 12, unit: 'HOURS') {
             upgrade_mode = 'upgrade'
           }
           if (OS_DIST_UPGRADE.toBoolean() == true || OS_UPGRADE.toBoolean() == true) {
+            //Set skip galera/mysql packages during Upgrade OS phase
+            holdPackets = 'galera-3 mysql-wsrep-5.6 mysql-wsrep-server-5.6 mysql-wsrep-client-5.6 mysql-wsrep-common-5.6 \
+mysql-wsrep-5.7 mysql-wsrep-server-5.7 mysql-wsrep-client-5.7 mysql-wsrep-common-5.7'
+            salt.cmdRun(env, target, 'apt-mark hold ' + holdPackets, true, null, false)
             debian.osUpgradeNode(env, target, upgrade_mode, false)
+            //Unset skip galera/mysql packages during Upgrade OS phase
+            salt.cmdRun(env, target, 'apt-mark unhold ' + holdPackets, true, null, false)
           }
         }
 
