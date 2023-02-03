@@ -187,6 +187,21 @@ timeout(time: 12, unit: 'HOURS') {
       common.stageWrapper(upgradeStageMap, "Upgrade OpenStack", target, interactive) {
         openstack.runOpenStackUpgradePhase(env, target, 'upgrade')
         openstack.applyOpenstackAppsStates(env, target)
+
+        // Workaround for PROD-33592, restart designate-central services if enabled
+        designate_enabled = salt.getPillar(env, 'I@designate:server', "designate:server:enabled").get("return")[0].values()[0]
+        if (designate_enabled == '' || designate_enabled == 'false' || designate_enabled == null) {
+          common.infoMsg('Designate is disabled, nothing to do')
+        } else {
+          try {
+            salt.runSaltProcessStep(env, "I@designate:server", "service.restart", "designate-central", null, true)
+          }
+          catch (Exception ex) {
+            common.infoMsg(ex)
+            error('Designate service is broken, please check logs')
+          }
+        }
+
         openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
     }
