@@ -131,6 +131,24 @@ def revertSnapshotVM(env, domain, snapshotName, ensureUp=true) {
   }
 }
 
+def checkDesignate(env) {
+  def common = new com.mirantis.mk.Common()
+  def salt = new com.mirantis.mk.Salt()
+  // Workaround for PROD-33592, restart designate-central services if enabled
+  designate_enabled = salt.getPillar(env, 'I@designate:server', "designate:server:enabled").get("return")[0].values()[0]
+  if (designate_enabled == '' || designate_enabled == 'false' || designate_enabled == null) {
+    common.infoMsg('Designate is disabled, nothing to do')
+  } else {
+    try {
+       salt.runSaltProcessStep(env, "I@designate:server", "service.restart", "designate-central", null, true)
+    }
+    catch (Exception ex) {
+       common.infoMsg(ex)
+       error('Designate service is broken, please check logs')
+    }
+  }
+}
+
 def env = "env"
 timeout(time: 12, unit: 'HOURS') {
   node() {
@@ -159,6 +177,7 @@ timeout(time: 12, unit: 'HOURS') {
         openstack.runOpenStackUpgradePhase(env, target, 'pre')
         salt.runSaltProcessStep(env, target, 'saltutil.refresh_pillar', [], null, true)
         salt.enforceState(env, target, 'linux.system.repo')
+        checkDesignate(env)
         openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
     }
@@ -187,21 +206,7 @@ timeout(time: 12, unit: 'HOURS') {
       common.stageWrapper(upgradeStageMap, "Upgrade OpenStack", target, interactive) {
         openstack.runOpenStackUpgradePhase(env, target, 'upgrade')
         openstack.applyOpenstackAppsStates(env, target)
-
-        // Workaround for PROD-33592, restart designate-central services if enabled
-        designate_enabled = salt.getPillar(env, 'I@designate:server', "designate:server:enabled").get("return")[0].values()[0]
-        if (designate_enabled == '' || designate_enabled == 'false' || designate_enabled == null) {
-          common.infoMsg('Designate is disabled, nothing to do')
-        } else {
-          try {
-            salt.runSaltProcessStep(env, "I@designate:server", "service.restart", "designate-central", null, true)
-          }
-          catch (Exception ex) {
-            common.infoMsg(ex)
-            error('Designate service is broken, please check logs')
-          }
-        }
-
+        checkDesignate(env)
         openstack.runOpenStackUpgradePhase(env, target, 'verify')
       }
     }
