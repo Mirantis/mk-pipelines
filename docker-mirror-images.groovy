@@ -126,6 +126,9 @@ timeout(time: 4, unit: 'HOURS') {
                     def buildTime = new Date().format("yyyyMMdd-HH:mm:ss.SSS", TimeZone.getTimeZone('UTC'))
 
                     if (setDefaultArtifactoryProperties) {
+                        common.infoMsg("Re-pulling uploaded image ${targetImageFull} (WA for probably changed hash)")
+                        sh("docker image rm ${targetImageFull} || true")
+                        sh("docker pull ${targetImageFull}")
                         common.infoMsg("Processing artifactory props for : ${targetImageFull}")
                         LinkedHashMap artifactoryProperties = [:]
                         def tgtImageInfo = getImageInfo(targetImageFull)
