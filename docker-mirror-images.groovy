@@ -64,6 +64,9 @@ def imageURL(String registry, String imageName, String sha256) {
     }
 }
 
+def tgt_image_sha256
+def unique_image_id
+
 timeout(time: 4, unit: 'HOURS') {
     node(slaveNode) {
         def user = jenkinsUtils.currentUsername()
@@ -120,20 +123,19 @@ timeout(time: 4, unit: 'HOURS') {
                     common.infoMsg("Attempt to push docker image into remote registry: ${env.REGISTRY_URL}")
                     common.retry(3, 5) {
                         docker.withRegistry(env.REGISTRY_URL, env.TARGET_REGISTRY_CREDENTIALS_ID) {
-                            sh("docker push ${targetImageFull}")
+                            out = sh(script:"docker push ${targetImageFull}", returnStdout: true).trim()
+                            common.infoMsg(out)
+                            hash_regex = /digest:\ssha256:(\S*)\s/
+                            hash_group = (out =~ hash_regex)
+                            tgt_image_sha256 = hash_group[0][1]
+                            unique_image_id = "sha256:${hash_group[0][1]}"
                         }
                     }
                     def buildTime = new Date().format("yyyyMMdd-HH:mm:ss.SSS", TimeZone.getTimeZone('UTC'))
 
                     if (setDefaultArtifactoryProperties) {
-                        common.infoMsg("Re-pulling uploaded image ${targetImageFull} (WA for probably changed hash)")
-                        sh("docker image rm ${targetImageFull} || true")
-                        sh("docker pull ${targetImageFull}")
                         common.infoMsg("Processing artifactory props for : ${targetImageFull}")
                         LinkedHashMap artifactoryProperties = [:]
-                        def tgtImageInfo = getImageInfo(targetImageFull)
-                        def tgt_image_sha256 = tgtImageInfo['sha256']
-                        def unique_image_id = tgtImageInfo['id']
                         def tgtImgUrl = imageURL(targetRegistry, targetImageFull, tgt_image_sha256) - '/manifest.json'
                         artifactoryProperties = [
                             'com.mirantis.targetTag'    : env.IMAGE_TAG,
