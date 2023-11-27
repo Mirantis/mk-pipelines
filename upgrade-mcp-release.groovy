@@ -954,9 +954,9 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             def wrongPluginJarName = "${gerritGlusterPath}/plugins/project-download-commands.jar"
             salt.cmdRun(venvPepper, 'I@gerrit:client', "test -f ${wrongPluginJarName} && rm ${wrongPluginJarName} || true")
 
-            salt.enforceStateWithTest(venvPepper, 'I@jenkins:client:security and not I@salt:master', 'jenkins.client.security', "", true, true, null, true, 60, 2)
-            salt.enforceStateWithTest(venvPepper, 'I@jenkins:client and I@docker:client:images and not I@salt:master', 'docker.client.images', "", true, true, null, true, 60, 2)
-            salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client and not I@salt:master' state.sls docker.client --async")
+            salt.enforceStateWithTest(venvPepper, 'I@jenkins:client:security', 'jenkins.client.security', "", true, true, null, true, 60, 2)
+            salt.enforceStateWithTest(venvPepper, 'I@jenkins:client and I@docker:client:images', 'docker.client.images', "", true, true, null, true, 60, 2)
+            salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and I@docker:client' state.sls docker.client --async")
         }
     }
     // docker.client state may trigger change of jenkins master or jenkins slave services,
@@ -973,8 +973,8 @@ timeout(time: pipelineTimeout, unit: 'HOURS') {
             }
             // Apply changes for HaProxy on CI/CD nodes
             salt.enforceState(venvPepper, 'I@keepalived:cluster:instance:cicd_control_vip and I@haproxy:proxy', 'haproxy.proxy', true)
-            salt.upgradePackageAndRestartSaltMinion(venvPepper, 'I@jenkins:client and not I@salt:master', 'python-jenkins')
-            salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client and not I@salt:master' state.sls jenkins.client --async")
+            salt.upgradePackageAndRestartSaltMinion(venvPepper, 'I@jenkins:client', 'python-jenkins')
+            salt.cmdRun(venvPepper, "I@salt:master", "salt -C 'I@jenkins:client' state.sls jenkins.client --async")
 
             common.warningMsg("Jenkins update started in background in order to handle plugin post-install issues.")
             common.warningMsg("Please wait until it finished. Jenkins could be restarted during this procedure.")
